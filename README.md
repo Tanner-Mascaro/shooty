@@ -53,7 +53,7 @@ Win scores and room size are in `shared/config.js`.
 
 ## Bots
 
-Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.
+Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Pick **Easy / Medium / Hard** first; each bot also gets a random character. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.
 
 `npm run bots` (or `npm start -- --bots` without auto-restart) also starts every new room with one bot, for local testing.
 
@@ -61,7 +61,15 @@ Any room can be filled out with server-side bots using the lobby's **+ BOT / −
 - **Shoots** the rifle at the nearest enemy it can see within 25 units, after a short reaction delay and with some aim wobble
 - Fires through the same `shoot` handler as a real player, so hits, kills, tracers, sounds and scoring all work normally
 
-Speed, sight range, reaction time, fire rate and aim error are constants at the top of `server/bot.js`.
+Speed, sight range, reaction time, fire rate and aim error per difficulty are in `BOT_LEVELS` at the top of `server/bot.js`.
+
+## Haunted house
+
+The fourth map is half an old house and half the Backrooms, under a real ceiling (drawn by `drawCeiling` in `public/js/render/world.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`).
+
+## Seeing players
+
+Every player has a Minecraft-style glowing outline: white in free-for-all, red / blue in teams. Teammates show through walls, and so does any enemy for 3 seconds after you hit them.
 
 ## Profiles, accounts and leaderboard
 

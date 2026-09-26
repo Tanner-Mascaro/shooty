@@ -171,96 +171,213 @@ function drawCrosshair() {
 }
 
 // --- first-person weapon models ---
-// Drawn in a local frame anchored at the bottom-right of the screen and rotated so -y points
-// toward the crosshair; y=0 is the near end, y=-L the muzzle. Widths taper for perspective.
-function seg(L, y0, y1, hw0, hw1, xo, fill) {
-  const k = y => 1 - 0.45 * Math.min(1, Math.max(0, -y / L));
-  ctx.fillStyle = fill;
+// Drawn in a local frame anchored at the bottom right of the screen and rotated so -y points
+// toward the crosshair: y=0 is the near end (at your hand), y=-L the muzzle, x runs across the
+// gun. Widths taper with distance for perspective. Each part is a lit top face over a darker
+// side face pushed toward the bottom of the screen (EX, EY), so it reads as solid, and gloved
+// hands on sleeved arms hold it.
+let EX = 0, EY = 1; // screen-down in the local frame, set each frame
+const SQUASH = [1.15, 0.6]; // the gun is drawn wide and short: across, along the barrel
+
+function quad(L, y0, y1, hw0, hw1, xo) {
+  const k = y => 1 - 0.5 * Math.min(1, Math.max(0, -y / L)); // the far end is further away
   ctx.beginPath();
   ctx.moveTo((xo - hw0) * k(y0), y0); ctx.lineTo((xo - hw1) * k(y1), y1);
   ctx.lineTo((xo + hw1) * k(y1), y1); ctx.lineTo((xo + hw0) * k(y0), y0);
-  ctx.closePath(); ctx.fill();
+  ctx.closePath();
+}
+function seg(L, y0, y1, hw0, hw1, xo, fill) { ctx.fillStyle = fill; quad(L, y0, y1, hw0, hw1, xo); ctx.fill(); }
+
+// a solid part: side face `d` deep, the top face, and a faint highlight where the light catches it
+function part(L, y0, y1, hw0, hw1, xo, top, side, d = 1.8) {
+  ctx.fillStyle = side;
+  for (let i = 4; i >= 1; i--) { ctx.save(); ctx.translate(EX * d * i / 4, EY * d * i / 4); quad(L, y0, y1, hw0, hw1, xo); ctx.fill(); ctx.restore(); }
+  ctx.fillStyle = top; quad(L, y0, y1, hw0, hw1, xo); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; quad(L, y0, y1, hw0 * 0.3, hw1 * 0.3, xo - hw0 * 0.45); ctx.fill();
 }
 
 const GUN_LEN = { pistol: 22, rifle: 34, sniper: 42, shotgun: 30, smg: 27, blade: 30 };
+// long guns sit further back (their trigger hand low on screen) so the muzzle stays short of the crosshair
+const BACK = { pistol: 0, blade: 2, smg: 3, shotgun: 5, rifle: 7, sniper: 13 };
+const BARREL = ['#18181c', '#0a0a0c'];
+const pumpOffset = now => Math.max(0, 1 - Math.abs(now - S.fireT - 450) / 200) * 4; // shotgun pump slides back after a shot
 
 const MODELS = {
-  pistol(L, now, c) {
-    const slide = Math.max(0, 1 - (now - S.fireT) / 90) * 3; // slide kicks back on each shot
-    seg(L, 3, -7, 2.4, 2.2, 0, c.dark);                   // grip
-    seg(L, -5 + slide, -L + slide, 3.2, 2.8, 0, c.mid);   // slide
-    seg(L, -L + slide, -L - 1 + slide, 1, 0.9, 0, '#111'); // muzzle
-    seg(L, -8 + slide, -18 + slide, 0.5, 0.45, 1.3, c.glow);
-  },
   blade(L, now, c) {
     const p = Math.min(1, (now - S.swingT) / 250), sw = p < 1 ? Math.sin(p * Math.PI) : 0;
     ctx.rotate(-sw * 1.4); ctx.translate(-sw * 10, -sw * 4);
-    seg(L, 3, -9, 2.2, 2, 0, c.dark);    // grip
-    seg(L, -9, -11, 5, 4.6, 0, c.light); // guard
-    ctx.fillStyle = c.mid;               // jagged blade
+    part(L, 3, -9, 2.2, 2, 0, c.dark, '#0c0c0f', 1.4);    // grip
+    part(L, -9, -11, 5, 4.6, 0, c.light, c.mid, 1.2);     // guard
+    ctx.fillStyle = c.mid;                                // jagged blade
     ctx.beginPath(); ctx.moveTo(-2.2, -11); ctx.lineTo(-2.6, -20); ctx.lineTo(-1, -23); ctx.lineTo(-1.8, -27); ctx.lineTo(0.3, -L);
     ctx.lineTo(1.6, -26); ctx.lineTo(1, -22); ctx.lineTo(1.8, -16); ctx.lineTo(2, -11); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.beginPath(); ctx.moveTo(-0.4, -12); ctx.lineTo(0.2, -L + 2); ctx.lineTo(0.6, -12); ctx.closePath(); ctx.fill(); // edge shine
     ctx.strokeStyle = c.glow; ctx.lineWidth = 0.35; ctx.stroke();
   },
+  pistol(L, now, c) {
+    const s = Math.max(0, 1 - (now - S.fireT) / 90) * 3; // slide kicks back on each shot
+    part(L, 3, -9, 2.3, 2.1, 0.3, c.dark, '#0c0c0f', 2.6);             // frame
+    part(L, 1.5 + s, -L + s, 2.7, 2.4, 0, c.mid, c.dark, 2.2);          // slide
+    for (let i = 0; i < 4; i++) seg(L, 0.5 + s - i * 1.1, s - i * 1.1, 2.4, 2.4, 0, 'rgba(0,0,0,0.35)'); // grip serrations
+    seg(L, 1 + s, -0.4 + s, 1.9, 1.9, 0, '#101013');                   // rear sight
+    seg(L, -L + 2.2 + s, -L + 1 + s, 0.6, 0.6, 0, c.light);            // front sight
+    seg(L, -L + 0.8 + s, -L + s, 0.9, 0.9, 0, '#050505');              // muzzle
+    seg(L, -3 + s, -15 + s, 0.4, 0.35, 1.5, c.glow);
+  },
   rifle(L, now, c) {
-    seg(L, 3, -14, 5.4, 4.4, 0, c.mid);    // receiver
-    seg(L, -7, -13, 2.2, 2, -5.6, c.dark);  // magazine
-    seg(L, -14, -26, 3.4, 2.8, 0, c.dark);  // handguard
-    seg(L, -26, -L, 1.3, 1.1, 0, '#111');   // barrel
-    seg(L, -10, -13, 1.2, 1.1, 0, c.light); // rear sight
-    seg(L, 1, -24, 0.7, 0.6, 1.6, c.glow);  // accent strip
+    part(L, 14, 3, 3.8, 4.4, 0.4, c.dark, '#0e0e11', 2.4);  // stock
+    part(L, 3, -14, 4.4, 3.8, 0, c.mid, c.dark, 2.6);       // receiver
+    part(L, -6, -13, 1.9, 1.7, -5.2, c.dark, '#0b0b0e', 4); // magazine, hanging down
+    part(L, -14, -27, 3, 2.5, 0, c.dark, '#0e0e11', 2.2);   // handguard
+    part(L, -27, -L, 1.1, 0.95, 0, BARREL[0], BARREL[1], 1.2);
+    seg(L, 2, -24, 0.9, 0.75, 0, c.light);                  // top rail with slots
+    for (let y = 1; y > -23; y -= 2.2) seg(L, y, y - 0.8, 0.9, 0.9, 0, 'rgba(0,0,0,0.4)');
+    seg(L, -0.5, -3, 1.6, 1.5, 0, '#101013');               // rear sight
+    seg(L, -24, -25.6, 1.2, 1.1, 0, '#101013');             // front sight
+    seg(L, 1, -22, 0.4, 0.35, 2.7, c.glow);
   },
   smg(L, now, c) {
-    seg(L, 3, -13, 4.6, 4, 0, c.mid);
-    seg(L, -5, -14, 1.8, 1.7, -5.2, c.dark); // long mag
-    seg(L, -13, -20, 3, 2.6, 0, c.dark);
-    seg(L, -20, -L, 1.2, 1, 0, '#111');
-    seg(L, 0, -18, 0.6, 0.5, 1.4, c.glow);
+    part(L, 9, 3, 2.6, 3.2, 0.3, c.dark, '#0e0e11', 1.8);   // folded stock
+    part(L, 3, -13, 4, 3.5, 0, c.mid, c.dark, 2.3);
+    part(L, -4, -15, 1.6, 1.5, -4.6, c.dark, '#0b0b0e', 4.8); // long mag
+    part(L, -13, -19, 2.6, 2.3, 0, c.dark, '#0e0e11', 1.8);
+    part(L, -19, -L, 1, 0.9, 0, BARREL[0], BARREL[1], 1.1);
+    seg(L, 1, -12, 0.8, 0.7, 0, c.light);
+    seg(L, 0, -17, 0.4, 0.35, 2.3, c.glow);
   },
   shotgun(L, now, c) {
-    const pump = Math.max(0, 1 - Math.abs(now - S.fireT - 450) / 200) * 4; // slides back after a shot
-    seg(L, 3, -12, 5.8, 5, 0, c.mid);
-    seg(L, -12, -L, 1.6, 1.3, -1.5, '#111'); // twin barrels
-    seg(L, -12, -L, 1.6, 1.3, 1.5, '#111');
-    seg(L, -13 + pump, -21 + pump, 3.8, 3.3, 0, c.light);
-    seg(L, 1, -11, 0.7, 0.6, 2.5, c.glow);
+    const pump = pumpOffset(now);
+    part(L, 14, 3, 3.8, 4.6, 0.5, c.dark, '#0e0e11', 2.4);  // stock
+    part(L, 3, -12, 5, 4.4, 0, c.mid, c.dark, 2.8);         // receiver
+    part(L, -12, -L, 1.4, 1.2, -1.4, BARREL[0], BARREL[1], 1.4); // twin barrels
+    part(L, -12, -L, 1.4, 1.2, 1.4, BARREL[0], BARREL[1], 1.4);
+    part(L, -13 + pump, -21 + pump, 3.7, 3.3, 0, c.light, c.dark, 2.6); // pump
+    for (let y = -14; y > -20; y -= 1.3) seg(L, y + pump, y - 0.5 + pump, 3.4, 3.4, 0, 'rgba(0,0,0,0.3)');
+    seg(L, 1, -10, 0.6, 0.55, 2.8, c.glow);
   },
   sniper(L, now, c) {
     const bp = now - S.fireT - 450, bolt = bp > 0 && bp < 400 ? Math.sin(bp / 400 * Math.PI) * 4 : 0;
-    seg(L, 3, -12, 5, 4.4, 0, c.mid);          // stock + receiver
-    seg(L, -12, -20, 3.4, 3, 0, c.dark);
-    seg(L, -20, -L, 1.2, 0.9, 0, '#111');      // long barrel
-    seg(L, -8, -24, 2.5, 2.2, 0, '#0d0d0f');   // scope tube
-    seg(L, -23, -25, 2.8, 2.5, 0, c.light);    // scope bell
-    seg(L, -10 + bolt, -12 + bolt, 1, 1, 4.6, c.light); // bolt handle
-    seg(L, 2, -18, 0.6, 0.5, 3.4, c.glow);
+    part(L, 16, 3, 3.6, 4.4, 0.4, c.dark, '#0e0e11', 2.4);  // stock
+    part(L, 3, -12, 4.4, 3.9, 0, c.mid, c.dark, 2.6);       // receiver
+    part(L, -12, -21, 3, 2.6, 0, c.dark, '#0e0e11', 2);     // fore-end
+    part(L, -21, -L, 1.1, 0.85, 0, BARREL[0], BARREL[1], 1.1);
+    part(L, -10 + bolt, -12 + bolt, 1.1, 1.1, 4.8, c.light, c.dark, 1.2); // bolt handle
+    part(L, -2, -26, 2.2, 1.9, 0, '#141418', '#08080a', 3);  // scope tube
+    part(L, -1, -4.5, 2.8, 2.7, 0, '#1b1b20', '#0a0a0c', 3.2); // eyepiece
+    part(L, -23, -26.5, 3, 2.8, 0, '#1b1b20', '#0a0a0c', 3.2); // objective bell
+    seg(L, -26.2, -26.5, 2.2, 2.2, 0, 'rgba(120,200,255,0.55)'); // lens glint
+    seg(L, 2, -18, 0.5, 0.45, 3.4, c.glow);
   },
 };
 
+// where the hands go: trigger hand on the grip, support hand under the front (x, y in the gun's frame)
+const GRIP = {
+  blade:   { hand: [0, 0.5] },
+  pistol:  { hand: [0.4, 1.5], support: [-2.2, 3] },
+  rifle:   { hand: [0.6, 0.5], support: [-0.6, -20] },
+  smg:     { hand: [0.6, 0.5], support: [-0.6, -15.5] },
+  shotgun: { hand: [0.6, 0.5], support: [-0.4, -17] },
+  sniper:  { hand: [0.6, 0.5], support: [-0.6, -16.5] },
+};
+// a gloved fist, pixel art like the rest of the game: back of the hand, knuckle ridge, finger
+// gaps, thumb on top and the cuff at the wrist. o outline, h highlight, g glove, k shadow, c cuff
+const FIST = [
+  '...oooo...',
+  '..ohhhho..',
+  '.ohhgggggo',
+  'ohgggggggo',
+  'okhkhkhkgo',
+  'oggggggggo',
+  'ogkgkgkgko',
+  'oggggggggo',
+  '.ogggggkgo',
+  '.okggggko.',
+  '..occcco..',
+  '..occcco..',
+];
+const GLOVE_PAL = { o: '#0c0c0e', h: '#6a6e62', g: '#44483f', k: '#2a2d27', c: '#1d1f24' };
+
+// the fist at (x, y) in the gun's frame, turned by rot, w x h big (in screen units: the gun's
+// squash into the screen doesn't apply to hands)
+function glove(x, y, rot, w, h) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(1 / SQUASH[0], 1 / SQUASH[1]); ctx.rotate(rot);
+  const cw = w / FIST[0].length, ch = h / FIST.length;
+  FIST.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      const c = GLOVE_PAL[row[i]];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(-w / 2 + i * cw, -h / 2 + j * ch, cw + 0.03, ch + 0.03); // tiny overlap hides seams
+    }
+  });
+  ctx.restore();
+}
+
+const SLEEVE = ['#1c1e23', '#2b2e35'];
+
+// a sleeved forearm from the wrist (x0, y0) running off screen to (x1, y1), w0 -> w1 half widths
+function arm(x0, y0, x1, y1, w0, w1, accent) {
+  const l = Math.hypot(x1 - x0, y1 - y0), nx = -(y1 - y0) / l, ny = (x1 - x0) / l;
+  const side = (a, b, fill) => {
+    ctx.fillStyle = fill; ctx.beginPath();
+    ctx.moveTo(x0 + nx * w0 * a, y0 + ny * w0 * a); ctx.lineTo(x1 + nx * w1 * a, y1 + ny * w1 * a);
+    ctx.lineTo(x1 + nx * w1 * b, y1 + ny * w1 * b); ctx.lineTo(x0 + nx * w0 * b, y0 + ny * w0 * b); ctx.closePath(); ctx.fill();
+  };
+  side(-1, 1, SLEEVE[1]);
+  side(0.35, 1, SLEEVE[0]);                     // the shaded half
+  const cx = x0 + (x1 - x0) * 1.6 / l, cy = y0 + (y1 - y0) * 1.6 / l; // cuff band just past the wrist
+  ctx.strokeStyle = 'rgba(' + accent + ',0.45)'; ctx.lineWidth = 0.9;
+  ctx.beginPath(); ctx.moveTo(cx + nx * w0 * 1.05, cy + ny * w0 * 1.05); ctx.lineTo(cx - nx * w0 * 1.05, cy - ny * w0 * 1.05); ctx.stroke();
+}
+
 // gun metal per level
-const METAL = { hell: ['#221a1c', '#35292b', '#4a3a3a'], robot: ['#262b33', '#3c434e', '#58616e'], witch: ['#1d2019', '#2e3328', '#454c3c'] };
+const METAL = { hell: ['#221a1c', '#35292b', '#4a3a3a'], robot: ['#262b33', '#3c434e', '#58616e'], witch: ['#1d2019', '#2e3328', '#454c3c'],
+  haunt: ['#211d16', '#342e24', '#4c4434'] };
 
 function drawViewmodel(now) {
   const { W, H } = view, u = Math.min(W, H * 1.6) / 100;
   const moving = S.onGround ? Math.min(S.speed, 4) : 0;
   const bx = Math.sin(S.bobPhase) * moving * 0.4 * u, by = Math.abs(Math.cos(S.bobPhase)) * moving * 0.3 * u;
   const showBlade = S.weapon === 'blade' || now < S.quickUntil, w = showBlade ? 'blade' : S.weapon;
-  const ax = W / 2 + 26 * u + bx, ay = H + 3 * u + by;       // anchor, bottom right
-  const tx = W / 2 + 4 * u, ty = H / 2 + 10 * u;             // aim point, just below-right of the crosshair
+  // anchor bottom right, pushed around by bob and by sway (the gun trails your mouse a little)
+  const ax = W / 2 + 21 * u + bx + S.swayX * u, ay = H - 11 * u + by + S.swayY * u + S.slideDip * 2 * u;
+  const tx = W / 2 + 6 * u, ty = H / 2 + 2 * u;              // aim point, just right of the crosshair
   const ang = Math.atan2(tx - ax, ay - ty);                  // rotation that points local -y at the aim point
   const L = GUN_LEN[w], kick = S.recoil * (w === 'sniper' || w === 'shotgun' ? 6 : 3);
   const r = !showBlade && S.reloading, dip = r ? Math.sin(Math.min(1, (now - r.start) / (r.until - r.start)) * Math.PI) : 0; // gun drops out of view and back
   const m = METAL[S.theme.id];
   const colors = { dark: m[0], mid: m[1], light: m[2], glow: 'rgba(' + S.theme.accent + ',' + (0.65 + 0.35 * Math.sin(now / 250)) + ')' };
+  const rot = ang + S.recoil * 0.12 - dip * 0.5;
+  // you look along the gun from behind it, so it's drawn wide and short (foreshortened) rather
+  // than as a long side view: SX across, SY along the barrel
+  const [SX, SY] = SQUASH;
+  // a screen direction, turned and stretched into the gun's frame
+  const local = (sx, sy) => [(sx * Math.cos(rot) + sy * Math.sin(rot)) / SX, (-sx * Math.sin(rot) + sy * Math.cos(rot)) / SY];
+  [EX, EY] = local(0, 1); // screen-down, for the side faces
+  const g = GRIP[w], pump = w === 'shotgun' ? pumpOffset(now) : 0;
   ctx.save();
   ctx.translate(ax, ay);
-  ctx.rotate(ang + S.recoil * 0.12 - dip * 0.5);
-  ctx.scale(u, u);
-  ctx.translate(0, kick + dip * 16);
+  ctx.rotate(rot);
+  ctx.scale(u * SX, u * SY);
+  ctx.translate(0, kick + dip * 16 + BACK[w]);
+  // arms first, the gun over them, then the hands wrapped over the gun
+  const [hx, hy] = g.hand, [rdx, rdy] = local(0.55, 1);
+  arm(hx + 1, hy + 2.5, hx + 1 + rdx * 50, hy + 2.5 + rdy * 50, 3.2, 6, S.theme.accent);
+  let sx, sy;
+  if (g.support) {
+    [sx, sy] = g.support; sy += pump;
+    const [ldx, ldy] = local(-0.75, 1);
+    arm(sx - 1.5, sy + 1.5, sx - 1.5 + ldx * 60, sy + 1.5 + ldy * 60, 3, 6.5, S.theme.accent);
+  }
   MODELS[w](L, now, colors);
+  // a pistol's support hand cups under the trigger hand, so it goes first; a long gun's is out front
+  if (w === 'pistol') glove(sx, sy, 0.9, 7, 8.5);
+  if (w !== 'blade') glove(hx, hy, 0.15, 7.5, 9);
+  else { ctx.save(); const p = Math.min(1, (now - S.swingT) / 250), sw = p < 1 ? Math.sin(p * Math.PI) : 0; ctx.rotate(-sw * 1.4); ctx.translate(-sw * 10, -sw * 4); glove(hx, hy - 3, 0.1, 7.5, 9); ctx.restore(); }
+  if (g.support && w !== 'pistol') glove(sx, sy, -0.35, 7, 8.5);
   ctx.restore();
   if (S.muzzle > 0 && !showBlade) {
-    const tip = (L - kick) * u;
+    const tip = (L - kick - BACK[w]) * u * 0.6;
     glow(ax + Math.sin(ang) * tip, ay - Math.cos(ang) * tip, (w === 'sniper' || w === 'shotgun' ? 11 : 5) * u * S.muzzle / 6, 'rgba(255,210,110,0.95)');
   }
 }

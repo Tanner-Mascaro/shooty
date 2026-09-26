@@ -155,6 +155,7 @@ const handlers = {
     if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); }
     else if (S.others[msg.who]) S.others[msg.who].hitT = now;
     if (msg.by === S.myId) {
+      if (S.others[msg.who]) S.others[msg.who].markT = now; // they glow through walls for a bit (render/index.js)
       S.hitMarker = 14; S.hitHead = msg.head;
       play(msg.head ? 'headshot' : 'hitmarker');
     }
@@ -200,6 +201,7 @@ const handlers = {
   },
 
   notice(msg) { toast(msg.text); },
+
   chat(msg) { addChat(msg); },
   rtc(msg) { onSignal(msg); },
 

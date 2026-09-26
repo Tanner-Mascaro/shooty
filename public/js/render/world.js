@@ -5,10 +5,38 @@ import { S } from '../state.js';
 import { view, pk } from './canvas.js';
 import { colors } from '../level.js';
 import { PLAYER_SPRITES } from './sprites.js';
-import { MAT } from '/shared/terrain.js';
+import { MAT, CEILING_H, noise } from '/shared/terrain.js';
+import { inBackrooms } from '/shared/levels.js';
 
 const hash = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const LED = [[60, 255, 120], [60, 160, 255], [255, 170, 40]]; // server rack status lights
+
+// a ceiling instead of sky (haunted house): each row above the horizon looks up at the plane
+// CEILING_H high. Backrooms: stained tiles with fluorescent panels, a few of them flickering;
+// the house: dark boards between heavy beams.
+function drawCeiling(c, ybot, dx, dy, horizon, focal, eye, t, fr, fg, fb, fogK) {
+  const { RW, pix, zbuf } = view, me = S.me;
+  for (let y = 0; y < ybot; y++) {
+    const idx = y * RW + c, up = horizon - y - 0.5;
+    const z = up > 0 ? (CEILING_H - eye) * focal / up : MAX_DEPTH;
+    if (z >= MAX_DEPTH) { pix[idx] = pk(fr, fg, fb); zbuf[idx] = 1e9; continue; }
+    const wx = me.x + dx * z, wy = me.y + dy * z, cx = Math.floor(wx), cy = Math.floor(wy), fx = wx - cx, fy = wy - cy;
+    let r, g, b, f = 1 - Math.exp(-z * fogK);
+    if (inBackrooms(wx, wy)) {
+      const h = hash(cx, cy);
+      if ((cx + 2 * cy) % 3 === 0 && fx > 0.15 && fx < 0.85 && fy > 0.3 && fy < 0.7) {
+        const lit = h > 0.12 || Math.sin(t * 23 + h * 90) * Math.sin(t * 7 + h * 30) > -0.1; // a few panels flicker
+        if (lit) { r = 255; g = 248; b = 205; f *= 0.25; } else { r = 70; g = 68; b = 55; }
+      } else if (fx < 0.04 || fy < 0.04) { r = 88; g = 82; b = 56; }
+      else { const v = 0.85 + h * 0.2; r = 150 * v; g = 140 * v; b = 96 * v; }
+    } else {
+      const beam = (wx * 0.66) % 1 < 0.12;
+      const v = 0.8 + 0.3 * hash(cx * 3, Math.floor(wy * 5));
+      r = beam ? 24 : 40 * v; g = beam ? 16 : 28 * v; b = beam ? 10 : 20 * v;
+    }
+    pix[idx] = pk(r + (fr - r) * f, g + (fg - g) * f, b + (fb - b) * f); zbuf[idx] = z;
+  }
+}
 
 // ray-march depths along each screen column, shared by every frame
 const ZS = [];
@@ -19,7 +47,7 @@ export function drawTerrain(now) {
   const { RW, RH, pix, zbuf, skyRow } = view;
   const { CR, CG, CB, EM } = colors;
   const me = S.me, th = S.theme, T = S.T;
-  const t = now / 1000, robot = th.id === 'robot', witch = th.id === 'witch';
+  const t = now / 1000, robot = th.id === 'robot', witch = th.id === 'witch', haunt = th.id === 'haunt';
 
   // sky gradient by row (depends only on elevation above the horizon)
   const lo = th.skyLo, hi = th.skyHi;
@@ -75,6 +103,26 @@ export function drawTerrain(now) {
           const idx = y * RW + c;
           pix[idx] = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff); zbuf[idx] = z;
         }
+      } else if (m === MAT.WALL && haunt) {
+        // Backrooms: yellow striped wallpaper with damp stains over a baseboard;
+        // the house: dark wood wainscoting, a rail, and faded damask wallpaper above
+        const sh = xFace ? 0.78 : 1, along = xFace ? wy : wx, back = inBackrooms(wx, wy);
+        for (let y = ytop; y < ybot; y++) {
+          const hh = eye + (horizon - y - 0.5) * z / focal;
+          let r, g, b;
+          if (back) {
+            if (hh < 0.1) { r = 72; g = 60; b = 32; }
+            else {
+              const stripe = (along * 8) % 1 < 0.5 ? 1 : 0.92, stain = noise(along * 1.7, hh * 1.3) > 0.68 ? 0.72 : 1;
+              r = wc[0] * stripe * stain; g = wc[1] * stripe * stain; b = wc[2] * stripe * stain * 0.95;
+            }
+          } else if (hh < 0.9) { const panel = (along * 2.5) % 1 < 0.06 || hh < 0.08 ? 0.6 : 1; r = 62 * panel; g = 40 * panel; b = 26 * panel; }
+          else if (hh < 0.98) { r = 86; g = 58; b = 34; }
+          else { const d = Math.sin(along * 13) * Math.sin(hh * 13) > 0.45 ? 1.3 : 1; r = 56 * d; g = 44 * d; b = 64 * d; }
+          const idx = y * RW + c;
+          r *= sh; g *= sh; b *= sh;
+          pix[idx] = pk(r + (fr - r) * f, g + (fg - g) * f, b + (fb - b) * f); zbuf[idx] = z;
+        }
       } else if (m === MAT.WALL) {
         // wall faces are textured by world height (hell: rune bands; robot: panels + light strip; witch: moss + runes)
         const sh = xFace ? 0.75 : 1, seam = ((wx + wy) * (robot ? 1 : 2)) % 1 < 0.05 ? 0.6 : 1;
@@ -96,6 +144,7 @@ export function drawTerrain(now) {
         if (kind === 2) { // animated pit surface
           const v = 0.5 + 0.5 * Math.sin(wx * 3.1 + t * 1.7) * Math.sin(wy * 2.7 - t * 1.3);
           if (robot) { r = 20 + v * 60; g = 200 + v * 55; b = 120 + v * 80; }
+          else if (haunt) { r = 18 + v * 30; g = 4 + v * 6; b = 34 + v * 50; } // a hole into the void
           else if (witch) { const bub = Math.sin(wx * 11 + t * 3) * Math.sin(wy * 9 - t * 2) > 0.9; r = bub ? 200 : 50 + v * 50; g = bub ? 255 : 150 + v * 90; b = bub ? 140 : 30 + v * 30; }
           else { r = 255; g = 60 + v * 130; b = 10 + v * 40; }
           ff = f * 0.4;
@@ -110,6 +159,7 @@ export function drawTerrain(now) {
       if (ybot <= 0) break;
     }
 
+    if (th.ceiling) { drawCeiling(c, ybot, dx, dy, horizon, focal, eye, t, fr, fg, fb, th.fogK); continue; }
     // sky with the level's moon / planet
     let md = me.a + Math.atan(camX) - th.orbA;
     md = Math.atan2(Math.sin(md), Math.cos(md));
@@ -134,7 +184,9 @@ export function drawTerrain(now) {
 }
 
 // billboard at (ex, ey) with its bottom at height ez; w/h are world size
-export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint) {
+// `outline` { col: [r, g, b], xray }: a one-pixel glowing rim around the shape, like Minecraft's
+// Glowing effect; with xray it shows through walls too
+export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint, outline) {
   const { eye, horizon, focal, fwdx, fwdy, rtx, rty } = S.cam;
   const { RW, RH, pix, zbuf } = view;
   const dx = ex - S.me.x, dy = ey - S.me.y, f = dx * fwdx + dy * fwdy;
@@ -160,19 +212,38 @@ export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint) {
       pix[idx] = cols[p]; zbuf[idx] = f;
     }
   }
+  if (outline) drawOutline(cx, hw, y0, y1, xa, xb, ya, yb, f, px, glint, outline);
+}
+
+// the silhouette's edge: pixels just outside the shape next to one inside it
+function drawOutline(cx, hw, y0, y1, xa, xb, ya, yb, f, px, glint, { col, xray }) {
+  const { RW, RH, pix, zbuf } = view, mw = xb - xa + 3, mh = yb - ya + 3, mask = new Uint8Array(mw * mh);
+  for (let x = xa; x <= xb; x++) {
+    const u = (x + 0.5 - (cx - hw)) / (2 * hw);
+    for (let y = ya; y <= yb; y++) if (px(u, (y + 0.5 - y0) / (y1 - y0), glint)) mask[(y - ya + 1) * mw + (x - xa + 1)] = 1;
+  }
+  const c = pk(col[0], col[1], col[2]);
+  for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) {
+    const k = j * mw + i;
+    if (mask[k] || !((i > 0 && mask[k - 1]) || (i < mw - 1 && mask[k + 1]) || (j > 0 && mask[k - mw]) || (j < mh - 1 && mask[k + mw]))) continue;
+    const x = xa + i - 1, y = ya + j - 1;
+    if (x < 0 || y < 0 || x >= RW || y >= RH) continue;
+    const idx = y * RW + x;
+    if (xray || zbuf[idx] > f) pix[idx] = c;
+  }
 }
 
 // another player (or a corpse: squashed tall, stretched wide) using the level's character;
 // `tint` [r, g, b] recolors the body for teams
 const tinted = {};
-export function drawPlayer(x, y, z, hScale, wScale, flash, glint, tint, skin) {
+export function drawPlayer(x, y, z, hScale, wScale, flash, glint, tint, skin, outline) {
   const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES[S.theme.sprite];
   let pal = s.pal;
   if (tint) {
     const key = (skin || S.theme.sprite) + tint;
     pal = tinted[key] ??= s.pal.map((c, i) => c && (i === 1 || i === 2) ? c.map((v, j) => v * 0.35 + tint[j] * (i === 1 ? 0.65 : 0.4)) : c);
   }
-  drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, pal, s.emit, flash, glint);
+  drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, pal, s.emit, flash, glint, outline);
 }
 
 export function drawParticles(list) {

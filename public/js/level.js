@@ -1,6 +1,6 @@
 // Loads a level: terrain, precomputed floor colors, minimap image and pickup pads.
 import { RES } from '/shared/config.js';
-import { LEVELS, MW, MH } from '/shared/levels.js';
+import { LEVELS, MW, MH, inBackrooms } from '/shared/levels.js';
 import { buildTerrain, findPickups, MAT, noise } from '/shared/terrain.js';
 import { S } from './state.js';
 import { THEMES } from './themes.js';
@@ -29,8 +29,7 @@ const hash = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 6682652
 function buildColors() {
   const { T, MAP, theme } = S, NT = T.TW * T.TH;
   const CR = colors.CR = new Uint8Array(NT), CG = colors.CG = new Uint8Array(NT), CB = colors.CB = new Uint8Array(NT), EM = colors.EM = new Uint8Array(NT);
-  const pits = [];
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (MAP[y][x] === 'L') pits.push([x + 0.5, y + 0.5]);
+  const isPit = (cx, cy) => cy >= 0 && cy < MH && cx >= 0 && cx < MW && MAP[cy][cx] === 'L';
   // shapes are lit from the side the level's moon / planet is on
   const lx = Math.cos(theme.orbA) * 0.6, ly = Math.sin(theme.orbA) * 0.6, lz = 0.8;
   const h = (i, j) => T.hgt[Math.min(T.TH - 1, Math.max(0, j)) * T.TW + Math.min(T.TW - 1, Math.max(0, i))];
@@ -38,8 +37,10 @@ function buildColors() {
     const k = j * T.TW + i, x = (i + 0.5) / RES, y = (j + 0.5) / RES, n = hash(i, j), m = T.mat[k];
     let r, g, b;
     if (m === MAT.FLOOR) {
-      let ld = 99; // distance to nearest pit
-      for (const L of pits) ld = Math.min(ld, Math.max(0, Math.max(Math.abs(x - L[0]), Math.abs(y - L[1])) - 0.5));
+      let ld = 99; // distance to the nearest pit; only nearby ones matter (the glow fades out by 1.5)
+      const cx = Math.floor(x), cy = Math.floor(y);
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++)
+        if (isPit(cx + dx, cy + dy)) ld = Math.min(ld, Math.max(0, Math.max(Math.abs(x - cx - dx - 0.5), Math.abs(y - cy - dy - 0.5)) - 0.5));
       const glow = Math.max(0, 1 - ld / 1.5) ** 2;
       [r, g, b] = FLOORS[theme.id](x, y, n, glow, ld, k, EM);
     } else if (m === MAT.PIT) { r = 255; g = 90; b = 10; EM[k] = 2; }
@@ -97,6 +98,20 @@ const FLOORS = {
     r += 10 * glow; g += 60 * glow; b += 40 * glow;
     if (cx % 4 === 2 && cy % 4 === 2 && Math.hypot(fx - 0.5, fy - 0.5) < 0.12) { EM[k] = 1; return [60, 220, 255]; }
     return [r, g, b];
+  },
+  haunt(x, y, n, glow) {
+    // Backrooms: damp mustard carpet with darker stains; the house: worn floorboards.
+    // Both go dark toward a hole into the void.
+    let r, g, b;
+    if (inBackrooms(x, y)) {
+      const v = 0.8 + n * 0.3, stain = noise(x * 0.8, y * 0.8) > 0.68 ? 0.72 : 1;
+      r = 118 * v * stain; g = 102 * v * stain; b = 58 * v * stain;
+    } else {
+      const plank = Math.floor(y * 4), seam = (y * 4) % 1 < 0.08, tone = seam ? 0.45 : 0.75 + 0.4 * hash(plank, Math.floor(x * 0.7 + plank * 0.37));
+      r = 64 * tone; g = 42 * tone; b = 26 * tone;
+    }
+    const dark = 1 - 0.8 * glow;
+    return [r * dark, g * dark, b * dark];
   },
   witch(x, y, n, glow, ld, k, EM) {
     // mossy swamp ground with dark grass tufts and glowing mushrooms

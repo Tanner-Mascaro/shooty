@@ -6,12 +6,15 @@
 //   witch  # -> trees (trunk here; the canopy is a sprite drawn by the client), + -> bushes,
 //          edge -> a thick hedge with trees
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
+//   haunt  # -> full-height walls (touching # join into rooms), + -> old furniture, edge -> wall,
+//          under a ceiling (the client draws it at CEILING_H)
 //
 // kind: 0 = ground (walkable, may slope), 1 = blocked (anything taller than STEP_H), 2 = pit
 // mat:  what a sample is made of, for the client's colors (MAT below)
 // props: things the client draws or animates on top: trees (canopies), volcano craters
 
 export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9 };
+export const CEILING_H = 2.8; // haunted house: walls go all the way up to the ceiling
 const STEP_H = 0.3; // taller than this can't be walked onto (matches the client's step height)
 
 // smooth value noise in 0..1, same everywhere (seeded by position only)
@@ -69,11 +72,12 @@ export function buildTerrain(MAP, RES, style) {
   for (let cy = 1; cy < MH - 1; cy++) for (let cx = 1; cx < MW - 1; cx++) {
     const c = at(cx, cy), x = cx + 0.5, y = cy + 0.5, n = hash2(cx, cy);
     if (c === '+') {
-      if (style === 'robot') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
+      if (style === 'robot' || style === 'haunt') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.6, 0.65, MAT.LEAVES, 0.25);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
     if (c !== '#' || edge(cx, cy)) continue;
+    if (style === 'haunt') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; } // whole squares, so walls join flush
     if (style === 'robot') {
       // rack: inset from the square's sides unless the next square is rack too, so rows join up
       const m = 0.12;
