@@ -25,7 +25,6 @@ export const S = {
   // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick
   // behind, interpolated from prev to cur (`now` is this frame's position)
   others: {},
-  creatures: {}, // haunted house monsters by id (negative): { prev, cur, t, now, hitT, growlT }, drawn like others
   feed: [], // kill feed: { killer, victim, weapon, head, backstab, mine, t }
 
   // current level (see level.js)

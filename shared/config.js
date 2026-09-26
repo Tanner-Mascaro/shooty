@@ -34,7 +34,7 @@ export const START_GUN = 'pistol';
 export const AMMO = { pistol: 24, rifle: 60, sniper: 4, shotgun: 6, smg: 55 };
 export const MAX_SPARE = w => WEAPONS[w].mag * 3; // spare rounds you can carry per gun
 export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg']; // a gun pad rolls one of these each time it respawns
-export const AMMO_CRATES = 10;   // small ammo crates scattered at random spots each match: walk over for a mag per gun
+export const AMMO_CRATES = 18;   // small ammo crates scattered at random spots each match: walk over for a mag per gun
 export const AMMO_RESPAWN = 12000;
 export const GUN_SLOTS = 2;      // guns you can carry, plus the blade
 export const USE_RANGE = 1.2;    // how close you must be to pick up a gun or loot a box

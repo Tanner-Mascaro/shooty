@@ -29,8 +29,7 @@ const hash = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 6682652
 function buildColors() {
   const { T, MAP, theme } = S, NT = T.TW * T.TH;
   const CR = colors.CR = new Uint8Array(NT), CG = colors.CG = new Uint8Array(NT), CB = colors.CB = new Uint8Array(NT), EM = colors.EM = new Uint8Array(NT);
-  const pits = [];
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (MAP[y][x] === 'L') pits.push([x + 0.5, y + 0.5]);
+  const isPit = (cx, cy) => cy >= 0 && cy < MH && cx >= 0 && cx < MW && MAP[cy][cx] === 'L';
   // shapes are lit from the side the level's moon / planet is on
   const lx = Math.cos(theme.orbA) * 0.6, ly = Math.sin(theme.orbA) * 0.6, lz = 0.8;
   const h = (i, j) => T.hgt[Math.min(T.TH - 1, Math.max(0, j)) * T.TW + Math.min(T.TW - 1, Math.max(0, i))];
@@ -38,8 +37,10 @@ function buildColors() {
     const k = j * T.TW + i, x = (i + 0.5) / RES, y = (j + 0.5) / RES, n = hash(i, j), m = T.mat[k];
     let r, g, b;
     if (m === MAT.FLOOR) {
-      let ld = 99; // distance to nearest pit
-      for (const L of pits) ld = Math.min(ld, Math.max(0, Math.max(Math.abs(x - L[0]), Math.abs(y - L[1])) - 0.5));
+      let ld = 99; // distance to the nearest pit; only nearby ones matter (the glow fades out by 1.5)
+      const cx = Math.floor(x), cy = Math.floor(y);
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++)
+        if (isPit(cx + dx, cy + dy)) ld = Math.min(ld, Math.max(0, Math.max(Math.abs(x - cx - dx - 0.5), Math.abs(y - cy - dy - 0.5)) - 0.5));
       const glow = Math.max(0, 1 - ld / 1.5) ** 2;
       [r, g, b] = FLOORS[theme.id](x, y, n, glow, ld, k, EM);
     } else if (m === MAT.PIT) { r = 255; g = 90; b = 10; EM[k] = 2; }

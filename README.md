@@ -65,7 +65,7 @@ Speed, sight range, reaction time, fire rate and aim error per difficulty are in
 
 ## Haunted house
 
-The fourth map is half an old house and half the Backrooms, under a real ceiling. Three creatures roam it: they shriek and chase anyone they see within 9 units (slower than you can run), claw for 22 damage, and give up if you get 14 units away. Shoot or stab one for 120 damage to drive it off for 20 seconds. Tuning is in `CREATURE` in `server/creature.js`.
+The fourth map is half an old house and half the Backrooms, under a real ceiling (drawn by `drawCeiling` in `public/js/render/world.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`).
 
 ## Seeing players
 

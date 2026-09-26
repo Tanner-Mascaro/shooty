@@ -108,14 +108,6 @@ const handlers = {
   },
 
   state(msg, now) {
-    // creatures: interpolated like other players; gone from the list = driven off / match over
-    const seen = new Set();
-    for (const c of msg.creatures || []) {
-      seen.add(c.id);
-      const o = S.creatures[c.id] ??= { cur: null, hitT: -1e9, growlT: now + Math.random() * 4000 };
-      o.prev = o.cur || c; o.cur = c; o.t = now;
-    }
-    for (const id in S.creatures) if (!seen.has(+id)) delete S.creatures[id];
     for (const p of msg.players) {
       if (p.id === S.myId) {
         S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team;
@@ -160,9 +152,8 @@ const handlers = {
   hit(msg, now) {
     burst(msg.x, msg.y, msg.z, msg.weapon === 'sniper' ? 40 : msg.weapon === 'shotgun' ? 30 : msg.head ? 20 : 12, 'blood');
     if (msg.weapon === 'blade') playAt('slash', msg.x, msg.y);
-    if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); if (msg.weapon === 'creature') play('claw'); }
+    if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); }
     else if (S.others[msg.who]) S.others[msg.who].hitT = now;
-    else if (S.creatures[msg.who]) S.creatures[msg.who].hitT = now;
     if (msg.by === S.myId) {
       if (S.others[msg.who]) S.others[msg.who].markT = now; // they glow through walls for a bit (render/index.js)
       S.hitMarker = 14; S.hitHead = msg.head;
@@ -188,7 +179,7 @@ const handlers = {
       if (msg.weapon === 'sniper') S.killFlash = 10;
       if (S.theme.id === 'witch') setTimeout(() => play('cackle'), 250);
     } else if (msg.victim === S.myId) {
-      showMsg(pit ? S.theme.pitDeath : msg.weapon === 'creature' ? 'Something got you…' : (msg.backstab ? 'Backstabbed by ' : 'Killed by ') + nameOf(msg.killer));
+      showMsg(pit ? S.theme.pitDeath : (msg.backstab ? 'Backstabbed by ' : 'Killed by ') + nameOf(msg.killer));
       play(pit ? 'burn' : 'death');
     } else playAt(pit ? 'burn' : 'death', msg.x, msg.y);
   },
@@ -211,11 +202,6 @@ const handlers = {
 
   notice(msg) { toast(msg.text); },
 
-  // a creature noticed someone (a shriek), was driven off, or came back
-  creature(msg) {
-    if (msg.event === 'spot') playAt('shriek', msg.x, msg.y);
-    if (msg.event === 'banish') { burst(msg.x, msg.y, msg.z + 0.6, 50, 'blood'); playAt('banish', msg.x, msg.y); }
-  },
   chat(msg) { addChat(msg); },
   rtc(msg) { onSignal(msg); },
 
