@@ -18,3 +18,5 @@ export const clearToken = () => { try { localStorage.removeItem('shooty.token');
 
 export const savedName = () => get('shooty.name') || '';
 export const saveName = name => set('shooty.name', name);
+export const savedSkin = () => get('shooty.skin') || 'demon';
+export const saveSkin = skin => set('shooty.skin', skin);

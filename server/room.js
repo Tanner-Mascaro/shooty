@@ -1,7 +1,7 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
@@ -46,8 +46,8 @@ export class Room {
   // who's here, teams and ready state: sent whenever any of it changes
   roster() {
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, max: MAX_PLAYERS,
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, ready: p.ready, bot: !!p.bot })) });
+      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS,
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, skin: p.skin || 'demon', ready: p.ready, bot: !!p.bot })) });
   }
 
   // --- level / pickups ---
@@ -165,7 +165,7 @@ export class Room {
 
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
-    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false });
+    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false });
     p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     this.resetPlayer(p);
@@ -309,6 +309,13 @@ export class Room {
 
 // client -> server messages about the match; `this` is the Room, `p` the sending player
 Room.prototype.handlers = {
+  skin(p, msg) {
+    if (this.gameOn || !PLAYER_SKINS.includes(msg.skin) || p.skin === msg.skin) return;
+    p.skin = msg.skin;
+    p.ready = !!p.bot;
+    this.roster();
+  },
+
   level(p, msg) {
     if (this.gameOn || !LEVELS[msg.level]) return;
     this.setLevel(msg.level);

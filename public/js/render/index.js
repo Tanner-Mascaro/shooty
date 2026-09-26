@@ -84,11 +84,14 @@ export function render(dt) {
   for (const c of S.corpses) {
     if (c.mine) continue;
     const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0;
-    drawPlayer(c.x, c.y, c.z - sink, 1 - 0.72 * fall, 1 + 0.9 * fall, false, false);
+    drawPlayer(c.x, c.y, c.z - sink, 1 - 0.72 * fall, 1 + 0.9 * fall, false, false, null, c.skin);
   }
   const teams = S.room && S.room.mode === 'teams';
   for (const o of Object.values(S.others))
-    if (o.now) drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null);
+    if (o.now) {
+      const player = S.room && S.room.players.find(p => p.id === o.now.id);
+      drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null, player && player.skin);
+    }
   drawParticles(S.embers);
   drawParticles(S.particles);
   present(S.cam.ox, S.cam.oy);
