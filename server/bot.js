@@ -7,7 +7,7 @@
 import { TICK, EYE, BODY_H, WEAPONS, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
-import { groundAt, kindAt, walkHeight } from '../shared/terrain.js';
+import { kindAt, walkHeight, solidAt } from '../shared/terrain.js';
 
 // speed: walk wish-speed (map units / s); sprint: chase wish-speed; sight/reaction/aim as before
 export const BOT_LEVELS = {
@@ -56,8 +56,10 @@ function canSee(T, p, o, sight) {
   const d = Math.hypot(o.x - p.x, o.y - p.y);
   if (d > sight) return false;
   const z0 = p.z + EYE, z1 = o.z + BODY_H / 2;
-  for (let t = 0.2 / d; t < 1; t += 0.1 / d)
-    if (groundAt(T, p.x + (o.x - p.x) * t, p.y + (o.y - p.y) * t) > z0 + (z1 - z0) * t) return false;
+  for (let t = 0.2 / d; t < 1; t += 0.1 / d) {
+    const z = z0 + (z1 - z0) * t;
+    if (solidAt(T, p.x + (o.x - p.x) * t, p.y + (o.y - p.y) * t, z) > z) return false;
+  }
   return true;
 }
 
@@ -231,6 +233,7 @@ export function botTick(game, p) {
     return;
   }
   const gun = Object.keys(p.mag).includes('sniper') && d > 5 ? 'sniper'
+    : Object.keys(p.mag).includes('beam') && d > 4 ? 'beam'
     : Object.keys(p.mag).includes('crossbow') && d > 3 ? 'crossbow'
     : Object.keys(p.mag)[0];
   if (!gun) return; // out of ammo altogether

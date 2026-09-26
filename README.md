@@ -70,7 +70,7 @@ Run `npm test` for server checks covering infection, friendly fire, round ending
 
 ## Bots
 
-Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Pick **Easy / Medium / Hard** first; each bot also gets a random character. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.
+Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Pick **Easy / Medium / Hard** first; each bot also gets a random character. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with bots count toward saved stats.
 
 `npm run bots` (or `npm start -- --bots` without auto-restart) also starts every new room with one bot, for local testing.
 
@@ -90,7 +90,7 @@ Every player has a Minecraft-style glowing outline: white in free-for-all, red /
 
 ## Profiles, accounts and leaderboard
 
-Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses) plus their leaderboard rank. Matches with a bot in them don't count. Profiles also keep each player's settings.
+Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses) plus their leaderboard rank. Matches with bots count. Profiles also keep each player's settings.
 
 - **Guests:** no sign-up needed. The browser keeps a random secret key that identifies the profile, so clearing site data or switching browsers starts a new one.
 - **Accounts:** "Create account" puts a username + password on your current profile (stats kept). "Sign in" on any other device switches that browser to your account. Passwords are hashed with scrypt; 5 wrong tries per minute locks out that IP for the rest of the minute. There's no password reset yet (no email on file).

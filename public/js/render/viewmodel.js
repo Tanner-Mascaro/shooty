@@ -110,6 +110,22 @@ const MODELS = {
     sym(0.016, -0.115, -0.08, 0.06, 0.12, 'd'),                       // mag
     sym(0.016, -0.15, -0.08, -0.08, -0.03, 'd'),                      // grip
   ],
+  beam: [
+    sym(0.022, -0.1, -0.028, -0.38, -0.08, 'd'),                      // stock
+    sym(0.024, -0.072, -0.018, -0.08, 0.2, 'm'),                      // receiver
+    ...strips(0.024, -0.048, -0.042, -0.05, 0.18),
+    sym(0.028, -0.055, -0.02, 0.18, 0.42, 'd'),                       // shroud
+    sym(0.01, -0.02, -0.01, 0.0, 0.08, 'g'),                          // optic rail glow
+    sym(0.014, -0.014, 0.014, 0.02, 0.14, 'b'),                       // optic
+    sym(0.01, -0.01, 0.01, 0.14, 0.142, 'x'),                         // lens
+    sym(0.008, -0.042, -0.026, 0.42, 0.7, 'b'),                       // barrel
+    sym(0.014, -0.048, -0.02, 0.68, 0.78, 'g'),                       // emitter coil
+    sym(0.018, -0.018, 0.018, 0.76, 0.8, 'g'),                        // glowing muzzle
+    sym(0.014, -0.13, -0.075, 0.04, 0.1, 'd'),                        // mag
+    sym(0.0145, -0.128, -0.12, 0.042, 0.098, 'g'),
+    sym(0.015, -0.145, -0.075, -0.06, -0.02, 'd'),                    // grip
+    sym(0.003, -0.1, -0.094, -0.02, 0.03, 'b'),
+  ],
   blade: [
     sym(0.012, -0.02, 0.02, -0.08, 0.035, 'd'),                       // handle
     ...[0, 1, 2].map(i => sym(0.0125, -0.021, 0.021, -0.06 + i * 0.03, -0.05 + i * 0.03, 'b')),
@@ -243,15 +259,16 @@ const HIP = {
   shotgun:  [0.1, -0.068, 0.22, -0.08, 0.18],
   sniper:   [0.1, -0.07, 0.23, -0.08, 0.18],
   crossbow: [0.1, -0.072, 0.23, -0.08, 0.16],
+  beam:     [0.1, -0.068, 0.22, -0.08, 0.16],
   blade:    [0.11, -0.085, 0.24, -0.25, 0],
   claws:    [0.12, -0.09, 0.22, -0.15, 0.1],
 };
-const ADS_Z = { pistol: 0.34, deagle: 0.34, revolver: 0.34, rifle: 0.3, burst: 0.3, carbine: 0.3, smg: 0.3, uzi: 0.32, lmg: 0.28, crossbow: 0.32 };
+const ADS_Z = { pistol: 0.34, deagle: 0.34, revolver: 0.34, rifle: 0.3, burst: 0.3, carbine: 0.3, smg: 0.3, uzi: 0.32, lmg: 0.28, crossbow: 0.32, beam: 0.34 };
 const MUZZLE = {
   pistol: [0, -0.018, 0.2], deagle: [0, -0.02, 0.235], revolver: [0, -0.025, 0.28],
   rifle: [0, -0.037, 0.67], burst: [0, -0.032, 0.56], carbine: [0, -0.031, 0.52],
   smg: [0, -0.038, 0.37], uzi: [0, -0.03, 0.3], lmg: [0, -0.04, 0.62],
-  shotgun: [0, -0.018, 0.62], sniper: [0, -0.047, 0.84], crossbow: [0, -0.012, 0.46],
+  shotgun: [0, -0.018, 0.62], sniper: [0, -0.047, 0.84], crossbow: [0, -0.012, 0.46], beam: [0, -0.0, 0.8],
 };
 
 // light comes from above and a little to the left; lit per face, in the gun's own frame
@@ -402,7 +419,7 @@ export function drawViewmodel(now) {
   if (S.muzzle > 0 && !melee) {
     const [x, y, z] = xf(MUZZLE[w], t), sc = view.W / view.RW;
     const px = (view.RW / 2 + x / z * F) * sc, py = (view.RH / 2 - y / z * F) * sc, u = Math.min(view.W, view.H * 1.6) / 100;
-    const rad = (w === 'sniper' || w === 'shotgun' ? 11 : 6) * u * S.muzzle / 6, g = ctx.createRadialGradient(px, py, 0, px, py, rad);
+    const rad = (w === 'sniper' || w === 'shotgun' || w === 'beam' ? 11 : 6) * u * S.muzzle / 6, g = ctx.createRadialGradient(px, py, 0, px, py, rad);
     g.addColorStop(0, 'rgba(255,230,160,0.95)'); g.addColorStop(0.35, 'rgba(255,170,60,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
   }

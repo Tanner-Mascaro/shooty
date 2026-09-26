@@ -1,6 +1,6 @@
 // WebSocket connection and handlers for every server -> client message.
 import { EYE, HEAL, PLAGUE_TEAM, teamName } from '/shared/config.js';
-import { groundAt } from '/shared/terrain.js';
+import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S, owned, nameOf, gunSlots } from './state.js';
 import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
@@ -40,7 +40,7 @@ export function connect() {
   addEventListener('pageshow', e => { if (e.persisted) location.reload(); }); // came back via Back: reconnect
 }
 
-const airborne = p => p.z - groundAt(S.T, p.x, p.y) > 0.05;
+const airborne = p => p.z - walkHeight(S.T, p.x, p.y, p.z) > 0.05;
 
 // footsteps / jump / land sounds for another player, from consecutive server states
 function otherSounds(o, prev, cur) {
@@ -182,7 +182,7 @@ const handlers = {
     for (const r of msg.rays) {
       const ex = msg.x + Math.cos(r.a) * r.dist, ey = msg.y + Math.sin(r.a) * r.dist, ez = msg.z + EYE + r.p * r.dist;
       S.tracers.push({ x0: msg.x, y0: msg.y, z0: msg.z + EYE - 0.12, x1: ex, y1: ey, z1: ez, weapon: msg.weapon, t: now, mine });
-      if (!r.hit) burst(ex, ey, ez, msg.weapon === 'sniper' ? 28 : msg.weapon === 'shotgun' ? 3 : 8, 'spark');
+      if (!r.hit) burst(ex, ey, ez, msg.weapon === 'sniper' ? 28 : msg.weapon === 'beam' ? 18 : msg.weapon === 'shotgun' ? 3 : 8, 'spark');
       if (!mine && !r.hit && !whizzed) {
         // a bullet passing close by cracks past your head
         const dx = ex - msg.x, dy = ey - msg.y, L2 = dx * dx + dy * dy || 1;

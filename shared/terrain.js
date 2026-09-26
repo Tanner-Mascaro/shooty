@@ -281,7 +281,8 @@ export function buildTerrain(MAP, RES, style) {
   // open the room volume under each roof so walls stay solid but the inside is walkable
   for (const hut of props) {
     if (hut.type !== 'hut') continue;
-    const hw = (hut.w || 2.2) / 2 - 0.15, hd = (hut.d || 2.2) / 2 - 0.15;
+    // inset past wall thickness so side walls stay kind=1 (don't hollow them out)
+    const hw = (hut.w || 2.2) / 2 - 0.32, hd = (hut.d || 2.2) / 2 - 0.32;
     const i0 = Math.max(0, Math.floor((hut.x - hw) * RES)), i1 = Math.min(TW - 1, Math.ceil((hut.x + hw) * RES));
     const j0 = Math.max(0, Math.floor((hut.y - hd) * RES)), j1 = Math.min(TH - 1, Math.ceil((hut.y + hd) * RES));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
@@ -293,8 +294,8 @@ export function buildTerrain(MAP, RES, style) {
     const doorHalf = hut.doorHalf || Math.min(hw * 0.7, 1.2);
     const doorDir = hut.doorDir || 1;
     const fullHd = (hut.d || 2.2) / 2;
-    const ya = doorDir > 0 ? hut.y + fullHd - 0.4 : hut.y - fullHd - 0.85;
-    const yb = doorDir > 0 ? hut.y + fullHd + 0.85 : hut.y - fullHd + 0.4;
+    const ya = doorDir > 0 ? hut.y + fullHd - 0.55 : hut.y - fullHd - 1.0;
+    const yb = doorDir > 0 ? hut.y + fullHd + 1.0 : hut.y - fullHd + 0.55;
     const di0 = Math.max(0, Math.floor((hut.x - doorHalf) * RES)), di1 = Math.min(TW - 1, Math.ceil((hut.x + doorHalf) * RES));
     const dj0 = Math.max(0, Math.floor(Math.min(ya, yb) * RES)), dj1 = Math.min(TH - 1, Math.ceil(Math.max(ya, yb) * RES));
     for (let j = dj0; j <= dj1; j++) for (let i = di0; i <= di1; i++) {
@@ -331,13 +332,30 @@ export function walkHeight(T, x, y, z = 0) {
     const doorDir = p.doorDir || 1;
     const inside = Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd;
     const inDoor = Math.abs(x - p.x) < doorHalf && (
-      doorDir > 0 ? (y >= p.y + fullHd - 0.45 && y <= p.y + fullHd + 0.9)
-                  : (y <= p.y - fullHd + 0.45 && y >= p.y - fullHd - 0.9)
+      doorDir > 0 ? (y >= p.y + fullHd - 0.55 && y <= p.y + fullHd + 1.05)
+                  : (y <= p.y - fullHd + 0.55 && y >= p.y - fullHd - 1.05)
     );
     if (!inside && !inDoor) continue;
     if (z < g - 0.2) return 0;
   }
   return g;
+}
+
+// solid height for bullets / LOS / nades: floor under a roof, otherwise the heightmap
+export function solidAt(T, x, y, z = 0) {
+  return walkHeight(T, x, y, z);
+}
+
+// underside of a hut roof at (x,y), or null if not under one (for ceiling hits)
+export function ceilingAt(T, x, y) {
+  for (const p of T.props || []) {
+    if (p.type !== 'hut') continue;
+    const hw = (p.w || 2.2) / 2 - 0.05, hd = (p.d || 2.2) / 2 - 0.05;
+    if (Math.abs(x - p.x) >= hw || Math.abs(y - p.y) >= hd) continue;
+    const g = groundAt(T, x, y);
+    if (g > 1.2) return g;
+  }
+  return null;
 }
 
 export function kindAt(T, x, y) {

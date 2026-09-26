@@ -23,7 +23,7 @@ export const S = {
   clawsOnly: false, jumpsUsed: 0, jumpHeld: false,
   dashX: 0, dashY: 0, dashUntil: 0, nextDash: 0,
   reloading: null, // { w, start, until } while a reload runs
-  nextFire: { pistol: 0, deagle: 0, revolver: 0, rifle: 0, burst: 0, carbine: 0, sniper: 0, crossbow: 0, shotgun: 0, smg: 0, uzi: 0, lmg: 0, blade: 0, claws: 0 },
+  nextFire: { pistol: 0, deagle: 0, revolver: 0, rifle: 0, burst: 0, carbine: 0, sniper: 0, crossbow: 0, beam: 0, shotgun: 0, smg: 0, uzi: 0, lmg: 0, blade: 0, claws: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
 
   // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick

@@ -3,8 +3,10 @@
 export const TICK = 1000 / 30;   // server state broadcast interval (ms)
 export const RES = 12;           // heightmap samples per map unit (higher = smoother shapes)
 export const MAX_HP = 100;
-export const WIN_SCORE = 10;       // free-for-all: first player to this many kills
-export const TEAM_WIN_SCORE = 20;  // teams: first team to this many kills
+export const WIN_SCORE = 10;       // free-for-all default kills to win
+export const TEAM_WIN_SCORE = 20;  // teams default kills to win
+export const WIN_SCORE_OPTIONS = [5, 10, 15, 20, 25, 30];
+export const TEAM_WIN_SCORE_OPTIONS = [10, 20, 30, 40];
 export const MAX_PLAYERS = 8;      // per room
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
 export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', plague: 'Plague', snipers: 'Snipers' };
@@ -44,6 +46,7 @@ export const WEAPONS = {
   carbine:  { dmg: 18,  head: 2,   cd: 100,  spread: 0.018, scopedSpread: 0.007, airSpread: 0.055, auto: true, mag: 25, reload: 1550 },
   sniper:   { dmg: 100, head: 1.5, cd: 1400, spread: 0.12,  scopedSpread: 0,     airSpread: 0.08, mag: 4, reload: 2400 },
   crossbow: { dmg: 85,  head: 1.8, cd: 1100, spread: 0.02,  scopedSpread: 0.004, airSpread: 0.05, mag: 1, reload: 1600 },
+  beam:     { dmg: 38,  head: 2,   cd: 260,  spread: 0.014, scopedSpread: 0.002, airSpread: 0.04, mag: 16, reload: 1700 },
   shotgun:  { dmg: 12,  head: 1.5, cd: 850,  spread: 0.07,  pellets: 8, falloff: 12, mag: 6, reload: 2200 },
   smg:      { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.018, airSpread: 0.07, auto: true, mag: 35, reload: 1500 },
   uzi:      { dmg: 9,   head: 1.8, cd: 55,   spread: 0.04,  scopedSpread: 0.022, airSpread: 0.09, auto: true, mag: 32, reload: 1400 },
@@ -54,10 +57,10 @@ export const WEAPONS = {
 // Every gun's ammo runs out; only the blade needs none. A gun you've emptied completely is gone.
 export const START_GUN = 'pistol';
 // spare rounds a gun comes with on top of a full mag (the pistol when you spawn, the rest from pads)
-export const AMMO = { pistol: 24, deagle: 14, revolver: 18, rifle: 60, burst: 60, carbine: 50, sniper: 4, crossbow: 8, shotgun: 6, smg: 55, uzi: 64, lmg: 150 };
+export const AMMO = { pistol: 24, deagle: 14, revolver: 18, rifle: 60, burst: 60, carbine: 50, sniper: 4, crossbow: 8, beam: 32, shotgun: 6, smg: 55, uzi: 64, lmg: 150 };
 export const MAX_SPARE = w => WEAPONS[w].mag * 3; // spare rounds you can carry per gun
-export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'crossbow', 'uzi'];
-export const SNIPER_GUNS = ['sniper', 'crossbow'];
+export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'crossbow', 'uzi', 'beam'];
+export const SNIPER_GUNS = ['sniper', 'crossbow', 'beam'];
 export const startGun = mode => mode === 'snipers' ? 'sniper' : START_GUN;
 export const padGuns = mode => mode === 'snipers' ? SNIPER_GUNS : PAD_GUNS;
 export const AMMO_CRATES = 22;   // small ammo crates scattered at random spots each match: walk over for a mag per gun

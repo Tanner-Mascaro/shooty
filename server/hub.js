@@ -110,9 +110,9 @@ export class Hub {
   }
 
   // --- profiles (see profiles.js) ---
-  // bump a player's saved stats; matches with a bot in them don't count
+  // bump a player's saved stats (bot matches count — most play is vs bots)
   record(p, delta) {
-    if (!p || !p.pid || (p.room && p.room.hasBots)) return;
+    if (!p || !p.pid) return;
     for (const s in delta) p.stats[s] += delta[s];
     this.send(p, Object.assign({ type: 'profile' }, p.stats));
     const save = this.profiles.add(p.pid, delta).catch(e => log(`Could not save stats for ${this.who(p)}: ${e.message}`));

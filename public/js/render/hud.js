@@ -21,7 +21,7 @@ export function glow(x, y, r, color) {
 }
 
 export function drawTracers(now) {
-  S.tracers = S.tracers.filter(t => now - t.t < (t.weapon === 'sniper' ? 1500 : 90));
+  S.tracers = S.tracers.filter(t => now - t.t < (t.weapon === 'sniper' ? 1500 : t.weapon === 'beam' ? 520 : 90));
   const c = S.cam, me = S.me, near = 0.1;
   const lerp = (p, q, u) => ({ x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u, z: p.z + (q.z - p.z) * u });
   const line = (A, B, style, width) => { ctx.strokeStyle = style; ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); };
@@ -41,6 +41,13 @@ export function drawTracers(now) {
       if (hot > 0) {
         line(A, B, 'rgba(' + S.theme.accent + ',' + (hot * 0.6) + ')', 7);
         line(A, B, 'rgba(255,240,220,' + hot + ')', 2);
+      }
+    } else if (t.weapon === 'beam') {
+      const k = 1 - age / 520, hot = Math.max(0, 1 - age / 120);
+      line(A, B, 'rgba(160,40,140,' + (k * 0.4) + ')', 5 + age / 80);
+      if (hot > 0) {
+        line(A, B, 'rgba(255,60,220,' + (hot * 0.85) + ')', 6);
+        line(A, B, 'rgba(255,220,250,' + hot + ')', 2);
       }
     } else line(A, B, 'rgba(255,210,120,' + (0.7 * (1 - age / 90)) + ')', 1.5);
   }

@@ -255,6 +255,7 @@ export function initRoom() {
     send({ type: 'vote', level: b.dataset.level });
   }));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
+  document.querySelectorAll('#scorePick button, #teamScorePick button').forEach(b => b.addEventListener('click', () => send({ type: 'score', score: +b.dataset.score })));
   document.querySelectorAll('#plagueSelection button').forEach(b => b.addEventListener('click', () => send({ type: 'plagueSetup', selection: b.dataset.selection })));
   document.querySelectorAll('#teamPick button').forEach(b => b.addEventListener('click', () => send({ type: 'team', team: +b.dataset.team })));
   // bot difficulty for the next + BOT, remembered in this browser
@@ -313,12 +314,25 @@ export function showRoom() {
   $('roomKind').textContent = r.private ? 'private' : 'public';
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('sel', b.dataset.mode === r.mode));
   document.body.classList.toggle('plague', r.mode === 'plague');
+  const win = r.winScore ?? WIN_SCORE, teamWin = r.teamWinScore ?? TEAM_WIN_SCORE;
   $('modeHelp').textContent = r.mode === 'plague'
     ? `Infect everyone, or survive ${PLAGUE_DURATION / 60000} minutes. Monsters are fast and claw to infect.`
-    : r.mode === 'teams' ? `Red vs blue. First team to ${TEAM_WIN_SCORE} kills wins.`
-    : r.mode === 'snipers' ? `Sniper and crossbow only. First to ${WIN_SCORE} kills wins.`
-    : `Every player for themselves. First to ${WIN_SCORE} kills wins.`;
+    : r.mode === 'teams' ? `Red vs blue. First team to ${teamWin} kills wins.`
+    : r.mode === 'snipers' ? `Sniper, crossbow, and beam rifle only. First to ${win} kills wins.`
+    : `Every player for themselves. First to ${win} kills wins.`;
   document.body.classList.toggle('snipers', r.mode === 'snipers');
+  const scoreOn = r.mode === 'ffa' || r.mode === 'snipers' || r.mode === 'teams';
+  $('scoreSetup').hidden = !scoreOn;
+  $('scorePick').hidden = r.mode === 'teams';
+  $('teamScorePick').hidden = r.mode !== 'teams';
+  document.querySelectorAll('#scorePick button').forEach(b => {
+    b.classList.toggle('sel', +b.dataset.score === win);
+    b.disabled = r.gameOn;
+  });
+  document.querySelectorAll('#teamScorePick button').forEach(b => {
+    b.classList.toggle('sel', +b.dataset.score === teamWin);
+    b.disabled = r.gameOn;
+  });
   const manual = r.mode === 'plague' && r.plagueSelection === 'manual';
   $('plagueSetup').hidden = r.mode !== 'plague';
   document.querySelectorAll('#plagueSelection button').forEach(b => {

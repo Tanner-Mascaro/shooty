@@ -1,6 +1,6 @@
 // One frame: set up the camera, simulate effects, draw the world, then the HUD on top.
 import { TICK, EYE, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
-import { groundAt } from '/shared/terrain.js';
+import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S } from '../state.js';
 import { settings } from '../settings.js';
 import { BASE_FOV, SCOPE_FOV, ADS_ZOOM, GRAVITY, GUN_COLOR } from '../constants.js';
@@ -84,7 +84,7 @@ export function render(dt) {
   S.pickupSpots.forEach((p, i) => {
     if (!S.pickupActive[i]) return;
     const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
-    const z = p.weapon === 'ammo' ? groundAt(S.T, p.x, p.y) : 0.3 + 0.07 * Math.sin(now / 400 + i); // crates sit on the ground
+    const z = p.weapon === 'ammo' ? walkHeight(S.T, p.x, p.y, 0) : 0.3 + 0.07 * Math.sin(now / 400 + i); // crates sit on the ground
     drawSprite(p.x, p.y, z, sp.w, sp.h, sp.px, sp.pal, sp.emit);
   });
   const box = boxSprite(S.theme.accent);

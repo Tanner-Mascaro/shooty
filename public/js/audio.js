@@ -115,6 +115,14 @@ const SFX = {
     noise(o, { filter:'bandpass', freq:900, q:2, dur:0.12, vol:0.5 }); // body
     noise(o, { freq:600, dur:1.1, vol:0.35, delay:0.18, attack:0.08 }); // rolling echo
   },
+  beam(v, p) {
+    const o = bus(v * 0.9, p, 0.35);
+    tone(o, { type:'sawtooth', freq:920, to:220, dur:0.14, vol:0.35 });
+    tone(o, { type:'square', freq:1480, to:480, dur:0.1, vol:0.18 });
+    noise(o, { filter:'bandpass', freq:4200, q:2.5, dur:0.08, vol:0.7 });
+    noise(o, { filter:'highpass', freq:6000, dur:0.12, vol:0.45, attack:0.01 });
+    tone(o, { freq:110, to:40, dur:0.18, vol:0.25 });
+  },
   bolt() { const o = bus(0.6, 0); noise(o, { filter:'bandpass', freq:2500, q:3, dur:0.05, vol:0.8 }); tone(o, { type:'square', freq:300, to:200, dur:0.03, vol:0.1 }); noise(o, { filter:'bandpass', freq:1700, q:3, dur:0.06, vol:0.8, delay:0.2 }); },
   magOut() { const o = bus(0.5, 0); noise(o, { filter:'bandpass', freq:1100, q:3, dur:0.05, vol:0.8 }); noise(o, { freq:400, dur:0.08, vol:0.4, delay:0.12 }); },
   magIn() { const o = bus(0.6, 0); noise(o, { filter:'bandpass', freq:1600, q:3, dur:0.05, vol:0.9 }); tone(o, { type:'square', freq:260, to:180, dur:0.03, vol:0.12 }); noise(o, { filter:'bandpass', freq:2600, q:3, dur:0.05, vol:0.7, delay:0.1 }); },

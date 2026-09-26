@@ -1,7 +1,7 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
@@ -31,6 +31,8 @@ export class Room {
     this.private = isPrivate; // quick play never drops strangers into a private room
     this.players = {};        // id -> player (the hub's connection object, or a bot)
     this.mode = 'ffa';        // 'ffa' | 'teams' | 'plague'
+    this.winScore = WIN_SCORE;
+    this.teamWinScore = TEAM_WIN_SCORE;
     this.gameOn = false;
     this.plagueEndsAt = 0;
     this.plagueSelection = 'random'; // 'random' | 'manual'; manual roles survive rematches
@@ -72,6 +74,7 @@ export class Room {
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
       gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
+      winScore: this.winScore, teamWinScore: this.teamWinScore,
       players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
   }
 
@@ -324,8 +327,8 @@ export class Room {
     }
     if (!killer) return;
     if (this.mode === 'teams') {
-      if (this.teamKills(killer.team) >= TEAM_WIN_SCORE) this.finish(this.list.filter(p => p.team === killer.team), { team: killer.team }, TEAMS[killer.team] + ' team');
-    } else if (killer.kills >= WIN_SCORE) this.finish([killer], { winner: killer.id }, this.hub.name(killer));
+      if (this.teamKills(killer.team) >= this.teamWinScore) this.finish(this.list.filter(p => p.team === killer.team), { team: killer.team }, TEAMS[killer.team] + ' team');
+    } else if (killer.kills >= this.winScore) this.finish([killer], { winner: killer.id }, this.hub.name(killer));
   }
 
   startGame() {
@@ -415,7 +418,7 @@ export class Room {
     for (const n of this.nades) {
       n.vz -= NADE.gravity * dt;
       n.x += n.vx * dt; n.y += n.vy * dt; n.z += n.vz * dt;
-      const g = groundAt(this.T, n.x, n.y);
+      const g = walkHeight(this.T, n.x, n.y, n.z);
       if (n.z < g) {
         n.z = g; n.vz *= -NADE.bounce;
         n.vx *= 0.7; n.vy *= 0.7;
@@ -519,6 +522,21 @@ Room.prototype.handlers = {
     this.plagueEndsAt = 0;
     this.list.forEach((pl, i) => { pl.team = this.mode === 'plague' ? HEALTHY_TEAM : this.mode === 'teams' ? i % 2 + 1 : 0; pl.ready = !!pl.bot; });
     log(`[${this.code}] ${this.hub.who(p)} switched to ${MODE_NAMES[this.mode]}`);
+    this.roster();
+  },
+
+  score(p, msg) {
+    if (this.gameOn) return;
+    const n = +msg.score;
+    if (this.mode === 'teams') {
+      if (!TEAM_WIN_SCORE_OPTIONS.includes(n) || n === this.teamWinScore) return;
+      this.teamWinScore = n;
+    } else if (this.mode === 'ffa' || this.mode === 'snipers') {
+      if (!WIN_SCORE_OPTIONS.includes(n) || n === this.winScore) return;
+      this.winScore = n;
+    } else return;
+    this.resetReady();
+    log(`[${this.code}] ${this.hub.who(p)} set score limit to ${n}`);
     this.roster();
   },
 

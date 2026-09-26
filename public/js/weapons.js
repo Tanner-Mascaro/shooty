@@ -153,6 +153,7 @@ const KICK = {
   shotgun:  { recoil: 1,    punch: 0.12,  shake: 9,  fovKick: 0.05 },
   sniper:   { recoil: 1,    punch: 0.28,  shake: 14, fovKick: 0.12 },
   crossbow: { recoil: 0.7,  punch: 0.08,  shake: 4 },
+  beam:     { recoil: 0.35, punch: 0.04,  shake: 3, fovKick: 0.02 },
 };
 
 export function fire() {
