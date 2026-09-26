@@ -1,6 +1,6 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
-import { groundAt, kindAt } from '/shared/terrain.js';
+import { groundAt, kindAt, walkHeight } from '/shared/terrain.js';
 import { SLIDE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
@@ -62,7 +62,7 @@ export function footGround(x, y) {
       if (T.kind[k] === 1) wall = true; else top = Math.max(top, T.hgt[k]);
     }
     if (top === -Infinity) continue; // nothing but wall here
-    highest = Math.max(highest, wall ? top : groundAt(T, sx, sy));
+    highest = Math.max(highest, wall ? top : walkHeight(T, sx, sy, S.me?.z ?? 0));
   }
   return highest;
 }

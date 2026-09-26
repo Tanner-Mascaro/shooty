@@ -3,7 +3,7 @@
 // People can join a match that's already running; it ends early if too few are left.
 import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
-import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
+import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, randomBotName } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
@@ -194,7 +194,7 @@ export class Room {
 
   resetPlayer(p, avoid = this.enemies(p)) {
     const sp = this.spawnPos(avoid);
-    p.x = sp.x; p.y = sp.y; p.z = groundAt(this.T, sp.x, sp.y);
+    p.x = sp.x; p.y = sp.y; p.z = walkHeight(this.T, sp.x, sp.y, 0);
     const near = avoid.length ? avoid.reduce((m, o) => Math.hypot(o.x - sp.x, o.y - sp.y) < Math.hypot(m.x - sp.x, m.y - sp.y) ? o : m) : null;
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
@@ -656,7 +656,7 @@ Room.prototype.handlers = {
     // basic anti-cheat: no teleporting (bhop speed is capped client-side) and no walking into walls
     const maxStep = this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1; // match the infected movement cap
     if (Math.hypot(msg.x - p.x, msg.y - p.y) < maxStep && !hitsWall(this.T, msg.x, msg.y, PLAYER_R)) { p.x = msg.x; p.y = msg.y; }
-    const g = groundAt(this.T, p.x, p.y);
+    const g = walkHeight(this.T, p.x, p.y, msg.z);
     p.z = Math.max(g - 0.4, Math.min(g + 2, msg.z));
     p.a = msg.a;
     p.p = Math.max(-1.2, Math.min(1.2, msg.p));

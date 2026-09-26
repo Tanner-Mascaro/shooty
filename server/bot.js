@@ -6,7 +6,7 @@
 import { TICK, EYE, BODY_H, WEAPONS, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
-import { groundAt, kindAt } from '../shared/terrain.js';
+import { groundAt, kindAt, walkHeight } from '../shared/terrain.js';
 
 // speed: walk wish-speed (map units / s); sprint: chase wish-speed; sight/reaction/aim as before
 export const BOT_LEVELS = {
@@ -35,7 +35,7 @@ export function randomBotName(taken = new Set()) {
 
 // true if feet can stand at (x, y) coming from height z: no walls, no pits
 function walkable(T, x, y, z) {
-  return kindAt(T, x, y) === 0 && groundAt(T, x, y) <= z + 0.3;
+  return kindAt(T, x, y) === 0 && walkHeight(T, x, y, z) <= z + 0.3;
 }
 
 // straight-line walk from a to b stays on open ground (with a body-width margin)
@@ -87,7 +87,7 @@ function applyFriction(p, dt) {
 }
 
 export function newBrain() {
-  return { goal: null, seenAt: 0, nextShot: 0, stuck: 0, strafe: 1 };
+  return { goal: null, seenAt: 0, nextShot: 0, stuck: 0, strafe: 1, bhop: Math.random() < 0.4 };
 }
 
 function pickGoal(game, p) {
@@ -124,8 +124,8 @@ export function botTick(game, p) {
   let wx = 0, wy = 0;
   if (b.goal && !stopClose) {
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
-    // air-strafe: lean left/right while hopping so bhop actually gains speed
-    if (!p.onGround) {
+    // air-strafe only for hoppers; walkers keep a straight wish dir
+    if (!p.onGround && b.bhop) {
       if (Math.random() < 0.04) b.strafe = -b.strafe;
       const side = heading + b.strafe * (Math.PI / 2);
       wx = Math.cos(heading) * 0.7 + Math.cos(side) * 0.7;
@@ -152,8 +152,8 @@ export function botTick(game, p) {
       if (wx || wy) accelerate(p, wx, wy, wishSpeed, ACCEL, dt);
     }
     const spd = Math.hypot(p.vx, p.vy);
-    // bhop only once we're nearly at sprint speed (or already airborne chaining)
-    const wantJump = sprinting && !!(wx || wy) && (spd > wishSpeed * 0.8 || !p.onGround);
+    // only some bots bunny-hop; the rest just sprint/walk on the ground
+    const wantJump = b.bhop && sprinting && !!(wx || wy) && (spd > wishSpeed * 0.8 || !p.onGround);
     tryJump(p, wantJump, infected ? PLAGUE_JUMPS : 1);
     if (!p.onGround && (wx || wy)) airAccelerate(p, wx, wy, wishSpeed, dt);
   }
@@ -175,7 +175,7 @@ export function botTick(game, p) {
         b.stuck++;
       } else {
         p.x = nx; p.y = ny;
-        if (p.onGround) p.z = groundAt(T, nx, ny);
+        if (p.onGround) p.z = walkHeight(T, nx, ny, p.z);
         b.stuck = Math.max(0, b.stuck - 1);
       }
     }
@@ -183,10 +183,10 @@ export function botTick(game, p) {
 
   if (!p.onGround) {
     p.vz -= MOVE_GRAVITY * dt; p.z += p.vz * dt;
-    const floor = groundAt(T, p.x, p.y);
+    const floor = walkHeight(T, p.x, p.y, p.z);
     if (p.z <= floor) { p.z = floor; p.vz = 0; p.onGround = true; }
   } else {
-    p.z = groundAt(T, p.x, p.y);
+    p.z = walkHeight(T, p.x, p.y, p.z);
   }
 
   // turn toward the target and shoot once it has had time to react

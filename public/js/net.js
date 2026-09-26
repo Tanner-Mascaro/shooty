@@ -253,13 +253,25 @@ const handlers = {
 
   // { winner: id } in free-for-all, { team } in teams or plague
   win(msg) {
+    const mode = msg.mode || S.room?.mode;
     const won = msg.team ? msg.team === S.myTeam : msg.winner === S.myId;
-    const who = msg.team ? teamName(msg.mode || S.room?.mode, msg.team) + ' TEAM' : nameOf(msg.winner).toUpperCase();
-    showMsg(won ? (msg.team ? 'YOUR TEAM WINS!' : 'YOU WIN!') : who + ' WINS!', true);
+    let headline, sys, rematch;
+    if (mode === 'plague' && msg.team) {
+      const plagueWon = msg.team === PLAGUE_TEAM;
+      headline = plagueWon ? 'PLAGUE WINS!' : 'SURVIVORS WIN!';
+      sys = plagueWon ? 'Plague wins' : 'Survivors win';
+      rematch = (plagueWon ? 'Plague' : 'Survivors') + ' won. Rematch?';
+    } else {
+      const who = msg.team ? teamName(mode, msg.team) + ' TEAM' : nameOf(msg.winner).toUpperCase();
+      headline = won ? (msg.team ? 'YOUR TEAM WINS!' : 'YOU WIN!') : who + ' WINS!';
+      sys = won ? (msg.team ? 'Your team wins!' : 'You win!') : who + ' wins';
+      rematch = won ? 'You won! Rematch?' : who.toLowerCase().replace(/^\w/, c => c.toUpperCase()) + ' won. Rematch?';
+    }
+    showMsg(headline, true);
     play(won ? 'win' : 'lose');
-    addSystem(won ? (msg.team ? 'Your team wins!' : 'You win!') : who + ' wins');
+    addSystem(sys);
     S.started = false;
-    setTimeout(() => showWait(won ? 'You won! Rematch?' : who.toLowerCase().replace(/^\w/, c => c.toUpperCase()) + ' won. Rematch?'), 2000);
+    setTimeout(() => showWait(rematch), 2000);
   },
 
   // the match stopped early (not enough players left)

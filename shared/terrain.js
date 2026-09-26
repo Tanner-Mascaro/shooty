@@ -157,10 +157,15 @@ export function buildTerrain(MAP, RES, style) {
 
   for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
 
-  // volcanoes can spill into hut footprints after walls are placed — keep rooms open
+  // volcanoes can spill into hut footprints after walls are placed — keep rooms open, then
+  // add a solid peaked roof (fixed in the heightmap, not a turning billboard). Interior kind
+  // stays walkable so you can go inside under the roof.
   for (const hut of props) {
     if (hut.type !== 'hut') continue;
     const hw = (hut.w || 2.2) / 2, hd = (hut.d || 2.2) / 2, t = 0.16;
+    const wallH = hut.h, wallMat = hut.style === 'witch' ? MAT.BARK : MAT.ROCK;
+    const roofMat = hut.style === 'witch' ? MAT.LEAVES : MAT.ROCK;
+    const x0 = hut.x - hw, y0 = hut.y - hd, x1 = hut.x + hw, y1 = hut.y + hd;
     const clear = (xa, ya, xb, yb) => {
       const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
       const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES));
@@ -170,17 +175,35 @@ export function buildTerrain(MAP, RES, style) {
         hgt[k] = 0; mat[k] = MAT.FLOOR;
       }
     };
-    clear(hut.x - hw + t + 0.05, hut.y - hd + t + 0.05, hut.x + hw - t - 0.05, hut.y + hd - t - 0.05);
-    clear(hut.x - hw * 0.44, hut.y + hd - 0.05, hut.x + hw * 0.44, hut.y + hd + 0.55);
-    // restore door-side wall stubs so the opening stays framed
-    const wallH = hut.h, wallMat = hut.style === 'witch' ? MAT.BARK : MAT.ROCK;
-    const x0 = hut.x - hw, y0 = hut.y - hd, x1 = hut.x + hw, y1 = hut.y + hd;
-    const doorL = hut.x - hw * 0.44, doorR = hut.x + hw * 0.44;
-    box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
-    box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
+    clear(x0 + t + 0.05, y0 + t + 0.05, x1 - t - 0.05, y1 - t - 0.05);
+    clear(hut.x - hw * 0.44, y1 - 0.05, hut.x + hw * 0.44, y1 + 0.55);
+    box(x0 + t, y1 - t, hut.x - hw * 0.44, y1, wallH, wallMat);
+    box(hut.x + hw * 0.44, y1 - t, x1 - t, y1, wallH, wallMat);
+    // A-frame roof peaked along X (ridge runs parallel to the doorway wall)
+    raise(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, (px, py) => {
+      const u = Math.abs(px - hut.x) / (hw + 0.06), v = Math.abs(py - hut.y) / (hd + 0.06);
+      if (u > 1 || v > 1) return null;
+      const peak = wallH + 0.7 - u * 0.95;
+      return peak > wallH + 0.02 ? [peak, roofMat] : null;
+    });
+    hut.roof = wallH + 0.7;
   }
 
   for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
+
+  // open the room volume under each roof so walls stay solid but the inside is walkable
+  for (const hut of props) {
+    if (hut.type !== 'hut') continue;
+    const hw = (hut.w || 2.2) / 2 - 0.2, hd = (hut.d || 2.2) / 2 - 0.2;
+    const i0 = Math.max(0, Math.floor((hut.x - hw) * RES)), i1 = Math.min(TW - 1, Math.ceil((hut.x + hw) * RES));
+    const j0 = Math.max(0, Math.floor((hut.y - hd) * RES)), j1 = Math.min(TH - 1, Math.ceil((hut.y + hd) * RES));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const k = j * TW + i;
+      if (mat[k] === MAT.PIT) continue;
+      kind[k] = 0;
+    }
+  }
+
   // no procedural scatter of extra bushes/crates — map ASCII already places the cover we want
   return { hgt, kind, mat, props, TW, TH, RES };
 }
@@ -195,6 +218,18 @@ export function groundAt(T, x, y) {
     return T.hgt[b * T.TW + a];
   };
   return g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v;
+}
+
+// floor you stand on: under a hut roof this is the ground, not the roof heightmap
+export function walkHeight(T, x, y, z = 0) {
+  const g = groundAt(T, x, y);
+  for (const p of T.props || []) {
+    if (p.type !== 'hut') continue;
+    const hw = (p.w || 2.2) / 2 - 0.2, hd = (p.d || 2.2) / 2 - 0.2;
+    if (Math.abs(x - p.x) >= hw || Math.abs(y - p.y) >= hd) continue;
+    if (z < g - 0.2) return 0;
+  }
+  return g;
 }
 
 export function kindAt(T, x, y) {
