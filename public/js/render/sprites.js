@@ -74,6 +74,7 @@ function gunPx(w) {
 
 // world size + shape for a floating pickup
 export function pickupSprite(weapon, color) {
+  if (weapon === 'ammo') return AMMO_CRATE;
   if (weapon === 'health') return { w: 0.4, h: 0.4, px: healthPx, pal: [null, [235, 235, 235], null, [230, 30, 30]], emit: [1, 3] };
   return { w: 0.7, h: 0.35, px: gunPx(weapon), pal: [null, [70, 70, 78], [30, 30, 34], color], emit: [3] };
 }
@@ -96,4 +97,33 @@ export function canopySprite(variant) {
       return 0;
     },
   });
+}
+
+// --- small ammo crate: olive box with a brass band and a bullet stencil ---
+const AMMO_CRATE = { w: 0.42, h: 0.3, emit: [3], pal: [null, [74, 82, 44], [34, 38, 20], [230, 200, 90], [104, 114, 62]],
+  px(u, v) {
+    if (u < 0.06 || u > 0.94 || v < 0.08 || v > 0.94) return 2;
+    if (v < 0.24) return 4;                                                 // lid
+    if (v > 0.44 && v < 0.54) return 3;                                     // brass band
+    if (v > 0.6 && v < 0.86 && [0.3, 0.5, 0.7].some(c => Math.abs(u - c) < 0.04)) return 3; // rounds
+    return 1;
+  } };
+
+// --- loot box: a crate seen a little from above, banded in the level's accent color ---
+function boxPx(u, v) {
+  const top = 0.24;
+  if (v < top) { // lid, narrower toward the back
+    const inset = (top - v) / top * 0.12;
+    if (u < inset || u > 1 - inset) return 0;
+    return u < inset + 0.05 || u > 1 - inset - 0.05 || v < 0.04 ? 2 : 3;
+  }
+  if (u < 0.07 || u > 0.93 || v < top + 0.06 || v > 0.93) return 2;        // frame
+  if (v > 0.52 && v < 0.6) return 4;                                        // glowing band
+  if (Math.abs(u - 0.5) < 0.06 && v > 0.62) return 2;                       // latch
+  return (u * 9 | 0) % 3 === 0 ? 5 : 1;                                     // planks
+}
+const boxCache = {};
+export function boxSprite(accent) {
+  return boxCache[accent] ??= { w: 0.6, h: 0.5, px: boxPx, emit: [4],
+    pal: [null, [104, 76, 48], [44, 30, 20], [140, 104, 68], accent.split(',').map(Number), [88, 64, 40]] };
 }

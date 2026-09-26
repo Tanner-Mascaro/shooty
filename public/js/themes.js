@@ -4,7 +4,7 @@
 //   ambient        floating particles (embers / sparks / fireflies)
 //   blood/fire     hit particles and death burst
 //   sprite         enemy billboard in render/sprites.js
-//   drone          ambient hum oscillators [type, Hz]
+//   drone          ambient hum oscillators [type, Hz]; droneVol scales how loud it is
 
 export const THEMES = {
   hell: {
@@ -22,7 +22,7 @@ export const THEMES = {
     wall: [70, 76, 88], wallTop: [95, 100, 112], band: [40, 220, 255],
     ambient: [80, 220, 255], ambientVz: 0.15, blood: [35, 35, 40], fire: [140, 230, 255],
     sprite: 'robot', pitDeath: 'Dissolved!', enemyPitDeath: 'Enemy dissolved!', pitOverlay: '40,255,150',
-    accent: '40,220,255', bg: '#06202a', title: '#3ce', drone: [['square', 55], ['square', 110.4], ['sine', 220]], droneCut: 400,
+    accent: '40,220,255', bg: '#06202a', title: '#3ce', drone: [['triangle', 55], ['sine', 110.4], ['sine', 165.6]], droneCut: 220, droneVol: 0.6,
     minimap: [[30, 36, 44], [110, 120, 135], [40, 255, 150]],
   },
   witch: {

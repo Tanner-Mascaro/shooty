@@ -135,6 +135,7 @@ export class Hub {
     this.setProfile(p, pid);
     p.name = saved.name; p.username = saved.username;
     p.stats = Object.fromEntries(STATS.map(s => [s, saved[s]]));
+    this.send(p, { type: 'settings', settings: saved.settings }); // null: the browser sends its own
     await this.sendProfile(p);
     this.sendFriends(p);
     this.presence(p);
@@ -210,6 +211,13 @@ Hub.prototype.handlers = {
       log(`${before} is ${p.name}${p.username ? ' (account ' + p.username + ')' : ''} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}`);
       this.sendBoard(p);
     } else if (p.name !== oldName) log(`${before} renamed to ${p.name}`);
+  },
+
+  // your game settings changed (FPS, keys, ...): keep them on your profile
+  async settings(p, msg) {
+    const s = msg.settings;
+    if (!p.pid || !s || typeof s !== 'object' || Array.isArray(s) || JSON.stringify(s).length > 4000) return;
+    await this.profiles.saveSettings(p.pid, s);
   },
 
   // create an account: puts a username + password on your current profile, keeping its stats

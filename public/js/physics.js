@@ -1,6 +1,7 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt } from '/shared/terrain.js';
+import { SLIDE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, JUMP_V, SPEED_LIMIT, STEP } from './constants.js';
 import { send } from './net.js';
@@ -154,12 +155,28 @@ function airAccelerate(wx, wy, wishSpeed, dt) {
   S.vx += acc * wx; S.vy += acc * wy;
 }
 
-function applyFriction(dt) {
+function applyFriction(dt, scale = 1) {
   const sp = Math.hypot(S.vx, S.vy);
   if (sp < 0.001) { S.vx = S.vy = 0; return; }
-  const drop = Math.max(sp, STOP_SPEED) * FRICTION * dt;
+  const drop = Math.max(sp, STOP_SPEED) * FRICTION * scale * dt;
   const k = Math.max(0, sp - drop) / sp;
   S.vx *= k; S.vy *= k;
+}
+
+// start a slide on a fresh press of the slide key (or holding it as you land) while running;
+// it ends when you let go, jump, slow down or it runs out
+function updateSlide(wx, wy, wl) {
+  const now = performance.now(), sp = Math.hypot(S.vx, S.vy);
+  if (S.sliding && (!held('slide') || !S.onGround || now > S.slideEnd || sp < 0.8)) {
+    S.sliding = false; S.slideReady = now + SLIDE.cooldown;
+  }
+  if (S.sliding || !S.slideArmed || !held('slide') || !S.onGround || now < S.slideReady || sp < SLIDE.minSpeed) return;
+  S.sliding = true; S.slideArmed = false; S.slideEnd = now + SLIDE.time;
+  // boost along where you're moving (or where you're pressing, if that's clearer)
+  const dx = wl > 0 ? wx : S.vx / sp, dy = wl > 0 ? wy : S.vy / sp;
+  S.vx += dx * SLIDE.boost; S.vy += dy * SLIDE.boost;
+  S.fovKick = Math.max(S.fovKick, 0.04);
+  play('slide');
 }
 
 export function updatePlayer(dt) {
@@ -182,9 +199,12 @@ export function updatePlayer(dt) {
   if (wl > 0) { wx /= wl; wy /= wl; }
   const wishSpeed = wl > 0 ? MAX_SPEED * (S.scoped ? 0.55 : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
+  updateSlide(wx, wy, wl);
   if (S.onGround && held('jump')) { S.vz = JUMP_V; S.onGround = false; play('jump'); }
-  if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
+  if (S.sliding && S.onGround) { applyFriction(dt, SLIDE.friction); accelerate(wx, wy, wishSpeed * 0.3, ACCEL * 0.3, dt); } // glide, steer a little
+  else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
+  S.slideDip += ((S.sliding ? 1 : 0) - S.slideDip) * Math.min(1, dt * 12);
 
   let speed = Math.hypot(S.vx, S.vy);
   if (speed > SPEED_LIMIT) { S.vx *= SPEED_LIMIT / speed; S.vy *= SPEED_LIMIT / speed; speed = SPEED_LIMIT; }
@@ -215,7 +235,7 @@ export function updatePlayer(dt) {
     if (me.z <= g) { me.z = g; S.vz = 0; S.onGround = true; play('land'); }
   }
 
-  if (S.onGround && speed > 0.5) {
+  if (S.onGround && speed > 0.5 && !S.sliding) {
     S.bobPhase += speed * dt * 2.2;
     S.stepAcc += speed * dt;
     if (S.stepAcc > 0.85) { S.stepAcc = 0; play('step'); }
@@ -224,5 +244,5 @@ export function updatePlayer(dt) {
   setSizzle(inPit() ? 0.25 : 0);
   if (inPit() && Math.random() < 0.3) burst(me.x, me.y, me.z, 1, 'fire');
 
-  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped, seq: S.mySeq });
+  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped, sl: S.sliding, seq: S.mySeq });
 }

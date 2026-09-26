@@ -1,30 +1,67 @@
-// Player settings (FPS cap, sensitivity, key bindings), saved in this browser, and the
-// settings panel. Keys are KeyboardEvent.code values ('KeyW', 'Space', 'Digit1'), so they
-// don't change with Shift or the keyboard layout.
+// Player settings (FPS cap, sound, sensitivity, aim mode, key bindings) and the settings panel.
+// Saved in this browser and on your profile, so signing in on another device brings them along
+// (the server sends the profile's copy on connect; see hub.js useProfile). Keys are
+// KeyboardEvent.code values ('KeyW', 'Space', 'Digit1'), so they don't change with Shift or the
+// keyboard layout.
 import { S } from './state.js';
+import { send } from './net.js';
+import { applyVolume } from './audio.js';
 
 const $ = id => document.getElementById(id);
 
 // action -> [label, default key]; order is the order in the panel
 export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
-  jump: ['Jump', 'Space'], reload: ['Reload', 'KeyR'], swap: ['Swap to last gun', 'KeyQ'], next: ['Next gun', 'KeyE'],
-  melee: ['Quick melee', 'KeyF'], slot1: ['Rifle', 'Digit1'], slot2: ['Sniper', 'Digit2'], slot3: ['Shotgun', 'Digit3'],
-  slot4: ['SMG', 'Digit4'], slot5: ['Blade', 'Digit5'], fullscreen: ['Fullscreen', 'KeyO'],
+  jump: ['Jump', 'Space'], slide: ['Slide', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
+  melee: ['Quick melee', 'KeyF'], slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
+  fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
 };
-const DEFAULTS = { fps: 0, showFps: false, sens: 1, keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])) };
+// ads: right click scopes while held ('hold') or until clicked again ('toggle')
+const DEFAULTS = { fps: 0, showFps: false, volume: 1, ambient: 1, sens: 1, ads: 'toggle', keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])) };
 const FPS_CHOICES = [0, 30, 60, 90, 120, 144, 165, 240]; // 0 = as fast as the display refreshes
 
+// a full, valid settings object from whatever was saved (older versions, another device)
+function normalize(saved) {
+  saved = saved && typeof saved === 'object' ? saved : {};
+  const num = (v, lo, hi, d) => typeof v === 'number' && v >= lo && v <= hi ? v : d;
+  const mine = saved.keys && typeof saved.keys === 'object' ? saved.keys : {}, keys = {};
+  // keep bindings for actions that still exist; a new action whose default key you already
+  // use for something else starts unbound
+  for (const a in ACTIONS) keys[a] = a in mine ? (typeof mine[a] === 'string' ? mine[a] : null)
+    : Object.keys(ACTIONS).some(o => mine[o] === DEFAULTS.keys[a]) ? null : DEFAULTS.keys[a];
+  return {
+    fps: FPS_CHOICES.includes(saved.fps) ? saved.fps : DEFAULTS.fps,
+    showFps: typeof saved.showFps === 'boolean' ? saved.showFps : DEFAULTS.showFps,
+    volume: num(saved.volume, 0, 1, DEFAULTS.volume), ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient),
+    sens: num(saved.sens, 0.2, 3, DEFAULTS.sens),
+    ads: ['toggle', 'hold'].includes(saved.ads) ? saved.ads : DEFAULTS.ads,
+    keys,
+  };
+}
+
 function load() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('settings')) || {};
-    return { ...DEFAULTS, ...saved, keys: { ...DEFAULTS.keys, ...saved.keys } };
-  } catch { return structuredClone(DEFAULTS); }
+  try { return normalize(JSON.parse(localStorage.getItem('settings'))); } catch { return normalize(null); }
 }
 export const settings = load();
+
+let upload = null;
 function save() {
   try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
   showControlsHint();
+  applyVolume();
+  clearTimeout(upload); // sliders fire a lot: send the profile copy once they settle
+  upload = setTimeout(() => send({ type: 'settings', settings }), 800);
+}
+
+// the profile's copy, sent by the server when you connect or sign in; null if the profile has
+// none yet, so it gets this browser's
+export function fromProfile(saved) {
+  if (!saved) { send({ type: 'settings', settings }); return; }
+  Object.assign(settings, normalize(saved));
+  try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
+  showControlsHint();
+  applyVolume();
+  if (settingsOpen()) render();
 }
 
 export const held = action => !!S.keys[settings.keys[action]];
@@ -70,7 +107,7 @@ export function captureKey(e) {
     }
     binding = null;
     render();
-  } else if (e.code === 'Escape') closeSettings();
+  } else if (e.code === 'Escape' || e.code === settings.keys.settings) closeSettings();
   return true;
 }
 
@@ -78,6 +115,8 @@ function render() {
   $('fpsCap').value = settings.fps;
   $('showFps').checked = settings.showFps;
   $('sens').value = settings.sens;
+  $('ads').value = settings.ads;
+  for (const k of ['volume', 'ambient']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
   $('sensVal').textContent = settings.sens.toFixed(2) + '×';
   $('fsBtn').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Go fullscreen';
   $('binds').replaceChildren(...Object.entries(ACTIONS).map(([a, [label]]) => {
@@ -94,12 +133,15 @@ function render() {
 // the hint line at the bottom of the screen, using your keys
 function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
-  $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('swap')} last gun | ${k('next')}/wheel next gun | ${k('slot1')}-${k('slot5')} slots | ${k('melee')} melee | ${k('fullscreen')} fullscreen`;
+  $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {
   $('fpsCap').replaceChildren(...FPS_CHOICES.map(n => new Option(n ? n + ' FPS' : 'Unlimited (display refresh)', n)));
+  $('ads').addEventListener('change', e => { settings.ads = e.target.value; save(); });
+  for (const k of ['volume', 'ambient'])
+    $(k).addEventListener('input', e => { settings[k] = +e.target.value; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; save(); });
   $('fpsCap').addEventListener('change', e => { settings.fps = +e.target.value; save(); });
   $('showFps').addEventListener('change', e => { settings.showFps = e.target.checked; save(); });
   $('sens').addEventListener('input', e => { settings.sens = +e.target.value; $('sensVal').textContent = settings.sens.toFixed(2) + '×'; save(); });

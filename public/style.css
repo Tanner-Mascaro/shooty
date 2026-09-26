@@ -40,8 +40,9 @@ canvas { display:block; position:absolute; top:0; left:0; }
 .label { font-size:12px; font-weight:700; letter-spacing:.2em; color:var(--dim); }
 
 #lobbyHead { text-align:center; line-height:1; }
-#brand { font-size:13px; font-weight:700; letter-spacing:.6em; margin-right:-.6em; color:rgba(var(--accent-rgb),0.7); margin-bottom:8px; }
-#waitTitle { font-size:clamp(40px,7vw,68px); font-weight:700; letter-spacing:.12em; margin-right:-.12em; transition:color .4s, text-shadow .4s; }
+#brand { font-size:clamp(44px,8vw,76px); font-weight:700; letter-spacing:.12em; margin-right:-.12em; color:#fff;
+  text-shadow:0 0 24px rgba(var(--accent-rgb),0.8), 0 0 60px rgba(var(--accent-rgb),0.4); transition:text-shadow .4s; }
+#waitTitle { font-size:14px; font-weight:700; letter-spacing:.5em; margin-right:-.5em; margin-top:10px; transition:color .4s; text-shadow:none !important; }
 
 #lobby { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:18px; width:100%; max-width:1040px; align-items:start; }
 #side { display:flex; flex-direction:column; gap:18px; min-width:0; }
@@ -160,14 +161,18 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #board tr.you td { color:#fc6; font-weight:700; background:rgba(255,200,100,0.06); }
 
 /* settings: gear buttons, the panel, FPS counter */
-#headBtns { display:flex; gap:8px; justify-content:center; margin-top:14px; }
-#gameGear { position:absolute; bottom:8px; left:8px; z-index:350; width:36px; height:36px; font-size:20px; border-radius:8px; cursor:pointer; color:#ccc; background:rgba(20,20,24,0.8); border:1px solid #444; }
+/* lobby: settings + fullscreen pinned top right */
+#corner { position:fixed; top:16px; right:16px; z-index:150; display:flex; gap:8px; font-family:'Chakra Petch',system-ui,sans-serif;
+  --accent:#f42; --accent-rgb:255,70,20; }
+#corner .ghost { background:rgba(12,12,16,0.8); }
+body.ingame #corner { display:none; }
+/* in a match: just the gear, top right beside the minimap (same size formula as drawMinimap) */
+#gameGear { position:absolute; top:12px; right:calc(min(230px, 30vmin) + 22px); z-index:350; width:36px; height:36px; font-size:20px; border-radius:8px; cursor:pointer; color:#ccc; background:rgba(20,20,24,0.8); border:1px solid #444; }
 body:not(.ingame) #gameGear { display:none; }
 #gameGear:hover { color:#fff; border-color:#888; }
 body.locked #gameGear, body.locked #controls { display:none; } /* out of the way while you play */
 body.fs #controls { display:none; }
-#fps { position:absolute; bottom:8px; left:50px; z-index:10; pointer-events:none; color:#8f8; font:bold 13px 'Courier New',monospace; text-shadow:0 0 4px #000; }
-body.locked #fps { left:8px; }
+#fps { position:absolute; bottom:8px; left:8px; z-index:10; pointer-events:none; color:#8f8; font:bold 13px 'Courier New',monospace; text-shadow:0 0 4px #000; }
 #settings { position:fixed; inset:0; z-index:400; background:rgba(0,0,0,0.6); display:flex; align-items:safe center; justify-content:center; padding:16px; overflow-y:auto;
   --accent:#f42; --accent-rgb:255,70,20; --card:rgba(14,14,18,0.96); --line:rgba(255,255,255,0.1); --dim:#8a8a96;
   color:#d6d6de; font-family:'Chakra Petch',system-ui,sans-serif; font-size:14px; }
