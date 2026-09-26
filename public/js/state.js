@@ -39,7 +39,7 @@ export const S = {
   aimHeld: false, // right mouse button is down
 
   // screen effects
-  hitFlash: 0, healFlash: 0, killFlash: 0, muzzle: 0, recoil: 0, hitMarker: 0, hitHead: false,
+  hitFlash: 0, healFlash: 0, killFlash: 0, muzzle: 0, recoil: 0, hitMarker: 0, hitHead: false, damageIndicators: [],
   punch: 0, shake: 0, fovKick: 0, swayX: 0, swayY: 0, fireT: -1e9, swingT: -1e9, quickUntil: 0,
   bannerText: '', bannerT: -1e9, bannerGold: false,
 

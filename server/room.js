@@ -472,7 +472,7 @@ export class Room {
       if (killer && killer.hacks) hit = Math.round(hit * HACK_DMG);
       if (o.hacks) hit = 0;
       o.hp -= hit;
-      this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg: hit, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z });
+      this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg: hit, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z, fromX: n.x, fromY: n.y });
       if (o.hp <= 0) {
         this.killPlayer(o, killer && killer !== o ? killer : null, { weapon: 'nade', head: false, dist: d, a: Math.atan2(o.y - n.y, o.x - n.x) });
         if (!this.gameOn) break;
@@ -759,7 +759,7 @@ Room.prototype.handlers = {
       if (p.hacks) dmg = Math.round(dmg * HACK_DMG);
       if (o.hacks) dmg = 0;
       o.hp -= dmg;
-      this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg, head: h.head, weapon: msg.weapon,
+      this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg, head: h.head, weapon: msg.weapon, fromX: p.x, fromY: p.y,
         x: p.x + Math.cos(r.a) * r.dist, y: p.y + Math.sin(r.a) * r.dist,
         z: w.melee ? o.z + BODY_H / 2 : p.z + EYE + r.p * r.dist });
       if (o.hp <= 0) this.killPlayer(o, p, { weapon: msg.weapon, head: h.head, backstab: h.backstab, dist: r.dist, a: r.a });

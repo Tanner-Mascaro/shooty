@@ -204,6 +204,33 @@ export function drawHitMarker() {
   S.hitMarker--;
 }
 
+export function drawDamageIndicators(now) {
+  const life = 900, { W, H } = view;
+  S.damageIndicators = S.damageIndicators.filter(hit => now - hit.t < life);
+  for (const hit of S.damageIndicators) {
+    const alpha = 1 - (now - hit.t) / life;
+    const dx = Math.cos(hit.angle), dy = Math.sin(hit.angle);
+    const right = dx * S.cam.rtx + dy * S.cam.rty;
+    const forward = dx * S.cam.fwdx + dy * S.cam.fwdy;
+    const screenAngle = Math.atan2(-forward, right);
+    ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(screenAngle + Math.PI / 2);
+    ctx.globalAlpha = alpha * 0.85;
+    const radius = Math.min(120, Math.max(72, Math.min(W, H) * 0.12));
+    const haze = ctx.createRadialGradient(0, 0, radius - 80, 0, 0, radius + 80);
+    haze.addColorStop(0, 'rgba(255,35,30,0)');
+    haze.addColorStop(0.28, 'rgba(255,35,30,0.01)');
+    haze.addColorStop(0.42, 'rgba(255,35,30,0.18)');
+    haze.addColorStop(0.5, 'rgba(255,35,30,0.3)');
+    haze.addColorStop(0.58, 'rgba(255,35,30,0.18)');
+    haze.addColorStop(0.72, 'rgba(255,35,30,0.03)');
+    haze.addColorStop(1, 'rgba(255,35,30,0)');
+    ctx.strokeStyle = haze; ctx.lineWidth = 64; ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(255,25,20,0.4)'; ctx.shadowBlur = 38;
+    ctx.beginPath(); ctx.arc(0, 0, radius, -Math.PI * 0.75, -Math.PI * 0.25); ctx.stroke();
+    ctx.restore();
+  }
+}
+
 // full-screen color flashes (kill, damage, heal) and the pit vignette
 export function drawFlashes() {
   const { W, H } = view;
@@ -245,7 +272,7 @@ export function drawSpeed() {
 // rotating minimap (forward is up) with the weapon list under it
 export function drawMinimap(now) {
   const { W, H } = view, me = S.me;
-  const size = Math.min(230, Math.round(Math.min(W, H) * 0.3)), mx = W - size - 12, my = 12, cx = mx + size / 2, cy = my + size / 2, ms = size / 14;
+  const size = Math.min(230, Math.round(Math.min(W, H) * 0.3)), mx = W - size - 12, my = 12, cx = mx + size / 2, cy = my + size / 2, ms = size / 20;
   if (settings.showMinimap) {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(mx, my, size, size);
@@ -277,7 +304,19 @@ export function drawMinimap(now) {
     ctx.restore();
     ctx.fillStyle = '#fa4'; // you: arrow pointing up
     ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 5, cy + 6); ctx.lineTo(cx - 5, cy + 6); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.6)'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, size, size);
+    ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.85)'; ctx.lineWidth = 3; ctx.strokeRect(mx, my, size, size);
+    ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const [label, angle] of [['N', -Math.PI / 2], ['E', 0], ['S', Math.PI / 2], ['W', Math.PI]]) {
+      const screenAngle = angle - me.a - Math.PI / 2;
+      const dx = Math.cos(screenAngle), dy = Math.sin(screenAngle), edge = size / 2 - 8;
+      const scale = edge / Math.max(Math.abs(dx), Math.abs(dy));
+      const x = cx + dx * scale, y = cy + dy * scale;
+      const highlighted = label === 'N';
+      ctx.fillStyle = highlighted ? 'rgb(' + S.theme.accent + ')' : 'rgba(0,0,0,0.92)'; ctx.fillRect(x - 9, y - 9, 18, 18);
+      ctx.strokeStyle = highlighted ? '#fff' : 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1; ctx.strokeRect(x - 9, y - 9, 18, 18);
+      ctx.fillStyle = '#fff'; ctx.fillText(label, x, y + 0.5);
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
   ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';

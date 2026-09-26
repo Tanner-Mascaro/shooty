@@ -7,7 +7,7 @@ import { BASE_FOV, SCOPE_FOV, ADS_ZOOM, GRAVITY, GUN_COLOR } from '../constants.
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
 import { pickupSprite, canopySprite, boxSprite } from './sprites.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -125,6 +125,7 @@ export function render(dt) {
   drawWeaponView(now);
   drawHitMarker();
   drawFlashes();
+  drawDamageIndicators(now);
   drawBanner(now);
   drawMinimap(now);
   drawSpeed();
