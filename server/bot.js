@@ -146,14 +146,16 @@ export function botTick(game, p) {
   if (dashing) {
     p.vx = p.dashX * PLAGUE_DASH_SPEED; p.vy = p.dashY * PLAGUE_DASH_SPEED;
   } else {
-    // hold jump while moving = continuous bunny hop (same as players holding space)
-    tryJump(p, !!(wx || wy) || Math.hypot(p.vx, p.vy) > 0.4, infected ? PLAGUE_JUMPS : 1);
+    // run on the ground first — jumping with no speed just hops in place
     if (p.onGround) {
       applyFriction(p, dt);
       if (wx || wy) accelerate(p, wx, wy, wishSpeed, ACCEL, dt);
-    } else if (wx || wy) {
-      airAccelerate(p, wx, wy, wishSpeed, dt);
     }
+    const spd = Math.hypot(p.vx, p.vy);
+    // bhop only once we're nearly at sprint speed (or already airborne chaining)
+    const wantJump = sprinting && !!(wx || wy) && (spd > wishSpeed * 0.8 || !p.onGround);
+    tryJump(p, wantJump, infected ? PLAGUE_JUMPS : 1);
+    if (!p.onGround && (wx || wy)) airAccelerate(p, wx, wy, wishSpeed, dt);
   }
 
   let speed = Math.hypot(p.vx, p.vy);

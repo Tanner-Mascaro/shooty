@@ -107,34 +107,39 @@ const NADE_SPRITE = {
 };
 
 // --- hut roof billboard (collision-free; walls are terrain) ---
+// Sprite v=0 is the top of the billboard, v=1 the bottom (sits on the walls).
 const HUT_ROOF = {
   witch: {
-    w: 2.6, h: 1.35, emit: [],
+    w: 2.55, h: 1.05, emit: [],
     pal: [null, [28, 55, 22], [48, 88, 36], [70, 50, 28], [90, 70, 40]],
     px(u, v) {
-      const ridge = 0.12 + 0.55 * (1 - Math.abs(u - 0.5) * 2);
-      if (v > ridge) return 0;
-      if (v > ridge - 0.08) return 3; // eave
+      const half = Math.abs(u - 0.5) * 2;
+      const vTop = 0.06 + half * 0.72; // peak up top-center; eaves down at the sides
+      const vBot = 0.94;
+      if (v < vTop || v > vBot) return 0;
+      if (v > vBot - 0.1) return 3;
       return ((u * 14 | 0) ^ (v * 10 | 0)) & 1 ? 1 : 2;
     },
   },
   ice: {
-    w: 2.6, h: 1.2, emit: [3],
+    w: 2.55, h: 1.0, emit: [3],
     pal: [null, [170, 200, 230], [140, 175, 210], [220, 240, 255], [200, 220, 245]],
     px(u, v) {
-      const ridge = 0.1 + 0.5 * (1 - Math.abs(u - 0.5) * 2);
-      if (v > ridge) return 0;
-      if (Math.abs(u - 0.5) < 0.04 && v < 0.35) return 3;
-      return v < 0.15 ? 3 : ((u * 12 | 0) + (v * 8 | 0)) & 1 ? 1 : 2;
+      const half = Math.abs(u - 0.5) * 2;
+      const vTop = 0.05 + half * 0.7, vBot = 0.94;
+      if (v < vTop || v > vBot) return 0;
+      if (half < 0.08 && v < vTop + 0.25) return 3; // ice spike on the ridge
+      return v > vBot - 0.12 ? 3 : ((u * 12 | 0) + (v * 8 | 0)) & 1 ? 1 : 2;
     },
   },
   hell: {
-    w: 2.6, h: 1.25, emit: [3],
+    w: 2.55, h: 1.0, emit: [3],
     pal: [null, [70, 32, 24], [48, 22, 18], [255, 90, 20], [110, 50, 35]],
     px(u, v) {
-      const ridge = 0.1 + 0.52 * (1 - Math.abs(u - 0.5) * 2);
-      if (v > ridge) return 0;
-      if (v < 0.12 && Math.abs(u - 0.72) < 0.08) return 3; // lava vent glow
+      const half = Math.abs(u - 0.5) * 2;
+      const vTop = 0.05 + half * 0.7, vBot = 0.94;
+      if (v < vTop || v > vBot) return 0;
+      if (u > 0.62 && u < 0.8 && v < vTop + 0.2) return 3; // vent glow near ridge
       return ((u * 11 | 0) ^ (v * 9 | 0)) & 1 ? 1 : 2;
     },
   },

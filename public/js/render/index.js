@@ -102,7 +102,8 @@ export function render(dt) {
       drawSprite(p.x, p.y, p.h - 1.0, p.r * 2, 1.7, sp.px, sp.pal, sp.emit);
     } else if (p.type === 'hut') {
       const sp = hutRoofSprite(p.style);
-      drawSprite(p.x, p.y, p.h + 0.15, sp.w, sp.h, sp.px, sp.pal, sp.emit);
+      // bottom of the billboard sits on the wall tops (ez is the sprite's bottom)
+      drawSprite(p.x, p.y, p.h - 0.08, sp.w, sp.h, sp.px, sp.pal, sp.emit);
     }
   }
   for (const c of S.corpses) {
