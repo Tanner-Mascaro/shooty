@@ -8,6 +8,7 @@ import { actionFor, captureKey, settingsOpen, openSettings, toggleFullscreen } f
 import { openChat } from './chat.js';
 import { askMic } from './voice.js';
 import { dash } from './physics.js';
+import { saveClip } from './clip.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea');
@@ -24,6 +25,7 @@ export function initInput() {
     if (e.repeat) return;
     if (act === 'fullscreen') return toggleFullscreen();
     if (act === 'settings') return openSettings();
+    if (act === 'clip') return saveClip();
     if (act === 'chat') { e.preventDefault(); return openChat(); }
     if (act === 'talk') askMic(); // first press asks for the mic
     if (act === 'slide' && !S.clawsOnly) S.slideArmed = true;

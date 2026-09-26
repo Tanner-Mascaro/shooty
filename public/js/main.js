@@ -14,6 +14,7 @@ import { homeOpen, onHomeLeave } from './home.js';
 import { warmLobby } from './room.js';
 import { flushFriends } from './friends.js';
 import { ensureCanvas } from './render/canvas.js';
+import { syncClipBuffer } from './clip.js';
 import { S } from './state.js';
 
 initLobby();
@@ -58,6 +59,7 @@ function loop(t) {
   render(dt);
   updateChat(t);
   updateVoice(t);
+  syncClipBuffer();
 
   frames++;
   if (t - fpsT >= 500) {

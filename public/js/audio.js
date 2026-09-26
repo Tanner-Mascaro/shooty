@@ -3,7 +3,7 @@
 import { S } from './state.js';
 import { settings } from './settings.js';
 
-let actx = null, master = null, verb = null, noiseBuf = null, windGain = null, sizzleGain = null, droneOsc = [], droneLp = null, droneGain = null;
+let actx = null, master = null, verb = null, noiseBuf = null, windGain = null, sizzleGain = null, droneOsc = [], droneLp = null, droneGain = null, recDest = null;
 
 export function initAudio() {
   if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
@@ -48,6 +48,16 @@ export function applyVolume() {
   if (!actx) return;
   master.gain.setTargetAtTime(0.6 * settings.volume, actx.currentTime, 0.05);
   if (S.theme) droneGain.gain.setTargetAtTime(0.05 * (S.theme.droneVol ?? 1) * settings.ambient, actx.currentTime, 0.05);
+}
+
+// a MediaStreamTrack of the mixed game audio, for clip recording
+export function clipAudioTrack() {
+  if (!actx || !master) return null;
+  if (!recDest) {
+    recDest = actx.createMediaStreamDestination();
+    master.connect(recDest);
+  }
+  return recDest.stream.getAudioTracks()[0] || null;
 }
 
 function setLoop(g, v) { if (g) g.gain.setTargetAtTime(v, actx.currentTime, 0.1); }

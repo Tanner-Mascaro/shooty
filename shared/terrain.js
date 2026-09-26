@@ -10,6 +10,8 @@
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
 //   haunt / castle  # -> full-height walls (touching # join into rooms), + -> furniture / rubble,
 //          edge -> wall, under a ceiling (the client draws it at CEILING_H)
+//   nuke   # clusters -> cars / a bus, + -> junk crates, B clusters -> big enterable houses
+//          facing the street, edge -> block wall
 //
 // kind: 0 = ground (walkable, may slope), 1 = blocked (anything taller than STEP_H), 2 = pit
 // mat:  what a sample is made of, for the client's colors (MAT below)
@@ -74,11 +76,11 @@ export function buildTerrain(MAP, RES, style) {
   for (let cy = 1; cy < MH - 1; cy++) for (let cx = 1; cx < MW - 1; cx++) {
     const c = at(cx, cy), x = cx + 0.5, y = cy + 0.5, n = hash2(cx, cy);
     if (c === '+') {
-      if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
+      if (style === 'robot' || style === 'haunt' || style === 'castle' || style === 'nuke') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.6, 0.65, MAT.LEAVES, 0.25);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
-    // outdoor huts / lodges — walls only so the interior is walkable; roof is a client sprite
+    // outdoor huts / lodges — walls only so the interior is walkable; roof is raised afterward
     if (c === 'B' && (style === 'witch' || style === 'hell' || style === 'ice')) {
       const wallH = style === 'witch' ? 1.55 : style === 'ice' ? 1.65 : 1.75;
       const wallMat = style === 'witch' ? MAT.BARK : MAT.ROCK;
@@ -108,7 +110,63 @@ export function buildTerrain(MAP, RES, style) {
       if (style === 'witch') box(x1 - 0.4, y0 + 0.18, x1 - 0.18, y0 + 0.4, wallH + 0.9, MAT.ROCK);
       else if (style === 'ice') box(x0 + 0.2, y0 + 0.2, x0 + 0.42, y0 + 0.42, wallH + 0.55, MAT.ROCK);
       else box(x1 - 0.45, y1 - 0.45, x1 - 0.22, y1 - 0.22, wallH + 0.4, MAT.LAVA);
-      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style });
+      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir: 1 });
+      continue;
+    }
+    // nuketown houses: contiguous B cells become one big enterable house; door faces the street
+    if (c === 'B' && style === 'nuke' && !seen.has('B' + cx + ',' + cy)) {
+      const cells = [], stack = [[cx, cy]];
+      seen.add('B' + cx + ',' + cy);
+      while (stack.length) {
+        const [a, b] = stack.pop();
+        cells.push([a, b]);
+        for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = a + da, ny = b + db, k = 'B' + nx + ',' + ny;
+          if (!seen.has(k) && at(nx, ny) === 'B') { seen.add(k); stack.push([nx, ny]); }
+        }
+      }
+      const minX = Math.min(...cells.map(c => c[0])), maxX = Math.max(...cells.map(c => c[0]));
+      const minY = Math.min(...cells.map(c => c[1])), maxY = Math.max(...cells.map(c => c[1]));
+      const x0 = minX, y0 = minY, x1 = maxX + 1, y1 = maxY + 1;
+      const W = x1 - x0, D = y1 - y0, wallH = 2.1, t = 0.18, wallMat = MAT.WALL;
+      const midY = (minY + maxY) * 0.5;
+      const doorDir = midY < MH / 2 ? 1 : -1; // door toward mid-map street
+      const doorL = x0 + W * 0.3, doorR = x0 + W * 0.7;
+      const clearFloor = (xa, ya, xb, yb) => {
+        const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
+        const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const k = j * TW + i;
+          if (mat[k] === MAT.PIT) continue;
+          hgt[k] = 0; mat[k] = MAT.FLOOR;
+        }
+      };
+      box(x0, y0, x0 + t, y1, wallH, wallMat);
+      box(x1 - t, y0, x1, y1, wallH, wallMat);
+      if (doorDir > 0) {
+        box(x0 + t, y0, x1 - t, y0 + t, wallH, wallMat);
+        box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
+        box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
+      } else {
+        box(x0 + t, y1 - t, x1 - t, y1, wallH, wallMat);
+        box(x0 + t, y0, doorL, y0 + t, wallH, wallMat);
+        box(doorR, y0, x1 - t, y0 + t, wallH, wallMat);
+      }
+      clearFloor(x0 + t + 0.06, y0 + t + 0.06, x1 - t - 0.06, y1 - t - 0.06);
+      if (doorDir > 0) {
+        clearFloor(doorL, y1 - 0.05, doorR, y1 + 0.7);
+        box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
+        box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
+      } else {
+        clearFloor(doorL, y0 - 0.7, doorR, y0 + 0.05);
+        box(x0 + t, y0, doorL, y0 + t, wallH, wallMat);
+        box(doorR, y0, x1 - t, y0 + t, wallH, wallMat);
+      }
+      // chimney
+      box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, MAT.ROCK);
+      // interior cover (kitchen island / couch) so fights inside aren't empty boxes
+      if (W > 3.5 && D > 2.5) box(x0 + W * 0.38, y0 + D * 0.4, x0 + W * 0.62, y0 + D * 0.58, 0.55, MAT.CRATE);
+      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir });
       continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
@@ -127,6 +185,26 @@ export function buildTerrain(MAP, RES, style) {
         return null;
       });
       props.push({ type: 'tree', x: tx, y: ty, h: 2.4, r: 0.95 + 0.35 * n });
+    } else if (style === 'nuke' && !seen.has(cx + ',' + cy)) {
+      // cars and a bus: one hull per group of touching # squares
+      const cells = [], stack = [[cx, cy]];
+      seen.add(cx + ',' + cy);
+      while (stack.length) {
+        const [a, b] = stack.pop();
+        cells.push([a, b]);
+        for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const k = (a + da) + ',' + (b + db);
+          if (!seen.has(k) && at(a + da, b + db) === '#' && !edge(a + da, b + db)) { seen.add(k); stack.push([a + da, b + db]); }
+        }
+      }
+      const minX = Math.min(...cells.map(c => c[0])), maxX = Math.max(...cells.map(c => c[0]));
+      const minY = Math.min(...cells.map(c => c[1])), maxY = Math.max(...cells.map(c => c[1]));
+      const bus = cells.length >= 6;
+      const h = bus ? 1.35 : 0.95, inset = bus ? 0.08 : 0.18;
+      box(minX + inset, minY + inset, maxX + 1 - inset, maxY + 1 - inset, h, MAT.CRATE);
+      // cab / hood bump so vehicles read as cars, not crates
+      if (!bus) box(minX + 0.25, minY + 0.15, minX + 0.7, maxY + 0.85, h + 0.25, MAT.ROCK);
+      else box(minX + 0.15, minY + 0.12, minX + 1.1, maxY + 0.88, h + 0.2, MAT.ROCK);
     } else if (!seen.has(cx + ',' + cy)) {
       // volcano / iceberg: one cone per group of touching # squares
       const cells = [], stack = [[cx, cy]];
@@ -163,8 +241,9 @@ export function buildTerrain(MAP, RES, style) {
   for (const hut of props) {
     if (hut.type !== 'hut') continue;
     const hw = (hut.w || 2.2) / 2, hd = (hut.d || 2.2) / 2, t = 0.16;
-    const wallH = hut.h, wallMat = hut.style === 'witch' ? MAT.BARK : MAT.ROCK;
-    const roofMat = hut.style === 'witch' ? MAT.LEAVES : MAT.ROCK;
+    const wallH = hut.h, doorDir = hut.doorDir || 1;
+    const wallMat = hut.style === 'witch' ? MAT.BARK : hut.style === 'nuke' ? MAT.WALL : MAT.ROCK;
+    const roofMat = hut.style === 'witch' ? MAT.LEAVES : hut.style === 'nuke' ? MAT.CRATE : MAT.ROCK;
     const x0 = hut.x - hw, y0 = hut.y - hd, x1 = hut.x + hw, y1 = hut.y + hd;
     const clear = (xa, ya, xb, yb) => {
       const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
@@ -176,17 +255,24 @@ export function buildTerrain(MAP, RES, style) {
       }
     };
     clear(x0 + t + 0.05, y0 + t + 0.05, x1 - t - 0.05, y1 - t - 0.05);
-    clear(hut.x - hw * 0.44, y1 - 0.05, hut.x + hw * 0.44, y1 + 0.55);
-    box(x0 + t, y1 - t, hut.x - hw * 0.44, y1, wallH, wallMat);
-    box(hut.x + hw * 0.44, y1 - t, x1 - t, y1, wallH, wallMat);
+    if (doorDir > 0) {
+      clear(hut.x - hw * 0.44, y1 - 0.05, hut.x + hw * 0.44, y1 + 0.55);
+      box(x0 + t, y1 - t, hut.x - hw * 0.44, y1, wallH, wallMat);
+      box(hut.x + hw * 0.44, y1 - t, x1 - t, y1, wallH, wallMat);
+    } else {
+      clear(hut.x - hw * 0.44, y0 - 0.55, hut.x + hw * 0.44, y0 + 0.05);
+      box(x0 + t, y0, hut.x - hw * 0.44, y0 + t, wallH, wallMat);
+      box(hut.x + hw * 0.44, y0, x1 - t, y0 + t, wallH, wallMat);
+    }
     // A-frame roof peaked along X (ridge runs parallel to the doorway wall)
+    const peakH = hut.style === 'nuke' ? 1.15 : 0.7;
     raise(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, (px, py) => {
       const u = Math.abs(px - hut.x) / (hw + 0.06), v = Math.abs(py - hut.y) / (hd + 0.06);
       if (u > 1 || v > 1) return null;
-      const peak = wallH + 0.7 - u * 0.95;
+      const peak = wallH + peakH - u * (peakH + 0.25);
       return peak > wallH + 0.02 ? [peak, roofMat] : null;
     });
-    hut.roof = wallH + 0.7;
+    hut.roof = wallH + peakH;
   }
 
   for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;

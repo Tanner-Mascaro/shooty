@@ -1,11 +1,11 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
-import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, randomBotName } from './bot.js';
+import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
@@ -88,7 +88,7 @@ export class Room {
     this.pickups = findPickups(this.map).map(p => Object.assign(p, {
       gun: p.weapon !== 'health' && p.weapon !== 'nade',
       nade: p.weapon === 'nade',
-    }));
+    })).filter(p => this.mode !== 'snipers' || !p.nade);
     const taken = [...this.pickups];
     const scatter = (n, weapon, gun, nade, crate) => {
       for (let i = 0; i < n; i++) {
@@ -100,12 +100,16 @@ export class Room {
     };
     scatter(AMMO_CRATES, 'ammo', false, false, false);
     scatter(GUN_CRATES, 'rifle', true, false, true); // weapon re-rolled in rollPad; walk-over crates
-    scatter(NADE_CRATES, 'nade', false, true, false);
+    if (this.mode !== 'snipers') scatter(NADE_CRATES, 'nade', false, true, false);
     for (const pu of this.pickups) { pu.active = true; pu.respawnAt = 0; this.rollPad(pu); }
     this.boxes = [];
     this.nades = [];
   }
-  rollPad(pu) { if (pu.gun) pu.weapon = PAD_GUNS[Math.floor(Math.random() * PAD_GUNS.length)]; }
+  rollPad(pu) {
+    if (!pu.gun) return;
+    const guns = padGuns(this.mode);
+    pu.weapon = guns[Math.floor(Math.random() * guns.length)];
+  }
   pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon, crate: !!p.crate })), active: this.pickups.map(p => p.active) }; }
   broadcastPickups() { this.broadcast(this.pickupList()); }
   boxList() { return { type: 'boxes', boxes: this.boxes.map(b => ({ id: b.id, x: b.x, y: b.y, z: b.z, items: b.items.map(it => it.w) })) }; }
@@ -137,6 +141,7 @@ export class Room {
   // it can't be done
   takeGun(p, w, mag, spare, drop) {
     if (this.isInfected(p)) return null;
+    if (this.mode === 'snipers' && !padGuns(this.mode).includes(w)) return null;
     if (p.mag[w] !== undefined) { this.addSpare(p, w, mag + spare); return { dropped: null }; }
     const guns = Object.keys(p.mag);
     if (guns.length < GUN_SLOTS) { p.mag[w] = mag; p.inv[w] = spare; return { dropped: null }; }
@@ -199,8 +204,16 @@ export class Room {
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
     p.hp = this.maxHp(p);
-    p.mag = this.isInfected(p) ? {} : { [START_GUN]: WEAPONS[START_GUN].mag }; // rounds loaded; you own the guns listed here
-    p.inv = this.isInfected(p) ? {} : { [START_GUN]: AMMO[START_GUN] };         // spare rounds per gun
+    if (this.isInfected(p)) { p.mag = {}; p.inv = {}; }
+    else if (this.mode === 'snipers') {
+      // both long guns from the start; pads only restock sniper / crossbow
+      p.mag = { sniper: WEAPONS.sniper.mag, crossbow: WEAPONS.crossbow.mag };
+      p.inv = { sniper: AMMO.sniper * 2, crossbow: AMMO.crossbow };
+    } else {
+      const gun = startGun(this.mode);
+      p.mag = { [gun]: WEAPONS[gun].mag };
+      p.inv = { [gun]: AMMO[gun] };
+    }
     p.nades = 0;
     p.lastShot = {};
     p.sc = false; p.sl = false;
@@ -253,7 +266,9 @@ export class Room {
     const skin = PLAYER_SKINS[Math.floor(Math.random() * PLAYER_SKINS.length)];
     const taken = new Set(this.list.map(p => (p.name || '').toLowerCase()));
     const name = randomBotName(taken);
-    const bot = { id, bot: true, name, level, skin, knife: Math.random() < KNIFE_CHANCE, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
+    const knife = Math.random() < KNIFE_CHANCE;
+    const nadeBot = !knife && this.mode !== 'snipers' && Math.random() < NADE_CHANCE;
+    const bot = { id, bot: true, name, level, skin, knife, nadeBot, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
     return true;
@@ -445,7 +460,7 @@ export class Room {
       p.hp = Math.min(maxHp, p.hp + HEAL);
       pu.respawnAt = now + HEAL_RESPAWN;
     } else if (pu.nade || pu.weapon === 'nade') {
-      if ((p.nades || 0) >= NADE.maxCarry) return;
+      if (this.mode === 'snipers' || (p.nades || 0) >= NADE.maxCarry) return;
       p.nades = (p.nades || 0) + 1;
       pu.respawnAt = now + NADE_RESPAWN;
       this.syncAmmo(p);
@@ -618,7 +633,7 @@ Room.prototype.handlers = {
   },
 
   nade(p) {
-    if (!this.gameOn || this.isInfected(p) || !(p.nades > 0)) return;
+    if (!this.gameOn || this.mode === 'snipers' || this.isInfected(p) || !(p.nades > 0)) return;
     p.nades--;
     this.syncAmmo(p);
     const cos = Math.cos(p.a), sin = Math.sin(p.a), cp = Math.cos(p.p), sp = Math.sin(p.p);
@@ -626,7 +641,7 @@ Room.prototype.handlers = {
     const n = {
       id: ++this.nadeId, by: p.id, until: Date.now() + NADE.fuse,
       x: p.x + cos * 0.35, y: p.y + sin * 0.35, z: eye,
-      vx: cos * cp * NADE.speed, vy: sin * cp * NADE.speed, vz: sp * NADE.speed + 3.2,
+      vx: cos * cp * NADE.speed, vy: sin * cp * NADE.speed, vz: sp * NADE.speed + 1.2,
     };
     this.nades.push(n);
     this.broadcast({ type: 'nadeThrow', id: n.id, by: p.id, x: n.x, y: n.y, z: n.z });

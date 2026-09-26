@@ -2,6 +2,7 @@
 // (the starting pistol, as it never picks up guns) at the nearest enemy it can see. It refills
 // from ammo crates it happens to walk over. How good it is depends on its level (LEVELS).
 // Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
+// Some (NADE_CHANCE) get endless grenades and just lob them.
 // Movement uses the same accelerate / air-strafe / hold-jump bhop model as players.
 import { TICK, EYE, BODY_H, WEAPONS, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
@@ -16,6 +17,7 @@ export const BOT_LEVELS = {
 };
 
 export const KNIFE_CHANCE = 0.25;
+export const NADE_CHANCE = 0.2;
 
 const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0;
 
@@ -87,7 +89,7 @@ function applyFriction(p, dt) {
 }
 
 export function newBrain() {
-  return { goal: null, seenAt: 0, nextShot: 0, stuck: 0, strafe: 1, bhop: Math.random() < 0.4 };
+  return { goal: null, seenAt: 0, nextShot: 0, nextNade: 0, stuck: 0, strafe: 1, bhop: Math.random() < 0.4 };
 }
 
 function pickGoal(game, p) {
@@ -106,8 +108,8 @@ export function botTick(game, p) {
   const infected = game.isInfected(p);
   p.vx = p.vx || 0; p.vy = p.vy || 0;
 
-  // Infected pursue reachable survivors; knife bots chase until a blocked path makes them wander.
-  const chasing = foe && (infected ? clearPath(T, p, foe) : p.knife && now >= (b.wanderUntil || 0));
+  // Infected pursue reachable survivors; knife / nade bots chase until a blocked path makes them wander.
+  const chasing = foe && (infected ? clearPath(T, p, foe) : (p.knife || p.nadeBot) && now >= (b.wanderUntil || 0));
   if (chasing) {
     b.goal = { x: foe.x, y: foe.y };
     if (!infected && b.stuck > 10) { b.wanderUntil = now + 1500; b.goal = null; }
@@ -120,7 +122,7 @@ export function botTick(game, p) {
   }
 
   let heading = p.a;
-  const stopClose = chasing && foe && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : 0.8);
+  const stopClose = chasing && foe && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : p.nadeBot ? 4 : 0.8);
   let wx = 0, wy = 0;
   if (b.goal && !stopClose) {
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
@@ -137,7 +139,7 @@ export function botTick(game, p) {
     wx /= wl; wy /= wl;
   }
 
-  const sprinting = chasing || p.knife || infected;
+  const sprinting = chasing || p.knife || p.nadeBot || infected;
   let wishSpeed = sprinting ? L.sprint : L.speed;
   if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
   else if (p.knife && chasing) wishSpeed = L.sprint * 1.12;
@@ -210,13 +212,26 @@ export function botTick(game, p) {
     }
     return;
   }
+  if (p.nadeBot) {
+    p.nades = 99; // endless pouch
+    if (game.mode === 'snipers' || now < (b.nextNade || 0)) return;
+    const aim = Math.atan2(foe.y - p.y, foe.x - p.x);
+    const da = Math.abs(Math.atan2(Math.sin(aim - p.a), Math.cos(aim - p.a)));
+    if (da > 0.4) return; // still turning onto the throw
+    p.p = 0.28 + Math.min(0.5, d / 32); // lob farther targets higher
+    b.nextNade = now + 650 + Math.random() * 550;
+    game.handlers.nade.call(game, p);
+    return;
+  }
   if (p.knife) {
     if (d > WEAPONS.blade.range * 0.9) return;
     b.nextShot = now + Math.max(WEAPONS.blade.cd, L.fireGap);
     game.handlers.shoot.call(game, p, { weapon: 'blade' });
     return;
   }
-  const gun = Object.keys(p.mag)[0];
+  const gun = Object.keys(p.mag).includes('sniper') && d > 5 ? 'sniper'
+    : Object.keys(p.mag).includes('crossbow') && d > 3 ? 'crossbow'
+    : Object.keys(p.mag)[0];
   if (!gun) return; // out of ammo altogether
   if (!(p.mag[gun] > 0)) { // out: reload, a little after the last shot like a player would
     if (now - (p.lastShot[gun] || 0) >= WEAPONS[gun].reload) game.handlers.reload.call(game, p, { weapon: gun });
@@ -226,6 +241,7 @@ export function botTick(game, p) {
   const a = p.a, pch = p.p;
   p.a += (Math.random() * 2 - 1) * L.aim;
   p.p += (Math.random() * 2 - 1) * L.aim;
+  if (gun === 'sniper') p.sc = true; // bots scope for the zero hip-fire spread
   game.handlers.shoot.call(game, p, { weapon: gun });
   p.a = a; p.p = pch;
 }

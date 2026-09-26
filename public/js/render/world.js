@@ -198,11 +198,15 @@ export function drawTerrain(now) {
           else if (haunt || castle) { r = 18 + v * 30; g = 4 + v * 6; b = 34 + v * 50; }
           else if (witch) { const bub = Math.sin(wx * 11 + t * 3) * Math.sin(wy * 9 - t * 2) > 0.9; r = bub ? 200 : 50 + v * 50; g = bub ? 255 : 150 + v * 90; b = bub ? 140 : 30 + v * 30; }
           else if (ice) { r = 40 + v * 50; g = 110 + v * 80; b = 180 + v * 70; } // black ice / freezing water
-          else { r = 255; g = 60 + v * 130; b = 10 + v * 40; }
+          else { // hell lava: yellow-white core so it reads against the red floor
+            const crust = Math.sin(wx * 9 + t) * Math.sin(wy * 8 - t * 0.7) > 0.55;
+            if (crust) { r = 90; g = 28; b = 12; }
+            else { r = 255; g = 190 + v * 65; b = 60 + v * 90; }
+          }
           ff = f * 0.4;
         } else if (EM[k] === 3) { // lava in a volcano crater / running down its side
           const v = 0.5 + 0.5 * Math.sin(wx * 4.1 + t * 2.3) * Math.sin(wy * 3.7 - t * 1.9);
-          r = 255; g = 70 + v * 130; b = 10 + v * 30; ff = f * 0.3;
+          r = 255; g = 170 + v * 85; b = 40 + v * 70; ff = f * 0.25;
         } else { r = CR[k]; g = CG[k]; b = CB[k]; if (EM[k]) { ff = f * 0.5; g *= 0.8 + 0.2 * Math.sin(t * 2 + wx); } }
         const col = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff);
         for (let y = ytop; y < ybot; y++) { const idx = y * RW + c; pix[idx] = col; zbuf[idx] = z; }

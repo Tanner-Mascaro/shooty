@@ -15,7 +15,7 @@ export const THEMES = {
     ambient: [255, 120, 20], ambientVz: 0.5, blood: [150, 5, 5], fire: [255, 110, 10],
     sprite: 'demon', pitDeath: 'Burned alive!', enemyPitDeath: 'Enemy burned!', pitOverlay: '255,70,0',
     accent: '255,70,20', bg: '#3a0600', title: '#f42', drone: [['sawtooth', 41], ['sawtooth', 43.7], ['sawtooth', 82.1]], droneCut: 160,
-    minimap: [[40, 16, 14], [110, 40, 40], [255, 110, 20]],
+    minimap: [[40, 16, 14], [110, 40, 40], [255, 210, 40]],
   },
   robot: {
     id: 'robot', name: 'ROBOT FACTORY', fog: [12, 18, 28], fogK: 0.048, skyLo: [28, 36, 48], skyHi: [8, 10, 14], // dim ceiling over the server room
@@ -61,5 +61,14 @@ export const THEMES = {
     sprite: 'knight', pitDeath: 'Fell into the oubliette!', enemyPitDeath: 'Enemy fell!', pitOverlay: '20,10,5',
     accent: '255,150,50', bg: '#1a1410', title: '#fa5', drone: [['sawtooth', 36], ['sine', 72.3], ['triangle', 108]], droneCut: 180, droneVol: 0.4,
     minimap: [[40, 36, 30], [90, 82, 70], [30, 20, 12]],
+  },
+  nuke: {
+    id: 'nuke', name: 'NUKETOWN', fog: [55, 58, 48], fogK: 0.042, skyLo: [175, 185, 155], skyHi: [55, 75, 110],
+    orb: [255, 230, 160], orbGlow: [80, 60, 20], orbA: -0.8, orbE: 0.42, orbR: 0.1,
+    wall: [210, 175, 95], wallTop: [190, 155, 80], band: [255, 210, 70],
+    ambient: [255, 220, 140], ambientVz: 0.05, blood: [140, 15, 15], fire: [255, 180, 60],
+    sprite: 'cowboy', pitDeath: 'Fell in a hole!', enemyPitDeath: 'Enemy fell!', pitOverlay: '60,50,30',
+    accent: '255,200,60', bg: '#2a2818', title: '#fc5', drone: [['triangle', 52], ['sine', 104], ['sine', 156]], droneCut: 260, droneVol: 0.35,
+    minimap: [[70, 75, 55], [200, 170, 90], [40, 40, 35]],
   },
 };

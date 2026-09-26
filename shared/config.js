@@ -7,7 +7,7 @@ export const WIN_SCORE = 10;       // free-for-all: first player to this many ki
 export const TEAM_WIN_SCORE = 20;  // teams: first team to this many kills
 export const MAX_PLAYERS = 8;      // per room
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
-export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', plague: 'Plague' };
+export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', plague: 'Plague', snipers: 'Snipers' };
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
 export const PLAGUE_TEAM = 1;
 export const HEALTHY_TEAM = 2;
@@ -57,6 +57,9 @@ export const START_GUN = 'pistol';
 export const AMMO = { pistol: 24, deagle: 14, revolver: 18, rifle: 60, burst: 60, carbine: 50, sniper: 4, crossbow: 8, shotgun: 6, smg: 55, uzi: 64, lmg: 150 };
 export const MAX_SPARE = w => WEAPONS[w].mag * 3; // spare rounds you can carry per gun
 export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'crossbow', 'uzi'];
+export const SNIPER_GUNS = ['sniper', 'crossbow'];
+export const startGun = mode => mode === 'snipers' ? 'sniper' : START_GUN;
+export const padGuns = mode => mode === 'snipers' ? SNIPER_GUNS : PAD_GUNS;
 export const AMMO_CRATES = 22;   // small ammo crates scattered at random spots each match: walk over for a mag per gun
 export const AMMO_RESPAWN = 12000;
 export const GUN_CRATES = 14;    // random guns on the ground; walk over to grab if you have a free slot / ammo
@@ -66,6 +69,6 @@ export const USE_RANGE = 1.2;    // how close you must be to pick up a gun or lo
 export const BOX_TIME = 30000;   // loot boxes vanish after this long
 
 // grenades: find on pads / crates, throw with the nade key; fuse then AoE
-export const NADE = { dmg: 95, radius: 4.2, fuse: 1700, speed: 10, bounce: 0.4, gravity: 14, maxCarry: 3 };
+export const NADE = { dmg: 130, radius: 5.8, fuse: 900, speed: 26, bounce: 0.28, gravity: 16, maxCarry: 3 };
 export const NADE_CRATES = 10;
 export const NADE_RESPAWN = 18000;

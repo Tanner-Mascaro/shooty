@@ -1,7 +1,7 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName } from '/shared/config.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
@@ -18,7 +18,7 @@ const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const SKINS = Object.keys(PLAYER_SKIN_NAMES);
 const skinCanvas = {};
 let browsedSkin = 'demon';
-let skinWheelBuilt = false;
+let skinCarouselBuilt = false;
 
 function renderSkinPreview(canvas, skin) {
   const cached = skinCanvas[skin];
@@ -44,6 +44,18 @@ function renderSkinPreview(canvas, skin) {
   skinCanvas[skin] = copy;
 }
 
+const skinCards = () => [...document.querySelectorAll('#skins button')];
+
+function centeredSkin() {
+  const strip = $('skins'), mid = strip.scrollLeft + strip.clientWidth / 2;
+  return skinCards().reduce((best, b) => Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid) < Math.abs(best.offsetLeft + best.offsetWidth / 2 - mid) ? b : best);
+}
+
+function scrollToSkin(skin) {
+  const strip = $('skins'), b = skinCards().find(c => c.dataset.skin === skin);
+  if (b) strip.scrollTo({ left: b.offsetLeft + b.offsetWidth / 2 - strip.clientWidth / 2 });
+}
+
 function updateSkinButton() {
   const chosen = savedSkin() === browsedSkin;
   const name = (PLAYER_SKIN_NAMES[browsedSkin] || browsedSkin).toUpperCase();
@@ -53,26 +65,12 @@ function updateSkinButton() {
   btn.classList.toggle('picked', chosen);
   const status = $('skinStatus');
   if (status) status.textContent = 'Playing as ' + (PLAYER_SKIN_NAMES[savedSkin()] || savedSkin());
-}
-
-function renderSkinWheel() {
-  const current = SKINS.indexOf(browsedSkin), wheel = $('skinWheel');
-  wheel.replaceChildren();
-  [-1, 0, 1].forEach(offset => {
-    const skin = SKINS[(current + offset + SKINS.length) % SKINS.length];
-    const card = document.createElement('div');
-    card.className = 'skin-preview' + (offset ? (offset < 0 ? ' side left' : ' side right') : ' front');
-    if (!offset && savedSkin() === skin) card.classList.add('picked');
-    const canvas = document.createElement('canvas');
-    renderSkinPreview(canvas, skin);
-    const label = document.createElement('span');
-    label.textContent = PLAYER_SKIN_NAMES[skin];
-    card.append(canvas, label);
-    if (!offset) card.addEventListener('click', () => pickSkin(skin));
-    wheel.append(card);
+  skinCards().forEach(b => {
+    const mine = b.dataset.skin === savedSkin();
+    b.classList.toggle('sel', mine);
+    const tag = b.querySelector('small');
+    if (tag) tag.textContent = mine ? 'SELECTED' : '';
   });
-  skinWheelBuilt = true;
-  updateSkinButton();
 }
 
 function pickSkin(skin) {
@@ -82,18 +80,65 @@ function pickSkin(skin) {
     saveSkin(skin);
     send({ type: 'skin', skin });
   }
-  renderSkinWheel();
+  updateSkinButton();
+  scrollToSkin(skin);
 }
 
-function browseSkin(dir) {
-  browsedSkin = SKINS[(SKINS.indexOf(browsedSkin) + dir + SKINS.length) % SKINS.length];
-  renderSkinWheel();
+function initSkinCarousel() {
+  if (skinCarouselBuilt) return;
+  skinCarouselBuilt = true;
+  const strip = $('skins');
+  strip.replaceChildren(...SKINS.map(skin => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.skin = skin;
+    const canvas = document.createElement('canvas');
+    renderSkinPreview(canvas, skin);
+    const title = document.createElement('b');
+    title.textContent = (PLAYER_SKIN_NAMES[skin] || skin).toUpperCase();
+    const tag = document.createElement('small');
+    b.append(canvas, title, tag);
+    b.addEventListener('click', () => {
+      browsedSkin = skin;
+      pickSkin(skin);
+    });
+    return b;
+  }));
+  const step = dir => {
+    const all = skinCards(), idx = all.indexOf(centeredSkin());
+    const next = all[(idx + dir + all.length) % all.length];
+    browsedSkin = next.dataset.skin;
+    scrollToSkin(browsedSkin);
+    updateSkinButton();
+  };
+  $('skinPrev').addEventListener('click', () => step(-1));
+  $('skinNext').addEventListener('click', () => step(1));
+  strip.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    strip.scrollBy({ left: e.deltaY });
+  }, { passive: false });
+  let scrollTick = 0;
+  const mark = () => {
+    scrollTick = 0;
+    const c = centeredSkin();
+    browsedSkin = c.dataset.skin;
+    skinCards().forEach(b => b.classList.toggle('centered', b === c));
+    updateSkinButton();
+  };
+  strip.addEventListener('scroll', () => {
+    if (scrollTick) return;
+    scrollTick = requestAnimationFrame(mark);
+  }, { passive: true });
+  browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'demon';
+  updateSkinButton();
+  requestAnimationFrame(() => { scrollToSkin(browsedSkin); mark(); });
 }
 
 function updateMapVoteLabel(level) {
   const el = $('mapVote');
   if (!el) return;
-  const names = { hell: 'Hell', robot: 'Robot Factory', witch: 'Witch Swamp', haunt: 'Haunted House', ice: 'Ice Fields', castle: 'Castle Keep' };
+  const names = { hell: 'Hell', robot: 'Robot Factory', witch: 'Witch Swamp', haunt: 'Haunted House', ice: 'Ice Fields', castle: 'Castle Keep', nuke: 'Nuketown' };
   el.textContent = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
 }
 
@@ -111,12 +156,12 @@ function drawMapPreview(b) {
     c = document.createElement('canvas');
     c.width = T.TW; c.height = T.TH;
     const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
-    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [70, 62, 50] }[name] || th.minimap[0];
+    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [70, 62, 50], nuke: [70, 75, 55] }[name] || th.minimap[0];
     for (let k = 0; k < T.TW * T.TH; k++) {
       const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
       let r, g, bl;
       if (kind === 2) { r = pit[0]; g = pit[1]; bl = pit[2]; }
-      else if (m === MAT.LAVA) { r = 255; g = 90; bl = 20; }
+      else if (m === MAT.LAVA) { r = 255; g = 200; bl = 50; }
       else if (kind === 1) {
         const shade = 0.55 + 0.45 * Math.min(1, h / 2.2), top = th.wallTop || th.wall;
         const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [50, 55, 65] : m === MAT.CRATE ? [120, 95, 50] : top;
@@ -198,8 +243,6 @@ export const goToRoom = code => { location.href = code ? '?room=' + code : locat
 
 export function initRoom() {
   browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'demon';
-  $('skinPrev').addEventListener('click', () => browseSkin(-1));
-  $('skinNext').addEventListener('click', () => browseSkin(1));
   $('chooseSkin').addEventListener('click', () => pickSkin(browsedSkin));
   $('readyBtn').addEventListener('click', () => { initAudio(); send({ type: 'ready' }); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
@@ -242,7 +285,7 @@ let lobbyWarmed = false;
 export function warmLobby() {
   if (lobbyWarmed) return;
   lobbyWarmed = true;
-  renderSkinWheel();
+  initSkinCarousel();
   initMapCarousel();
 }
 
@@ -267,8 +310,11 @@ export function showRoom() {
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('sel', b.dataset.mode === r.mode));
   document.body.classList.toggle('plague', r.mode === 'plague');
   $('modeHelp').textContent = r.mode === 'plague'
-    ? `Infected monsters have ${PLAGUE_MAX_HP} health, move ${PLAGUE_SPEED_MULTIPLIER} times as fast, and can double jump and dash. Use the shoot button to attack with claws; two hits infect a full-health survivor. Infect everyone, or stay healthy for ${PLAGUE_DURATION / 60000} minutes to win. No friendly fire.`
-    : r.mode === 'teams' ? `Red vs blue. First team to ${TEAM_WIN_SCORE} kills wins.` : `Every player for themselves. First to ${WIN_SCORE} kills wins.`;
+    ? `Infect everyone, or survive ${PLAGUE_DURATION / 60000} minutes. Monsters are fast and claw to infect.`
+    : r.mode === 'teams' ? `Red vs blue. First team to ${TEAM_WIN_SCORE} kills wins.`
+    : r.mode === 'snipers' ? `Sniper and crossbow only. First to ${WIN_SCORE} kills wins.`
+    : `Every player for themselves. First to ${WIN_SCORE} kills wins.`;
+  document.body.classList.toggle('snipers', r.mode === 'snipers');
   const manual = r.mode === 'plague' && r.plagueSelection === 'manual';
   $('plagueSetup').hidden = r.mode !== 'plague';
   document.querySelectorAll('#plagueSelection button').forEach(b => {
@@ -319,8 +365,7 @@ export function showRoom() {
     return li;
   }));
   $('rosterHead').textContent = `PLAYERS ${r.players.length}/${r.max}`;
-  // only rebuild the wheel once; room updates just refresh the selected label
-  if (!skinWheelBuilt) renderSkinWheel();
+  if (!skinCarouselBuilt) initSkinCarousel();
   else updateSkinButton();
   $('teamPick').hidden = !teams || r.gameOn;
   document.querySelectorAll('#teamPick button').forEach(b => b.classList.toggle('sel', +b.dataset.team === S.myTeam));

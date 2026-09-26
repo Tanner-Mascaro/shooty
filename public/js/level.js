@@ -57,7 +57,7 @@ function buildColors() {
       // soft shadow where floor meets walls / props
       const ao = 0.62 + 0.38 * wallProx(i, j);
       r *= ao; g *= ao; b *= ao;
-    } else if (m === MAT.PIT) { r = 255; g = 90; b = 10; EM[k] = 2; }
+    } else if (m === MAT.PIT) { r = 255; g = 200; b = 50; EM[k] = 2; }
     else {
       [r, g, b] = SHAPE_COLORS[m](x, y, T.hgt[k], n, theme);
       if (m === MAT.LAVA) EM[k] = 3;
@@ -87,7 +87,7 @@ const SHAPE_COLORS = {
     const hot = Math.max(0, (h - 1.2) / 1.6) * 0.15;
     return [(118 + 40 * hot) * mott * band * ash, (54 + 10 * hot) * mott * band, 40 * mott * band];
   },
-  [MAT.LAVA]() { return [255, 90, 10]; },
+  [MAT.LAVA]() { return [255, 200, 50]; },
   [MAT.BARK](x, y, h, n) { // trunk tops: grain rings + darker pith
     const ring = 0.85 + 0.2 * Math.sin(h * 18 + noise(x * 3, y * 3) * 6), v = (0.75 + 0.35 * n) * ring;
     return [68 * v, 48 * v, 30 * v];
@@ -118,13 +118,13 @@ const SHAPE_COLORS = {
 // floor color per theme: (world x, y, noise 0..1, pit glow 0..1, pit distance, sample index, emissive array) -> [r, g, b]
 const FLOORS = {
   hell(x, y, n, glow, ld, k, EM) {
-    // scorched basalt with ash patches and glowing cracks
-    const basalt = 0.65 + 0.45 * noise(x * 2.4, y * 2.4) + n * 0.12;
-    const ash = noise(x * 5.5 + 3, y * 5.5) > 0.72 ? 1.25 : 1;
+    // dark basalt so yellow lava pits read clearly; faint warm rim near the edge
+    const basalt = 0.55 + 0.4 * noise(x * 2.4, y * 2.4) + n * 0.1;
+    const ash = noise(x * 5.5 + 3, y * 5.5) > 0.72 ? 1.2 : 1;
     const c = Math.abs(Math.sin(x * 1.9 + Math.sin(y * 1.3) * 2.2) + Math.sin(y * 2.1 + Math.sin(x * 1.1) * 2.0));
-    if (c < 0.028) { EM[k] = 1; return [255, 75 + n * 55, 12]; } // glowing crack
+    if (c < 0.028) { EM[k] = 1; return [255, 140 + n * 40, 30]; } // yellow-hot crack, not floor-red
     const grit = noise(x * 11, y * 11) > 0.85 ? 0.82 : 1;
-    return [(52 * basalt * ash + 140 * glow) * grit, (20 * basalt + 40 * glow) * grit, 16 * basalt * grit];
+    return [(36 * basalt * ash + 50 * glow) * grit, (14 * basalt + 35 * glow) * grit, 12 * basalt * grit];
   },
   robot(x, y, n, glow, ld, k, EM) {
     // metal floor plates with seams, rivets, scuffs, hazard stripes by the acid and floor lights
@@ -190,6 +190,24 @@ const FLOORS = {
     if (fx < 0.06 || fy < 0.06) { r = 38; g = 34; b = 28; }
     else if (noise(x * 5, y * 5) > 0.85) { r *= 0.82; g *= 0.82; b *= 0.8; } // scuffs
     r += 40 * glow; g += 18 * glow; b += 5 * glow;
+    return [r, g, b];
+  },
+  nuke(x, y, n, glow) {
+    // cracked asphalt street with faded lane paint and dusty yards
+    const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
+    const street = Math.abs(x - 30) < 8 || (cy > 14 && cy < 46 && Math.abs(x - 30) < 12);
+    const v = 0.75 + n * 0.2;
+    let r, g, b;
+    if (street) {
+      r = 48 * v; g = 48 * v; b = 46 * v;
+      if (Math.abs(x - 30) < 0.12) { r = 200; g = 180; b = 60; } // center line
+      if (fx < 0.05 || fy < 0.05) { r *= 0.7; g *= 0.7; b *= 0.7; }
+    } else {
+      const dirt = 0.85 + 0.2 * noise(x * 2, y * 2);
+      r = 95 * dirt * v; g = 105 * dirt * v; b = 55 * dirt * v;
+      if (noise(x * 6, y * 6) > 0.88) { r = 70; g = 90; b = 40; } // grass tufts
+    }
+    r += 15 * glow; g += 12 * glow; b += 5 * glow;
     return [r, g, b];
   },
 };
