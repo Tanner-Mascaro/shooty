@@ -1,8 +1,8 @@
 // Everyone connected to the server: which room each player is in, accounts and saved stats,
 // friends and invites. Match logic lives in room.js; storage in profiles.js.
 //
-// Rooms are joined by URL: /?room=CODE joins (or creates) that private room; no code means
-// quick play, which picks any public room with space.
+// Rooms are joined by URL: /?room=CODE joins (or creates) that private room; /?play=1 is
+// quick play (any public room with space). Bare / is the sign-in menu — no room until they pick.
 import { MAX_PLAYERS, PLAYER_SKINS } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
@@ -14,6 +14,7 @@ export const roomCodeFrom = url => {
   const code = new URL(url || '/', 'http://x').searchParams.get('room');
   return code && /^[A-Za-z0-9]{3,8}$/.test(code) ? code.toUpperCase() : null;
 };
+export const wantsQuickPlay = url => new URL(url || '/', 'http://x').searchParams.get('play') === '1';
 
 // failed sign-ins per IP: 5 a minute, then locked out until the minute is up
 const fails = new Map();
@@ -54,7 +55,10 @@ export class Hub {
     const id = this.nextId++;
     const p = this.conns[id] = { id, socket, ip, joinedAt: Date.now(), name: `Player ${id}`, pid: null, username: null };
     log(`${this.who(p)} connected (${Object.keys(this.conns).length} online)`);
-    this.joinRoom(p, roomCodeFrom(url));
+    const code = roomCodeFrom(url);
+    if (code) this.joinRoom(p, code);
+    else if (wantsQuickPlay(url)) this.joinRoom(p, null);
+    // bare /: stay on the sign-in menu with no room (auth / friends still work)
 
     socket.on('message', raw => {
       let msg;

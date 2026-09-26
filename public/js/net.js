@@ -63,7 +63,8 @@ const handlers = {
     S.mySeq = msg.seq;
     S.others = {};
     lastRoster = null;
-    history.replaceState(null, '', '?room=' + msg.room); // the address bar is now this room's invite link
+    // only pin the invite link once you're actually in a match room (menu stays bare /)
+    if (msg.room) history.replaceState(null, '', '?room=' + msg.room);
   },
 
   room(msg) {

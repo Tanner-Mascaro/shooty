@@ -1,5 +1,6 @@
 // First screen: sign in (or play as guest) and pick how to start — vs bots, quick play, or private room.
-// Shown when you open the site with no ?room= invite. Invite links skip straight to the lobby.
+// Shown when you open the site with no ?room= / ?play=. Invite links and play links skip to the lobby.
+// Bare / does not join a match room, so the menu can't shove you into a public lobby.
 import { send } from './net.js';
 import { token, setToken, clearToken, savedName, saveName, savedSkin } from './profile.js';
 import { goToRoom, newCode } from './room.js';
@@ -18,44 +19,60 @@ export function hideHome() {
 function showHome() {
   $('home').hidden = false;
   document.body.classList.add('on-home');
-  syncHomeAuth();
+  syncHomeAuth(true);
 }
 
 let signedIn = false;
+let authLayout = null; // 'in' | 'form' | 'guest' — only rewrite the DOM when this changes
 
 export function homeProfile(msg) {
-  signedIn = !!msg.username;
-  syncHomeAuth();
+  const next = !!msg.username;
+  if (next === signedIn && homeOpen()) {
+    // soft update: welcome text / name only, don't flip panels (that jumps the layout)
+    if (signedIn) $('homeWelcome').textContent = 'Signed in as ' + (savedName() || msg.name || 'you');
+    if (document.activeElement !== $('homeName') && savedName()) $('homeName').value = savedName();
+    return;
+  }
+  signedIn = next;
+  syncHomeAuth(true);
 }
 
-function syncHomeAuth() {
+function setAuthLayout(mode) {
+  if (authLayout === mode) return;
+  authLayout = mode;
+  $('homeSigned').hidden = mode !== 'in';
+  $('homeAuth').hidden = mode !== 'form';
+  $('homeGuest').hidden = mode !== 'guest';
+}
+
+function syncHomeAuth(force) {
   if (!homeOpen()) return;
   const name = savedName();
-  $('homeName').value = name;
-  $('homeName').placeholder = name ? name : 'Your name';
-  $('homeGuest').hidden = signedIn;
-  $('homeSigned').hidden = !signedIn;
-  $('homeAuth').hidden = signedIn || $('homeGuest').dataset.skipped === '1';
-  if (!signedIn && $('homeGuest').dataset.skipped === '1') $('homeGuest').hidden = false;
-  if (signedIn) {
-    $('homeWelcome').textContent = 'Signed in as ' + (name || 'you');
-    $('homeGuest').hidden = true;
-    $('homeAuth').hidden = true;
+  if (force || document.activeElement !== $('homeName')) {
+    $('homeName').value = name;
+    $('homeName').placeholder = name || 'Your name';
   }
-  $('homeAuthErr').textContent = '';
+  if (signedIn) {
+    setAuthLayout('in');
+    $('homeWelcome').textContent = 'Signed in as ' + (name || 'you');
+    $('homeGuest').dataset.skipped = '';
+  } else if ($('homeGuest').dataset.skipped === '1') setAuthLayout('guest');
+  else setAuthLayout('form');
 }
 
 export function homeAuth(msg) {
   if (!homeOpen()) return;
   if (msg.error) { $('homeAuthErr').textContent = msg.error; return; }
   $('homePass').value = '';
+  $('homeAuthErr').textContent = '';
   if (msg.token) setToken(msg.token);
   if (msg.signedOut) {
     clearToken(); saveName('');
     signedIn = false;
+    authLayout = null;
     send({ type: 'hello', token: token(), name: '', skin: 'demon' });
   }
-  syncHomeAuth();
+  // profile message that follows will call homeProfile; don't thrash the layout here
 }
 
 function saveGuestName() {
@@ -74,34 +91,30 @@ function playVsBots() {
     sessionStorage.setItem('shooty.fillBots', botLevel());
     sessionStorage.setItem('shooty.autoReady', '1');
   } catch {}
-  hideHome();
   goToRoom(newCode());
 }
 
 function quickPlay() {
   initAudio();
   saveGuestName();
-  hideHome();
-  // already on quick play with no ?room=; with a stale room URL, go public
-  if (new URLSearchParams(location.search).get('room')) goToRoom(null);
+  location.href = '?play=1';
 }
 
 function privateRoom() {
   initAudio();
   saveGuestName();
-  hideHome();
   goToRoom(newCode());
 }
 
 export function initHome() {
-  const hasRoom = !!new URLSearchParams(location.search).get('room');
+  const q = new URLSearchParams(location.search);
+  const hasRoom = !!q.get('room') || q.get('play') === '1';
   if (hasRoom) { hideHome(); return; }
   showHome();
 
   document.querySelectorAll('#homeBotLevel button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('#homeBotLevel button').forEach(x => x.classList.toggle('sel', x === b));
   }));
-  // default medium
   document.querySelector('#homeBotLevel button[data-level="medium"]')?.classList.add('sel');
 
   $('homeVsBots').addEventListener('click', playVsBots);
@@ -120,13 +133,13 @@ export function initHome() {
   $('homeLogout').addEventListener('click', () => send({ type: 'logout' }));
   $('homeSkipAuth').addEventListener('click', () => {
     $('homeGuest').dataset.skipped = '1';
-    $('homeAuth').hidden = true;
-    $('homeGuest').hidden = false;
+    authLayout = null;
+    syncHomeAuth(true);
   });
   $('homeShowAuth').addEventListener('click', () => {
     $('homeGuest').dataset.skipped = '';
-    $('homeAuth').hidden = false;
-    $('homeGuest').hidden = true;
+    authLayout = null;
+    syncHomeAuth(true);
     $('homeUser').focus();
   });
 }
