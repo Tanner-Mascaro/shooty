@@ -45,18 +45,15 @@ export function hideWait() {
   hideSummary(true);
 }
 
-export function applyLevelUI(name, theme) {
+export function applyLevelUI(name, _theme) {
   // leading = what the room is on / will play; sel/voted = what you picked (set in showRoom)
   document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('leading', b.dataset.level === name));
   scrollToMap(name); // the picked map slides to the middle of the carousel
-  const title = $('waitTitle');
-  title.textContent = theme.name;
-  title.style.color = theme.title;
-  title.style.textShadow = '';
-  for (const el of [wait, $('corner'), summary]) { // the corner buttons match the level too
-    el.style.setProperty('--accent', theme.title);
-    el.style.setProperty('--accent-rgb', theme.accent);
-    el.style.setProperty('--wash', theme.bg);
+  // keep lobby chrome fixed — no map-name title or accent wash per level
+  for (const el of [wait, $('corner'), summary]) {
+    el?.style.removeProperty('--accent');
+    el?.style.removeProperty('--accent-rgb');
+    el?.style.removeProperty('--wash');
   }
 }
 

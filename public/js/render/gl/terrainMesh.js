@@ -180,6 +180,18 @@ export function buildWorld(scene, T, theme, palette) {
     }
   }
 
+  // tower stairs / decks share the wall atlas so they match curtain stone
+  for (const p of T.props || []) {
+    if (p.type !== 'tower' || !p.treads) continue;
+    for (const t of p.treads) {
+      const ci = Math.min(TW - 1, Math.max(0, Math.floor(((t.x0 + t.x1) / 2) * RES)));
+      const cj = Math.min(TH - 1, Math.max(0, Math.floor(((t.y0 + t.y1) / 2) * RES)));
+      const tint = sampleColor(palette, ci, cj, TW, TH);
+      const lit = [Math.min(1, tint[0] * 1.15), Math.min(1, tint[1] * 1.15), Math.min(1, tint[2] * 1.15)];
+      addBox(wallPos, wallUV, wallCol, wallIdx, t.x0, t.y0, t.x1, t.y1, 0, Math.max(0.08, t.z), lit, 1);
+    }
+  }
+
   const addMesh = (vpos, vuv, vcol, vidx, map, emissive) => {
     if (!vidx.length) return;
     const g = new THREE.BufferGeometry();
@@ -325,18 +337,6 @@ function addProps(root, T, theme) {
       glow.rotation.x = -Math.PI / 2;
       glow.position.set(p.x, h + 0.05, p.y);
       root.add(glow);
-    } else if (p.type === 'tower' && p.treads) {
-      // crisp stair treads / deck as solid boxes (heightmap alone looked like a melted blob)
-      const stone = new THREE.MeshLambertMaterial({
-        color: theme.id === 'castle' ? 0x6a6570 : 0x5a5858,
-        flatShading: true,
-      });
-      for (const t of p.treads) {
-        const w = Math.max(0.08, t.x1 - t.x0), d = Math.max(0.08, t.y1 - t.y0), h = Math.max(0.08, t.z);
-        const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone);
-        box.position.set((t.x0 + t.x1) / 2, h / 2, (t.y0 + t.y1) / 2);
-        root.add(box);
-      }
     } else if (p.type === 'hut') {
       // A-frame roof as real geometry so the heightmap roof doesn't seal the room as a floor mound
       const hw = (p.w || 2.2) / 2 + 0.06, hd = (p.d || 2.2) / 2 + 0.06;
