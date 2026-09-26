@@ -337,11 +337,11 @@ body.ingame #corner { display:none; }
 #chat { font:13px 'IBM Plex Sans',system-ui,sans-serif; display:flex; flex-direction:column; gap:6px; flex:1 1 auto; min-height:0; }
 #chatCard #chatLog { min-height:140px; max-height:280px; flex:1 1 auto; background:rgba(0,0,0,0.28); border:1px solid var(--line); padding:8px 10px; }
 #chatCard #chatLog:empty::before { content:'Room chat here — use Msg on a friend (or /w name) for private messages'; color:var(--muted); }
-body.ingame #chat { position:fixed; left:14px; bottom:40px; z-index:160; width:min(380px, calc(100vw - 28px)); gap:4px; }
+body.ingame #chat { position:fixed; left:14px; bottom:40px; z-index:360; width:min(380px, calc(100vw - 28px)); gap:4px; }
 #chatLog { max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; color:#ddd; text-shadow:0 0 4px #000; scrollbar-width:thin; }
-body.ingame #chatLog { scrollbar-width:none; } /* no stray scroll gutter while playing */
+body.ingame #chatLog { scrollbar-width:none; max-height:160px; } /* no stray scroll gutter while playing */
 body.ingame #chatLog::-webkit-scrollbar { display:none; }
-body.chatting #chatLog { scrollbar-width:thin; }
+body.chatting #chatLog { scrollbar-width:thin; max-height:220px; }
 body.chatting #chatLog::-webkit-scrollbar { display:block; width:6px; }
 #chatLog > div { overflow-wrap:anywhere; transition:opacity .6s; }
 #chatLog > div.old { opacity:0; }
@@ -350,12 +350,13 @@ body.chatting #chatLog::-webkit-scrollbar { display:block; width:6px; }
 #chat .dm-tag { color:#c9a0ff; font-weight:700; }
 body.ingame #chat { pointer-events:none; }
 body.chatting #chat { pointer-events:auto; }
-body.chatting #chatLog { background:rgba(0,0,0,0.45); border-radius:2px; padding:4px 6px; }
+body.chatting #chatLog { background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:0; padding:6px 8px; }
 #chat .other { color:#bcd; font-weight:700; }
 #chat .me { color:#fc6; font-weight:700; }
 #chat .ally { color:#6af; font-weight:700; }
 #chat .foe { color:#f66; font-weight:700; }
 #chatInput { font:inherit; padding:7px 10px; color:#fff; background:#12100e; border:1px solid var(--line); border-radius:0; }
+body.ingame #chatInput { background:rgba(18,16,14,0.92); border-color:rgba(var(--accent-rgb),0.55); box-shadow:3px 3px 0 rgba(0,0,0,0.45); }
 #chatInput:focus { outline:none; border-color:var(--accent); }
 #talking { position:fixed; left:14px; top:50%; transform:translateY(-50%); z-index:160; pointer-events:none; color:#8f8; font:600 13px 'IBM Plex Sans',system-ui,sans-serif; text-shadow:0 0 4px #000; display:flex; flex-direction:column; gap:3px; }
 #roster li.talking { box-shadow:inset 0 0 0 1px #5e5; }

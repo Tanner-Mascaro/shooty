@@ -5,20 +5,24 @@ import { canvas } from './render/canvas.js';
 import { initAudio } from './audio.js';
 import { fire, melee, switchSlot, cycleWeapon, swapWeapon, reload, aim, use, throwNade } from './weapons.js';
 import { actionFor, captureKey, settingsOpen, openSettings, toggleFullscreen } from './settings.js';
-import { openChat } from './chat.js';
+import { openChat, chatOpen } from './chat.js';
 import { askMic } from './voice.js';
 import { dash } from './physics.js';
 import { saveClip } from './clip.js';
 
 const locked = () => document.pointerLockElement === canvas;
-const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea');
+const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
 
 export function initInput() {
-  canvas.addEventListener('click', () => { if (S.started) { initAudio(); canvas.requestPointerLock(); } });
+  canvas.addEventListener('click', () => {
+    if (!S.started || chatOpen()) return;
+    initAudio();
+    canvas.requestPointerLock();
+  });
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   window.addEventListener('keydown', e => {
-    if (typing(e) || captureKey(e)) return; // typing your name, or rebinding a key
+    if (typing(e) || captureKey(e)) return; // typing your name / chat, or rebinding a key
     S.keys[e.code] = true;
     const act = actionFor(e.code);
     if (e.code === 'Space' || (act && S.started)) e.preventDefault();

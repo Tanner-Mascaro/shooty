@@ -12,39 +12,74 @@ const KEEP = 50, FADE_MS = 8000;
 export const CHAT_MAX = 140; // the server cuts messages at this length too
 
 let dmTo = null; // { username, name } when messaging a friend privately
+let wantChat = false; // true while the match chat box should stay open (survives blur races)
 
-export const chatOpen = () => document.activeElement === $('chatInput');
+export const chatOpen = () => wantChat || document.activeElement === $('chatInput');
+
+function placeChat() {
+  const chat = $('chat');
+  const home = S.started ? document.body : $('chatCard');
+  if (home && chat.parentNode !== home) home.append(chat);
+}
+
+function focusInput() {
+  const input = $('chatInput');
+  if (!input || input.hidden) return;
+  try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+}
 
 export function openChat() {
   const input = $('chatInput');
-  S.keys = {}; S.mouseHeld = false; // don't keep running or firing while you type
+  S.keys = {}; S.mouseHeld = false; S.aimHeld = false; // don't keep running or firing while you type
+  wantChat = true;
+  placeChat();
   input.hidden = false;
   document.body.classList.add('chatting');
-  input.focus();
+  // pointer lock steals keyboard focus — unlock, then focus the box
+  if (document.pointerLockElement) {
+    const onUnlock = () => {
+      if (document.pointerLockElement) return;
+      document.removeEventListener('pointerlockchange', onUnlock);
+      focusInput();
+    };
+    document.addEventListener('pointerlockchange', onUnlock);
+    document.exitPointerLock();
+    requestAnimationFrame(() => requestAnimationFrame(focusInput));
+  } else focusInput();
+  showHint();
 }
 
 export function openDm(username, name) {
   dmTo = { username, name: name || username };
   openChat();
-  showHint();
   toast('Private message to ' + dmTo.name);
+}
+
+function relock() {
+  if (!S.started || document.pointerLockElement) return;
+  const c = $('c');
+  if (c) c.requestPointerLock().catch(() => {});
 }
 
 function closeChat() {
   const input = $('chatInput');
+  wantChat = false;
+  dmTo = null;
   input.value = '';
   input.blur();
   document.body.classList.remove('chatting');
   showHint();
+  relock();
 }
 
 function showHint() {
-  const input = $('chatInput'), chat = $('chat');
+  const input = $('chatInput');
   if (dmTo) input.placeholder = `DM ${dmTo.name}… (Esc clears)`;
-  else input.placeholder = S.started ? `Press ${keyName(settings.keys.chat)} to message` : 'Type a message… (/w user text for DM)';
-  input.hidden = S.started && !chatOpen(); // in a match the box only shows while you type
-  const home = S.started ? document.body : $('chatCard');
-  if (chat.parentNode !== home && !chatOpen()) home.append(chat);
+  else if (S.started) input.placeholder = wantChat ? 'Message the room… (Esc closes)' : `Press ${keyName(settings.keys.chat)} to chat`;
+  else input.placeholder = 'Type a message… (/w user text for DM)';
+  placeChat();
+  // keep the box visible while chatting; otherwise hide it in a match
+  input.hidden = S.started && !wantChat;
   $('chatLog').scrollTop = $('chatLog').scrollHeight;
 }
 
@@ -54,6 +89,8 @@ function pushLine(line) {
   log.append(line);
   while (log.children.length > KEEP) log.firstChild.remove();
   log.scrollTop = log.scrollHeight;
+  // new messages should be readable in-game even if you weren't chatting
+  if (S.started) line.classList.remove('old');
 }
 
 // a message from the server: { id, name, team, text }
@@ -66,6 +103,7 @@ export function addChat(msg) {
   text.textContent = msg.text;
   line.append(who, text);
   pushLine(line);
+  if (S.started && !chatOpen() && msg.id !== S.myId) toast(`${msg.name}: ${msg.text.slice(0, 60)}`);
 }
 
 // private message: { from, username, to, text, self }
@@ -118,15 +156,26 @@ export function initChat() {
   input.addEventListener('keydown', e => {
     e.stopPropagation(); // the game's key handler ignores typing anyway; keep Enter/Esc here
     if (e.key === 'Enter') {
+      e.preventDefault();
       sendLine(input.value);
       closeChat();
-      e.preventDefault();
     } else if (e.key === 'Escape') {
-      if (dmTo) { dmTo = null; input.value = ''; showHint(); e.preventDefault(); return; }
+      e.preventDefault();
+      if (dmTo) { dmTo = null; input.value = ''; showHint(); focusInput(); return; }
       closeChat();
     }
   });
-  input.addEventListener('blur', () => { document.body.classList.remove('chatting'); showHint(); });
+  // blur races with pointer-lock unlock — only close if we really left the box
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (wantChat) {
+        if (document.activeElement !== input) focusInput();
+        return;
+      }
+      document.body.classList.remove('chatting');
+      showHint();
+    }, 30);
+  });
   input.addEventListener('focus', () => { S.keys = {}; document.body.classList.add('chatting'); });
   showHint();
 }
