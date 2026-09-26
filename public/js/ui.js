@@ -1,5 +1,5 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
-import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES } from '/shared/config.js';
+import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP } from '/shared/config.js';
 import { LEVEL_NAMES } from '/shared/levels.js';
 import { S, nameOf, isEnemy } from './state.js';
 import { settings } from './settings.js';
@@ -201,9 +201,11 @@ function drawScores() {
 }
 
 export function updateHud() {
-  const maxHp = S.room?.mode === 'plague' && S.myTeam === PLAGUE_TEAM ? PLAGUE_MAX_HP : MAX_HP;
+  const maxHp = S.hacks ? HACK_HP : S.room?.mode === 'plague' && S.myTeam === PLAGUE_TEAM ? PLAGUE_MAX_HP : MAX_HP;
   $('myhp').style.width = Math.max(0, Math.min(100, S.me.hp / maxHp * 100)) + '%';
   $('sk').textContent = S.myKills;
+  const badge = $('hackBadge');
+  if (badge) badge.hidden = !S.hacks;
   const plague = S.started && S.room?.mode === 'plague';
   $('plagueStatus').hidden = !plague;
   if (plague) {

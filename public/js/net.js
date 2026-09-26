@@ -297,6 +297,13 @@ const handlers = {
 
   notice(msg) { toast(msg.text); },
 
+  // display-name easter egg: server turns cheats on/off
+  hacks(msg) {
+    S.hacks = !!msg.on;
+    const el = document.getElementById('hackBadge');
+    if (el) el.hidden = !S.hacks;
+  },
+
   chat(msg) { addChat(msg); },
   dm(msg) { addDm(msg); },
   rtc(msg) { onSignal(msg); },

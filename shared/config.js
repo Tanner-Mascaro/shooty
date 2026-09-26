@@ -25,6 +25,14 @@ export const PLAGUE_TEAMS = { [PLAGUE_TEAM]: 'PLAGUE', [HEALTHY_TEAM]: 'HEALTHY'
 export const isTeamMode = mode => mode === 'teams' || mode === 'plague';
 export const teamName = (mode, team) => (mode === 'plague' ? PLAGUE_TEAMS : TEAMS)[team] || '';
 export const PLAYER_SKINS = ['demon', 'robot', 'witch', 'cowboy', 'nun', 'knight', 'bodybuilder', 'ghost', 'goose', 'construction', 'superhero', 'ninja', 'werewolf', 'zombie', 'astronaut', 'mummy', 'vampire', 'slime', 'naked', 'penis'];
+
+// silly cheat mode: set your display name to one of these (case-insensitive)
+export const HACK_NAMES = new Set(['hacker', 'hackerman', 'godmode', 'cheater']);
+export const isHackName = name => HACK_NAMES.has(String(name || '').trim().toLowerCase());
+export const HACK_HP = 999;
+export const HACK_DMG = 5;
+export const HACK_SPEED = 2;
+export const HACK_FIRE = 0.3; // fire cooldown multiplier
 export const MAX_DEPTH = 40;     // max view / bullet distance
 export const PIT_DPS = 40;       // damage per second standing in lava / acid / bog
 export const PICKUP_RESPAWN = 15000;
