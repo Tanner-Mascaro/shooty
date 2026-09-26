@@ -131,6 +131,10 @@ export function initHome() {
 
   const submit = type => {
     $('homeAuthErr').textContent = '';
+    if (type === 'register' && $('homePass').value.length < 15) {
+      $('homeAuthErr').textContent = 'Choose a password with at least 15 characters';
+      return;
+    }
     send({ type, username: $('homeUser').value.trim(), password: $('homePass').value });
   };
   $('homeAuth').addEventListener('submit', e => { e.preventDefault(); submit('login'); });

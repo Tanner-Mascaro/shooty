@@ -20,6 +20,10 @@ export function initAccount() {
   $('showAuth').addEventListener('click', () => { form.hidden = false; $('signedOut').hidden = true; $('authUser').focus(); });
   const submit = type => {
     $('authErr').textContent = '';
+    if (type === 'register' && $('authPass').value.length < 15) {
+      $('authErr').textContent = 'Choose a password with at least 15 characters';
+      return;
+    }
     send({ type, username: $('authUser').value.trim(), password: $('authPass').value });
   };
   form.addEventListener('submit', e => { e.preventDefault(); submit('login'); });

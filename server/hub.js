@@ -16,18 +16,28 @@ export const roomCodeFrom = url => {
 };
 export const wantsQuickPlay = url => new URL(url || '/', 'http://x').searchParams.get('play') === '1';
 
-// failed sign-ins per IP: 5 a minute, then locked out until the minute is up
-const fails = new Map();
-const lockedOut = ip => { const f = fails.get(ip); return !!f && f.until > Date.now() && f.n >= 5; };
-const failedLogin = ip => {
-  const f = fails.get(ip);
-  if (!f || f.until < Date.now()) fails.set(ip, { n: 1, until: Date.now() + 60000 }); else f.n++;
+// throttle failed sign-ins by both source IP and normalized username
+const failsByIp = new Map(), failsByAccount = new Map();
+const lockedOut = (map, key, limit) => { const f = map.get(key); return !!f && f.until > Date.now() && f.n >= limit; };
+const pruneFailures = map => {
+  if (map.size > 10000) for (const [key, value] of map) if (value.until < Date.now()) map.delete(key);
 };
+const failedLogin = (ip, username) => {
+  const now = Date.now();
+  pruneFailures(failsByIp); pruneFailures(failsByAccount);
+  for (const [map, key, windowMs] of [[failsByIp, ip, 60000], [failsByAccount, username.toLowerCase(), 60000]]) {
+    const f = map.get(key);
+    if (!f || f.until < now) map.set(key, { n: 1, until: now + windowMs }); else f.n++;
+  }
+};
+const successfulLogin = (ip, username) => { failsByIp.delete(ip); failsByAccount.delete(username.toLowerCase()); };
 const cleanName = name => String(name ?? '').replace(/[^\w .-]/g, '').trim().slice(0, 16);
 
 const AUTH = ['register', 'login', 'logout'];
 const INVITE_GAP = 10000; // ms between invites to the same friend
 const CHAT_MAX = 140; // same cap as room chat / public/js/chat.js
+const DEV_CHEATS = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_CHEATS === '1';
+const MAX_MESSAGES_PER_SECOND = 120;
 
 export class Hub {
   constructor(profiles) {
@@ -51,7 +61,7 @@ export class Hub {
 
   // display-name easter egg: "hacker" / "godmode" / etc. unlocks cheats for that connection
   setHacks(p) {
-    const on = isHackName(p.name);
+    const on = DEV_CHEATS && isHackName(p.name);
     if (!!p.hacks === on) return;
     p.hacks = on;
     this.send(p, { type: 'hacks', on });
@@ -71,18 +81,36 @@ export class Hub {
   // --- connections and rooms ---
   connect(socket, ip, url) {
     const id = this.nextId++;
-    const p = this.conns[id] = { id, socket, ip, joinedAt: Date.now(), name: `Player ${id}`, pid: null, username: null };
+    const p = this.conns[id] = { id, socket, ip, joinedAt: Date.now(), name: `Player ${id}`, pid: null, username: null, messageTimes: [], authTimes: [] };
     log(`${this.who(p)} connected (${Object.keys(this.conns).length} online)`);
     const code = roomCodeFrom(url);
     if (code) this.joinRoom(p, code);
     else if (wantsQuickPlay(url)) this.joinRoom(p, null);
-    // bare /: stay on the sign-in menu with no room (auth / friends still work)
+    // bare / stays at the menu until the player chooses a room
 
     socket.on('message', raw => {
+      const now = Date.now();
+      p.messageTimes = p.messageTimes.filter(t => now - t < 1000);
+      if (p.messageTimes.length >= MAX_MESSAGES_PER_SECOND) {
+        log(`${this.who(p)} exceeded WebSocket message rate; disconnecting`);
+        socket.close(1008, 'Message rate exceeded');
+        return;
+      }
+      p.messageTimes.push(now);
       let msg;
       try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
-      if (!msg || !this.conns[id]) return;
-      const room = p.room, rh = room && room.handlers[msg.type], hh = this.handlers[msg.type];
+      if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.type !== 'string' || !this.conns[id]) return;
+      if (msg.type === 'login' || msg.type === 'register') {
+        p.authTimes = p.authTimes.filter(t => now - t < 60000);
+        if (p.authTimes.length >= 5) {
+          this.send(p, { type: 'auth', error: 'Too many attempts — wait a minute' });
+          return;
+        }
+        p.authTimes.push(now);
+      }
+      const room = p.room;
+      const rh = room && Object.hasOwn(room.handlers, msg.type) ? room.handlers[msg.type] : null;
+      const hh = Object.hasOwn(this.handlers, msg.type) ? this.handlers[msg.type] : null;
       if (!rh && !hh) return;
       Promise.resolve(rh ? rh.call(room, p, msg) : hh.call(this, p, msg)).catch(e => {
         log(`Error handling ${msg.type} from ${this.who(p)}: ${e.stack || e.message}`);
@@ -253,7 +281,7 @@ Hub.prototype.handlers = {
     const username = String(msg.username ?? '').trim(), password = String(msg.password ?? '');
     const bad = p.username ? 'You are already signed in'
       : !/^\w{3,16}$/.test(username) ? 'Username: 3-16 letters, numbers or _'
-      : password.length < 6 || password.length > 72 ? 'Password: 6-72 characters' : null;
+      : password.length < 15 || password.length > 72 ? 'Password: 15-72 characters' : null;
     if (bad) return this.send(p, { type: 'auth', error: bad });
     if (!await this.profiles.claim(p.pid, username, await hashPassword(password)))
       return this.send(p, { type: 'auth', error: 'That username is taken' });
@@ -268,16 +296,18 @@ Hub.prototype.handlers = {
   async login(p, msg) {
     if (!p.tokenHash) return;
     if (p.room && p.room.gameOn) return this.send(p, { type: 'auth', error: 'Finish the match first' });
-    if (lockedOut(p.ip)) return this.send(p, { type: 'auth', error: 'Too many tries — wait a minute' });
     const username = String(msg.username ?? '').trim().slice(0, 16), password = String(msg.password ?? '').slice(0, 72);
+    if (lockedOut(failsByIp, p.ip, 5) || lockedOut(failsByAccount, username.toLowerCase(), 10))
+      return this.send(p, { type: 'auth', error: 'Too many tries — wait a minute' });
     const acct = username && await this.profiles.account(username);
     // check against a dummy hash when there's no such user, so both cases take the same time
     if (!await checkPassword(password, acct ? acct.passHash : '00:00') || !acct) {
-      failedLogin(p.ip);
+      failedLogin(p.ip, username);
       log(`${this.who(p)} failed to sign in as ${username}`);
       return this.send(p, { type: 'auth', error: 'Wrong username or password' });
     }
     const before = this.who(p), token = newToken();
+    successfulLogin(p.ip, username);
     await this.profiles.addSession(hashToken(token), acct.id);
     p.tokenHash = hashToken(token);
     this.send(p, { type: 'auth', ok: true, token });

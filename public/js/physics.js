@@ -1,7 +1,7 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt, walkHeight } from '/shared/terrain.js';
-import { SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED } from '/shared/config.js';
+import { TICK, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { tryJump, tryDash } from '/shared/movement.js';
@@ -11,6 +11,7 @@ import { burst } from './particles.js';
 import { settings, held } from './settings.js';
 
 const PLAYER_R = 0.22;
+let lastInputAt = 0;
 
 function wallHitbox(x, y) {
   const T = S.T;
@@ -264,5 +265,8 @@ export function updatePlayer(dt) {
   setSizzle(inPit() ? 0.25 : 0);
   if (inPit() && Math.random() < 0.3) burst(me.x, me.y, me.z, 1, 'fire');
 
-  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
+  if (now - lastInputAt >= TICK) {
+    lastInputAt = now;
+    send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
+  }
 }

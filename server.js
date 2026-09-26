@@ -16,14 +16,67 @@ import { TICK, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS } from './shared/config.js
 
 const PORT = Number(process.env.PORT) || 3000;
 const root = path.dirname(fileURLToPath(import.meta.url));
+const production = process.env.NODE_ENV === 'production';
+const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean).map(value => {
+  let origin;
+  try { origin = new URL(value).origin; } catch { throw new Error(`Invalid ALLOWED_ORIGINS entry: ${value}`); }
+  if (production && new URL(origin).protocol !== 'https:') throw new Error('Production ALLOWED_ORIGINS must use https://');
+  return origin;
+}));
+const maxConnections = Math.max(1, Number(process.env.MAX_CONNECTIONS) || 100);
+const maxConnectionsPerIp = Math.max(1, Number(process.env.MAX_CONNECTIONS_PER_IP) || 20);
 
-const server = http.createServer(staticHandler(root));
+if (production && !allowedOrigins.size) throw new Error('ALLOWED_ORIGINS is required in production');
+if (production && process.env.TRUST_PROXY !== '1') throw new Error('Set TRUST_PROXY=1 behind the HTTPS hosting proxy');
+
+const serveStatic = staticHandler(root);
+const server = http.createServer((req, res) => {
+  if (production && process.env.TRUST_PROXY === '1' && req.headers['x-forwarded-proto'] !== 'https') {
+    res.writeHead(308, { Location: `${[...allowedOrigins][0]}${req.url}` });
+    res.end();
+    return;
+  }
+  serveStatic(req, res);
+});
 const hub = new Hub(await openProfiles(root));
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 32 * 1024, perMessageDeflate: false });
+const connectionsByIp = new Map();
+
+function originAllowed(origin) {
+  if (allowedOrigins.has(origin)) return true;
+  if (production || !origin) return false;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return (protocol === 'http:' || protocol === 'https:') && ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+  } catch { return false; }
+}
+
+server.on('upgrade', (req, socket, head) => {
+  const ip = clientIp(req, process.env.TRUST_PROXY === '1');
+  const count = connectionsByIp.get(ip) || 0;
+  let pathname;
+  try { pathname = new URL(req.url, 'http://localhost').pathname; } catch { pathname = ''; }
+  if (pathname !== '/' || !originAllowed(req.headers.origin)
+    || (production && req.headers['x-forwarded-proto'] !== 'https')
+    || wss.clients.size >= maxConnections || count >= maxConnectionsPerIp) {
+    socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(req, socket, head, ws => {
+    connectionsByIp.set(ip, count + 1);
+    ws.once('close', () => {
+      const next = (connectionsByIp.get(ip) || 1) - 1;
+      if (next > 0) connectionsByIp.set(ip, next); else connectionsByIp.delete(ip);
+    });
+    wss.emit('connection', ws, req);
+  });
+});
+
 wss.on('connection', (socket, req) => {
   socket.alive = true;
   socket.on('pong', () => socket.alive = true);
-  hub.connect(socket, clientIp(req), req.url);
+  hub.connect(socket, clientIp(req, process.env.TRUST_PROXY === '1'), req.url);
 });
 // drop connections that stopped answering (closed laptop, lost signal) so they don't linger in rooms
 setInterval(() => wss.clients.forEach(s => {

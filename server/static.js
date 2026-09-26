@@ -15,6 +15,10 @@ const TYPES = {
 export function staticHandler(root) {
   const mounts = [['/shared/', path.join(root, 'shared')], ['/', path.join(root, 'public')]];
   return async (req, res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
     let url;
     try { url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { url = null; }
     const mount = url && mounts.find(([prefix]) => url.startsWith(prefix));

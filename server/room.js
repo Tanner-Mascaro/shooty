@@ -1,7 +1,7 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, HARDPOINT_ROTATION_MS, HARDPOINT_FIRST_MS, HARDPOINT_REVEAL_MS, HARDPOINT_SITE_COUNT, HARDPOINT_RADIUS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, HARDPOINT_ROTATION_MS, HARDPOINT_FIRST_MS, HARDPOINT_REVEAL_MS, HARDPOINT_SITE_COUNT, HARDPOINT_RADIUS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, MOVE_SPEED_LIMIT, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, FEATURED_LEVELS, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
@@ -342,6 +342,7 @@ export class Room {
     const near = avoid.length ? avoid.reduce((m, o) => Math.hypot(o.x - sp.x, o.y - sp.y) < Math.hypot(m.x - sp.x, m.y - sp.y) ? o : m) : null;
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
+    p.lastInputAt = Date.now() - TICK;
     p.hp = this.maxHp(p);
     p.nades = 0;
     if (this.isInfected(p)) { p.mag = {}; p.inv = {}; }
@@ -925,14 +926,22 @@ Room.prototype.handlers = {
   },
 
   input(p, msg) {
-    if (msg.seq !== p.seq || ![msg.x, msg.y, msg.z, msg.a, msg.p].every(Number.isFinite)) return;
-    // basic anti-cheat: no teleporting (bhop speed is capped client-side) and no walking into walls
-    let maxStep = this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1; // match the infected movement cap
-    if (p.hacks) maxStep *= HACK_SPEED;
-    if (Math.hypot(msg.x - p.x, msg.y - p.y) < maxStep && !hitsWall(this.T, msg.x, msg.y, PLAYER_R)) { p.x = msg.x; p.y = msg.y; }
-    const g = walkHeight(this.T, p.x, p.y, msg.z);
-    p.z = Math.max(g - 0.4, Math.min(g + 2, msg.z));
-    p.a = msg.a;
+    if (msg.seq !== p.seq || ![msg.x, msg.y, msg.z, msg.a, msg.p].every(Number.isFinite)
+      || msg.x < 0 || msg.x >= MW || msg.y < 0 || msg.y >= MH) return;
+    const now = Date.now();
+    if (p.lastInputAt && now - p.lastInputAt < TICK * 0.8) return;
+    const elapsed = p.lastInputAt ? Math.min(250, Math.max(TICK * 0.8, now - p.lastInputAt)) : TICK;
+    p.lastInputAt = now;
+    let maxSpeed = MOVE_SPEED_LIMIT * (this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1);
+    if (p.hacks) maxSpeed *= HACK_SPEED;
+    const maxStep = maxSpeed * elapsed / 1000 + 0.04;
+    const dx = msg.x - p.x, dy = msg.y - p.y, distance = Math.hypot(dx, dy);
+    const scale = distance > maxStep ? maxStep / distance : 1;
+    const x = p.x + dx * scale, y = p.y + dy * scale;
+    if (!hitsWall(this.T, x, y, PLAYER_R)) { p.x = x; p.y = y; }
+    const g = walkHeight(this.T, p.x, p.y, p.z);
+    p.z = Math.max(g - 0.4, Math.min(g + 0.8, msg.z));
+    p.a = Math.atan2(Math.sin(msg.a), Math.cos(msg.a));
     p.p = Math.max(-1.2, Math.min(1.2, msg.p));
     p.sc = !this.isInfected(p) && !!msg.sc;
     p.sl = !this.isInfected(p) && !!msg.sl;
@@ -958,7 +967,7 @@ Room.prototype.handlers = {
     p.nextFire[msg.weapon] = now + cd;
     // prefer the aim snapshot from the shot so bullets match the crosshair (incl. recoil)
     const prevA = p.a, prevP = p.p;
-    if (Number.isFinite(msg.a)) p.a = msg.a;
+    if (Number.isFinite(msg.a)) p.a = Math.atan2(Math.sin(msg.a), Math.cos(msg.a));
     if (Number.isFinite(msg.p)) p.p = Math.max(-1.2, Math.min(1.2, msg.p));
     const targets = this.enemies(p);
     const res = w.melee ? doMelee(this.T, p, targets, msg.weapon) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped);

@@ -5,8 +5,9 @@ export function log(msg) {
   console.log(`[${t}] ${msg}`);
 }
 
-// the visitor's address; behind a proxy (ngrok, Render) the real one is in x-forwarded-for
-export function clientIp(req) {
+// Use forwarded client IPs only when the hosting proxy is trusted and TRUST_PROXY is enabled.
+export function clientIp(req, trustProxy = false) {
   const fwd = req.headers['x-forwarded-for'];
-  return (fwd ? fwd.split(',')[0] : req.socket.remoteAddress || '?').trim().replace(/^::ffff:/, '');
+  const ip = trustProxy && fwd ? fwd.split(',')[0] : req.socket.remoteAddress || '?';
+  return ip.trim().replace(/^::ffff:/, '');
 }
