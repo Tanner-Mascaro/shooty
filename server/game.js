@@ -333,8 +333,20 @@ Game.prototype.handlers = {
 
   input(p, msg) {
     if (msg.seq !== p.seq || ![msg.x, msg.y, msg.z, msg.a, msg.p].every(Number.isFinite)) return;
+    const prevX = p.x, prevY = p.y;
     // basic anti-cheat: no teleporting (bhop speed is capped client-side)
     if (Math.hypot(msg.x - p.x, msg.y - p.y) < 1) { p.x = msg.x; p.y = msg.y; }
+
+    const r = 0.22;
+    const minX = Math.floor((p.x - r) * RES), maxX = Math.floor((p.x + r) * RES);
+    const minY = Math.floor((p.y - r) * RES), maxY = Math.floor((p.y + r) * RES);
+    let blocked = false;
+    for (let cy = minY; cy <= maxY; cy++) for (let cx = minX; cx <= maxX; cx++) {
+      if (cx < 0 || cy < 0 || cx >= MW || cy >= MH) { blocked = true; break; }
+      if (this.map[cy][cx] === '#') { blocked = true; break; }
+    }
+    if (blocked) { p.x = prevX; p.y = prevY; return; }
+
     const g = groundAt(this.T, p.x, p.y);
     p.z = Math.max(g - 0.4, Math.min(g + 2, msg.z));
     p.a = msg.a;

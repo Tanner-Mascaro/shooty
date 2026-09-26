@@ -7,10 +7,90 @@ import { send } from './net.js';
 import { play, setWind, setSizzle } from './audio.js';
 import { burst } from './particles.js';
 
-// highest ground under the player's footprint
+const PLAYER_R = 0.22;
+
+function wallHitbox(x, y) {
+  const T = S.T;
+  if (!T) return false;
+
+  const minI = Math.floor((x - PLAYER_R) * T.RES), maxI = Math.floor((x + PLAYER_R) * T.RES);
+  const minJ = Math.floor((y - PLAYER_R) * T.RES), maxJ = Math.floor((y + PLAYER_R) * T.RES);
+
+  for (let j = minJ; j <= maxJ; j++) for (let i = minI; i <= maxI; i++) {
+    if (i < 0 || j < 0 || i >= T.TW || j >= T.TH) return true;
+    if (T.kind[j * T.TW + i] !== 1) continue;
+
+    const left = i / T.RES, right = (i + 1) / T.RES;
+    const top = j / T.RES, bottom = (j + 1) / T.RES;
+    const closestX = Math.min(Math.max(x, left), right);
+    const closestY = Math.min(Math.max(y, top), bottom);
+    const dx = x - closestX, dy = y - closestY;
+    if (dx * dx + dy * dy <= PLAYER_R * PLAYER_R) return true;
+  }
+
+  return false;
+}
+
+// highest walkable ground under the player's footprint; wall height must never count as ground
 export function footGround(x, y) {
-  const T = S.T, r = 0.2;
-  return Math.max(groundAt(T, x, y), groundAt(T, x + r, y + r), groundAt(T, x - r, y - r), groundAt(T, x + r, y - r), groundAt(T, x - r, y + r));
+  const T = S.T;
+  if (wallHitbox(x, y)) return -Infinity;
+
+  let highest = -Infinity;
+  for (const [sx, sy] of [
+    [x, y],
+    [x + PLAYER_R, y + PLAYER_R],
+    [x - PLAYER_R, y - PLAYER_R],
+    [x + PLAYER_R, y - PLAYER_R],
+    [x - PLAYER_R, y + PLAYER_R],
+    [x + PLAYER_R, y],
+    [x - PLAYER_R, y],
+    [x, y + PLAYER_R],
+    [x, y - PLAYER_R],
+  ]) {
+    const fx = sx * T.RES - 0.5, fy = sy * T.RES - 0.5;
+    const i = Math.floor(fx), j = Math.floor(fy);
+    let valid = false;
+    for (let jj = j; jj <= j + 1; jj++) for (let ii = i; ii <= i + 1; ii++) {
+      if (ii < 0 || jj < 0 || ii >= T.TW || jj >= T.TH) continue;
+      if (T.kind[jj * T.TW + ii] === 1) { valid = false; break; }
+      valid = true;
+    }
+    if (!valid) continue;
+    highest = Math.max(highest, groundAt(T, sx, sy));
+  }
+  return highest;
+}
+
+function resolveWallOverlap(me) {
+  if (!wallHitbox(me.x, me.y)) return;
+
+  const dirX = S.vx || 0;
+  const dirY = S.vy || 0;
+  const dirLen = Math.hypot(dirX, dirY) || 1;
+  const ring = [];
+
+  for (let r = 0.05; r <= 0.8; r += 0.05) {
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+      ring.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    ring.push([r, 0], [-r, 0], [0, r], [0, -r]);
+  }
+
+  if (dirLen > 0) {
+    ring.push([dirX / dirLen * 0.18, dirY / dirLen * 0.18]);
+    ring.push([dirX / dirLen * 0.32, dirY / dirLen * 0.32]);
+  }
+
+  for (const [ox, oy] of ring) {
+    const x = me.x + ox, y = me.y + oy;
+    if (!wallHitbox(x, y)) { me.x = x; me.y = y; return; }
+  }
+
+  for (const [ox, oy] of [[0.2, 0], [-0.2, 0], [0, 0.2], [0, -0.2], [0.2, 0.2], [0.2, -0.2], [-0.2, 0.2], [-0.2, -0.2]]) {
+    const x = me.x + ox, y = me.y + oy;
+    if (!wallHitbox(x, y)) { me.x = x; me.y = y; return; }
+  }
 }
 
 export const inPit = () => S.me && S.T && kindAt(S.T, S.me.x, S.me.y) === 2 && S.me.z < -0.15;
@@ -65,17 +145,44 @@ export function updatePlayer(dt) {
   if (speed > SPEED_LIMIT) { S.vx *= SPEED_LIMIT / speed; S.vy *= SPEED_LIMIT / speed; speed = SPEED_LIMIT; }
   S.speed = speed;
 
-  // walls and pit edges block unless you jump over/out
+  const prevX = me.x, prevY = me.y;
+  resolveWallOverlap(me);
+
+  // walls and pit edges block unless you jump over/out; sweep in small steps so we never clip through a wall
   const tol = S.onGround ? STEP : 0.12;
-  const nx = me.x + S.vx * dt;
-  if (footGround(nx, me.y) <= me.z + tol) me.x = nx; else S.vx = 0;
-  const ny = me.y + S.vy * dt;
-  if (footGround(me.x, ny) <= me.z + tol) me.y = ny; else S.vy = 0;
+  const moveAxis = (axis, value) => {
+    const step = 0.05; const n = Math.max(1, Math.ceil(Math.abs(value) / step));
+    const dv = value / n;
+    for (let i = 0; i < n; i++) {
+      const next = (axis === 'x' ? me.x : me.y) + dv;
+      const x = axis === 'x' ? next : me.x;
+      const y = axis === 'y' ? next : me.y;
+      if (wallHitbox(x, y)) {
+        if (axis === 'x') S.vx = 0; else S.vy = 0;
+        return;
+      }
+      if (footGround(x, y) <= me.z + tol) {
+        if (axis === 'x') me.x = next; else me.y = next;
+      } else {
+        if (axis === 'x') S.vx = 0; else S.vy = 0;
+        return;
+      }
+    }
+  };
+
+  if (S.vx) moveAxis('x', S.vx * dt);
+  if (S.vy) moveAxis('y', S.vy * dt);
+
+  if (wallHitbox(me.x, me.y)) {
+    me.x = prevX; me.y = prevY;
+    S.vx = 0; S.vy = 0;
+    resolveWallOverlap(me);
+  }
 
   const g = footGround(me.x, me.y);
   if (S.onGround) {
-    if (g >= me.z - 0.12) me.z = g;
-    else { S.onGround = false; S.vz = 0; } // walked off a ledge into a pit
+    if (Number.isFinite(g) && g >= me.z - 0.12) me.z = g;
+    else { S.onGround = false; S.vz = 0; } // walked off a ledge into a pit or hit a wall
   }
   if (!S.onGround) {
     S.vz -= GRAVITY * dt;
