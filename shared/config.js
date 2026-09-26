@@ -30,5 +30,3 @@ export const PAD_GUNS = ['sniper', 'shotgun', 'smg']; // a gun pad rolls one of 
 export const GUN_SLOTS = 2;      // guns you can carry, plus the blade
 export const USE_RANGE = 1.2;    // how close you must be to pick up a gun or loot a box
 export const BOX_TIME = 30000;   // loot boxes vanish after this long
-// weapon slots, keys 1-5
-export const WEAPON_ORDER = ['rifle', 'sniper', 'shotgun', 'smg', 'blade'];
