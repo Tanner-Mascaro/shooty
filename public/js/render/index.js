@@ -5,8 +5,8 @@ import { S } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
-import { pickupSprite, canopySprite } from './sprites.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo } from './hud.js';
+import { pickupSprite, canopySprite, boxSprite } from './sprites.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -73,10 +73,8 @@ export function render(dt) {
     const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
     drawSprite(p.x, p.y, 0.3 + 0.07 * Math.sin(now / 400 + i), sp.w, sp.h, sp.px, sp.pal, sp.emit);
   });
-  for (const d of S.drops) {
-    const sp = pickupSprite(d.weapon, GUN_COLOR[d.weapon]);
-    drawSprite(d.x, d.y, d.z + 0.2 + 0.05 * Math.sin(now / 300 + d.id), sp.w, sp.h, sp.px, sp.pal, sp.emit);
-  }
+  const box = boxSprite(S.theme.accent);
+  for (const b of S.boxes) drawSprite(b.x, b.y, b.z, box.w, box.h, box.px, box.pal, box.emit);
   for (const p of S.T.props) { // swamp tree canopies (the trunks are terrain)
     if (p.type !== 'tree' || Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;
     const sp = canopySprite((p.x * 7 + p.y * 3 | 0) % 4);
@@ -106,6 +104,7 @@ export function render(dt) {
   drawMinimap(now);
   drawSpeed();
   drawAmmo(now);
+  drawUsePrompt();
 
   decayEffects(dt);
   updateHud();

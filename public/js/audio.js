@@ -1,15 +1,16 @@
 // All sounds are synthesized with WebAudio, no asset files.
 // Browsers only allow audio after a user gesture, so initAudio() is called from click handlers.
 import { S } from './state.js';
+import { settings } from './settings.js';
 
-let actx = null, master = null, verb = null, noiseBuf = null, windGain = null, sizzleGain = null, droneOsc = [], droneLp = null;
+let actx = null, master = null, verb = null, noiseBuf = null, windGain = null, sizzleGain = null, droneOsc = [], droneLp = null, droneGain = null;
 
 export function initAudio() {
   if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   actx = new AC();
-  master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
+  master = actx.createGain(); master.connect(actx.destination);
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -28,7 +29,7 @@ export function initAudio() {
   sizzleGain = loop('highpass', 2500); // standing in a pit
   // ambient level drone
   droneLp = actx.createBiquadFilter(); droneLp.type = 'lowpass';
-  const dg = actx.createGain(); dg.gain.value = 0.05; droneLp.connect(dg); dg.connect(master);
+  droneGain = actx.createGain(); droneLp.connect(droneGain); droneGain.connect(master);
   droneOsc = [0, 1, 2].map(() => { const o = actx.createOscillator(); o.connect(droneLp); o.start(); return o; });
   const lfo = actx.createOscillator(); lfo.frequency.value = 0.07;
   const lg = actx.createGain(); lg.gain.value = 80; lfo.connect(lg); lg.connect(droneLp.frequency); lfo.start();
@@ -39,6 +40,14 @@ export function updateDrone() {
   if (!actx || !S.theme) return;
   droneOsc.forEach((o, i) => { o.type = S.theme.drone[i][0]; o.frequency.value = S.theme.drone[i][1]; });
   droneLp.frequency.value = S.theme.droneCut;
+  applyVolume();
+}
+
+// master and background (level hum) volume from settings, 0..1 each
+export function applyVolume() {
+  if (!actx) return;
+  master.gain.setTargetAtTime(0.6 * settings.volume, actx.currentTime, 0.05);
+  if (S.theme) droneGain.gain.setTargetAtTime(0.05 * (S.theme.droneVol ?? 1) * settings.ambient, actx.currentTime, 0.05);
 }
 
 function setLoop(g, v) { if (g) g.gain.setTargetAtTime(v, actx.currentTime, 0.1); }

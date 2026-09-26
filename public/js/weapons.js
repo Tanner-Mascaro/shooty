@@ -1,10 +1,11 @@
 // Firing, melee, scoping, reloading and weapon switching. The server decides hits; this only sends
 // requests and plays the local feedback (sound, recoil, screen punch) immediately. Rounds are
 // counted here the same way the server counts them, so the ammo readout never waits on the network.
-import { WEAPONS, WEAPON_ORDER } from '/shared/config.js';
-import { S, owned, spare } from './state.js';
+import { WEAPONS, GUN_SLOTS, USE_RANGE } from '/shared/config.js';
+import { S, owned, spare, gunSlots } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
+import { settings } from './settings.js';
 
 export function switchWeapon(w) {
   if (w === S.weapon || !owned(w)) return;
@@ -15,12 +16,14 @@ export function switchWeapon(w) {
   play('swap');
 }
 
+// slot n (1-based): your guns, then the blade last
+export const slotWeapon = n => n > GUN_SLOTS ? 'blade' : gunSlots()[n - 1];
+export function switchSlot(n) { const w = slotWeapon(n); if (w) switchWeapon(w); }
+
 export function cycleWeapon(dir) {
-  let i = WEAPON_ORDER.indexOf(S.weapon);
-  for (let n = 0; n < WEAPON_ORDER.length; n++) {
-    i = (i + dir + WEAPON_ORDER.length) % WEAPON_ORDER.length;
-    if (owned(WEAPON_ORDER[i])) { switchWeapon(WEAPON_ORDER[i]); return; }
-  }
+  const order = [...gunSlots(), 'blade'];
+  const i = order.indexOf(S.weapon);
+  switchWeapon(order[(i + dir + order.length) % order.length]);
 }
 
 // back to the gun you had before this one
@@ -51,11 +54,51 @@ export function updateReload() {
   if (!S.reloading && S.started && S.mag[S.weapon] === 0 && now >= S.nextFire[S.weapon] && now >= S.switchUntil) reload();
 }
 
-export function toggleScope() {
-  if (S.weapon !== 'sniper' || S.reloading) return;
-  if (!S.scoped && performance.now() < S.nextFire.sniper) return; // still chambering
+const canScope = () => S.weapon === 'sniper' && !S.reloading && performance.now() >= S.nextFire.sniper; // not while chambering
+
+// right mouse button, pressed (down) or released; 'toggle' flips on press, 'hold' scopes while held
+export function aim(down) {
+  S.aimHeld = down;
+  if (settings.ads === 'hold') return; // updateScope does it
+  if (!down || S.weapon !== 'sniper' || S.reloading) return;
+  if (!S.scoped && !canScope()) return;
   S.scoped = !S.scoped;
   play('scope', S.scoped);
+}
+
+// hold mode, every frame: scoped exactly while the button is down and the sniper is ready
+// (so it scopes back in by itself once the bolt is cycled after a shot)
+function updateScope() {
+  if (settings.ads !== 'hold') return;
+  const want = S.aimHeld && (S.scoped ? S.weapon === 'sniper' && !S.reloading : canScope());
+  if (want !== S.scoped) { S.scoped = want; play('scope', want); }
+}
+
+// --- picking things up ---
+// the nearest gun pad or loot box in reach, with what the use key would do there
+export function findUseTarget() {
+  const me = S.me;
+  let best = null, bestD = USE_RANGE;
+  const consider = (o, t) => {
+    const d = Math.hypot(me.x - o.x, me.y - o.y);
+    if (d <= bestD && Math.abs(me.z - (o.z || 0)) < 1.2) { best = t; bestD = d; }
+  };
+  S.pickupSpots.forEach((p, i) => { if (S.pickupActive[i] && p.weapon !== 'health') consider(p, { pad: i, items: [p.weapon] }); });
+  for (const b of S.boxes) consider(b, { box: b.id, items: b.items });
+  return best;
+}
+
+// the gun that gets swapped out when both slots are full: the one in your hand, or the last one you held
+export function gunToDrop() {
+  const guns = gunSlots();
+  if (guns.length < GUN_SLOTS) return null;
+  return guns.includes(S.weapon) ? S.weapon : guns.includes(S.lastWeapon) ? S.lastWeapon : guns[0];
+}
+
+export function use() {
+  const t = S.useTarget;
+  if (!t) return;
+  send(t.pad !== undefined ? { type: 'use', pad: t.pad, drop: gunToDrop() } : { type: 'use', box: t.box, drop: gunToDrop() });
 }
 
 // quick = F key: stab without switching away from your gun
@@ -107,5 +150,7 @@ export function fire() {
 // called every frame: auto weapons keep firing while the button is held
 export function autoFire() {
   updateReload();
+  updateScope();
+  S.useTarget = S.started && S.me ? findUseTarget() : null;
   if (S.mouseHeld && S.started && WEAPONS[S.weapon].auto) fire();
 }

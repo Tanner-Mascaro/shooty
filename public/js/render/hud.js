@@ -1,14 +1,15 @@
 // Everything drawn at full resolution on top of the 3D view: tracers, glows, the gun,
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
-import { WEAPONS, WEAPON_ORDER, EYE, BODY_H } from '/shared/config.js';
-import { S, owned, spare, isEnemy, nameOf } from '../state.js';
-import { BASE_FOV, MAX_SPEED, GUN_COLOR } from '../constants.js';
+import { WEAPONS, GUN_SLOTS, EYE, BODY_H } from '/shared/config.js';
+import { S, spare, isEnemy, nameOf } from '../state.js';
+import { BASE_FOV, SCOPE_FOV, MAX_SPEED, GUN_COLOR } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
 import { inPit } from '../physics.js';
 import { settings, keyName } from '../settings.js';
+import { slotWeapon, gunToDrop } from '../weapons.js';
 
 const key = a => keyName(settings.keys[a]);
 
@@ -52,10 +53,10 @@ export function drawPickupGlows() {
     const on = S.pickupActive[i];
     glow(q.x, q.y, (on ? 260 : 120) / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
-  for (const d of S.drops) { // dropped guns get a smaller glow
-    const q = project(d.x, d.y, d.z + 0.05);
+  for (const b of S.boxes) { // loot boxes glow in the level's color
+    const q = project(b.x, b.y, b.z + 0.05);
     if (q.f < 0.3 || occluded(q)) continue;
-    glow(q.x, q.y, 150 / q.f, 'rgba(' + GUN_COLOR[d.weapon].join(',') + ',0.35)');
+    glow(q.x, q.y, 170 / q.f, 'rgba(' + S.theme.accent + ',0.35)');
   }
 }
 
@@ -92,19 +93,62 @@ export function drawNameTags() {
   ctx.textAlign = 'left';
 }
 
-function drawScope() {
-  const { W, H } = view, cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.45;
-  const lens = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r);
-  lens.addColorStop(0, 'rgba(0,0,0,0)'); lens.addColorStop(1, 'rgba(' + S.theme.accent + ',0.25)');
-  ctx.fillStyle = lens; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+// sniper scope: a round lens with fine crosshairs, tapered posts, mil-dot ranging marks and a
+// lit red center, a dark edge vignette and a faint glare. Opens up as it zooms in.
+function drawScope(now) {
+  const { W, H } = view, cx = W / 2, cy = H / 2;
+  const open = Math.min(1, Math.max(0, (BASE_FOV * 0.6 - S.fov) / (BASE_FOV * 0.6 - SCOPE_FOV) * 1.4));
+  const r = Math.min(W, H) * (0.36 + 0.1 * open);
+  const acc = S.theme.accent;
+
+  // everything outside the lens is the scope body
   ctx.fillStyle = '#000'; ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill('evenodd');
-  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.beginPath();
-  ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
-  ctx.lineWidth = 3; ctx.beginPath(); // thick posts
-  ctx.moveTo(cx - r, cy); ctx.lineTo(cx - r * 0.35, cy); ctx.moveTo(cx + r * 0.35, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy + r * 0.35); ctx.lineTo(cx, cy + r); ctx.stroke();
-  ctx.fillStyle = '#000';
-  for (let i = 1; i <= 4; i++) { const d = r * 0.07 * i; ctx.fillRect(cx - d - 1.5, cy - 1.5, 3, 3); ctx.fillRect(cx + d - 1.5, cy - 1.5, 3, 3); ctx.fillRect(cx - 1.5, cy + d - 1.5, 3, 3); }
-  ctx.fillStyle = '#f22'; ctx.fillRect(cx - 1.5, cy - 1.5, 3, 3);
+  // lens: darker toward the rim, tinted by the level
+  const lens = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+  lens.addColorStop(0, 'rgba(0,0,0,0)'); lens.addColorStop(0.8, 'rgba(' + acc + ',0.06)'); lens.addColorStop(1, 'rgba(0,0,0,0.85)');
+  ctx.fillStyle = lens; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  // glare across the top left of the glass
+  const glare = ctx.createLinearGradient(cx - r, cy - r, cx, cy);
+  glare.addColorStop(0, 'rgba(255,255,255,0.07)'); glare.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = glare; ctx.beginPath(); ctx.arc(cx, cy, r * 0.96, Math.PI * 0.95, Math.PI * 1.55); ctx.arc(cx - r * 0.1, cy - r * 0.1, r * 0.8, Math.PI * 1.55, Math.PI * 0.95, true); ctx.fill();
+  // metal rim
+  ctx.strokeStyle = 'rgba(' + acc + ',0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r - 1, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, r + 3, 0, Math.PI * 2); ctx.stroke();
+
+  // fine crosshair lines, then heavy posts that taper toward the middle
+  const gap = r * 0.05;
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 1.2; ctx.beginPath();
+  ctx.moveTo(cx - r, cy); ctx.lineTo(cx - gap, cy); ctx.moveTo(cx + gap, cy); ctx.lineTo(cx + r, cy);
+  ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy - gap); ctx.moveTo(cx, cy + gap); ctx.lineTo(cx, cy + r); ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,0.92)';
+  const post = (ax, ay, bx, by, w0, w1) => { // quad from (ax, ay) w0 wide to (bx, by) w1 wide
+    const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy), nx = -dy / l, ny = dx / l;
+    ctx.beginPath(); ctx.moveTo(ax + nx * w0, ay + ny * w0); ctx.lineTo(bx + nx * w1, by + ny * w1);
+    ctx.lineTo(bx - nx * w1, by - ny * w1); ctx.lineTo(ax - nx * w0, ay - ny * w0); ctx.closePath(); ctx.fill();
+  };
+  const inner = r * 0.42;
+  post(cx - r, cy, cx - inner, cy, 4, 1.2); post(cx + r, cy, cx + inner, cy, 4, 1.2); post(cx, cy + r, cx, cy + inner, 4, 1.2);
+  post(cx, cy - r, cx, cy - r * 0.62, 3, 1); // thinner top post leaves the view above clear
+
+  // mil-dots: small ovals, a longer tick every other one below center for holdover
+  for (let i = 1; i <= 4; i++) {
+    const d = r * 0.085 * i;
+    for (const [x, y] of [[cx - d, cy], [cx + d, cy], [cx, cy - d], [cx, cy + d]]) {
+      ctx.beginPath(); ctx.ellipse(x, y, x === cx ? 2.2 : 1.4, x === cx ? 1.4 : 2.2, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (i % 2 === 0) ctx.fillRect(cx - 7, cy + d - 0.6, 14, 1.2);
+  }
+
+  // lit center: small red dot with a soft glow, pulsing faintly
+  glow(cx, cy, 10, 'rgba(255,40,30,' + (0.35 + 0.1 * Math.sin(now / 300)) + ')');
+  ctx.fillStyle = '#ff3a2a'; ctx.beginPath(); ctx.arc(cx, cy, 1.8, 0, Math.PI * 2); ctx.fill();
+
+  // bolt still cycling after a shot: a thin arc around the edge fills up
+  const left = S.nextFire.sniper - now, cd = WEAPONS.sniper.cd;
+  if (left > 0) {
+    ctx.strokeStyle = 'rgba(' + acc + ',0.8)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - left / cd)); ctx.stroke();
+  }
 }
 
 // crosshair per weapon; the rifle/SMG gap opens in the air and on recoil
@@ -214,7 +258,7 @@ function drawViewmodel(now) {
 }
 
 export function drawWeaponView(now) {
-  if (S.scoped && S.fov < BASE_FOV * 0.6) drawScope();
+  if (S.scoped && S.fov < BASE_FOV * 0.6) drawScope(now);
   else { drawCrosshair(); drawViewmodel(now); }
   if (S.muzzle > 0) S.muzzle--;
 }
@@ -287,7 +331,8 @@ export function drawMinimap(now) {
     if (!S.pickupActive[i]) return;
     ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
   });
-  for (const d of S.drops) { ctx.fillStyle = 'rgb(' + GUN_COLOR[d.weapon].join(',') + ')'; ctx.fillRect(d.x - 0.15, d.y - 0.15, 0.3, 0.3); }
+  ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
+  for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
   for (const [id, o] of Object.entries(S.others)) {
     if (!o.now) continue;
     ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';
@@ -299,13 +344,14 @@ export function drawMinimap(now) {
   ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.6)'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, size, size);
 
   ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';
-  WEAPON_ORDER.forEach((w, i) => {
-    const has = owned(w), ammo = has && w !== 'blade' ? ' ' + S.mag[w] + (w === 'rifle' ? '' : '/' + spare(w)) : '';
-    ctx.fillStyle = w === S.weapon ? '#fc6' : has ? '#aaa' : '#444';
-    ctx.fillText((w === S.weapon ? '> ' : '') + key('slot' + (i + 1)) + ' ' + w.toUpperCase() + ammo, mx + size, my + size + 22 + i * 22);
-  });
+  const slots = GUN_SLOTS + 1; // two guns, then the blade
+  for (let i = 1; i <= slots; i++) {
+    const w = slotWeapon(i), ammo = w && w !== 'blade' ? ' ' + S.mag[w] + (w === 'rifle' ? '' : '/' + spare(w)) : '';
+    ctx.fillStyle = w && w === S.weapon ? '#fc6' : w ? '#aaa' : '#444';
+    ctx.fillText((w && w === S.weapon ? '> ' : '') + key('slot' + i) + ' ' + (w ? w.toUpperCase() : 'EMPTY') + ammo, mx + size, my + size + 22 * i);
+  }
   ctx.font = '12px Courier New'; ctx.fillStyle = '#777';
-  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' last gun', mx + size, my + size + 22 + WEAPON_ORDER.length * 22);
+  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' switch', mx + size, my + size + 22 * (slots + 1));
   const cd = WEAPONS[S.weapon].cd, left = S.nextFire[S.weapon] - now; // chamber bar for slow guns
   if (cd > 400 && left > 0 && !S.reloading) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
   ctx.textAlign = 'left';
@@ -335,4 +381,21 @@ export function drawAmmo(now) {
     ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#fc6'; ctx.fillText(key('reload') + ' RELOAD', W / 2, y);
   }
   ctx.textAlign = 'left';
+}
+
+// "E  Take SNIPER" when you're in reach of a gun pad or a loot box
+export function drawUsePrompt() {
+  const t = S.useTarget;
+  if (!t || !t.items.length) return;
+  const { W, H } = view, drop = gunToDrop(), items = t.items.map(w => w.toUpperCase());
+  let text;
+  if (t.pad !== undefined) text = S.mag[t.items[0]] !== undefined ? 'Take ' + items[0] + ' ammo' : drop ? 'Swap ' + drop.toUpperCase() + ' for ' + items[0] : 'Take ' + items[0];
+  else text = 'Loot box: ' + items.join(', ');
+  const k = key('use');
+  ctx.font = 'bold 16px Courier New';
+  const kw = ctx.measureText(k).width + 14, tw = ctx.measureText(text).width, x = W / 2 - (kw + 10 + tw) / 2, y = H / 2 + 80;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 8, y - 18, kw + 10 + tw + 16, 28);
+  ctx.strokeStyle = '#fc6'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y - 14, kw, 20);
+  ctx.fillStyle = '#fc6'; ctx.textAlign = 'center'; ctx.fillText(k, x + kw / 2, y + 1);
+  ctx.fillStyle = '#eee'; ctx.textAlign = 'left'; ctx.fillText(text, x + kw + 10, y + 1);
 }

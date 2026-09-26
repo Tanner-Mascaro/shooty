@@ -1,7 +1,7 @@
 // WebSocket connection and handlers for every server -> client message.
 import { EYE, HEAL, TEAMS } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
-import { S, owned, nameOf } from './state.js';
+import { S, owned, nameOf, gunSlots } from './state.js';
 import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
@@ -10,6 +10,7 @@ import { showWait, hideWait, setWaitText, showMsg, banner, toast, pushFeed } fro
 import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 import { showFriends, showInvite } from './friends.js';
+import { fromProfile } from './settings.js';
 
 let ws = null;
 
@@ -81,17 +82,15 @@ const handlers = {
   inv(msg) {
     S.mag = msg.mag; S.inv = msg.inv;
     if (S.reloading && !owned(S.reloading.w)) S.reloading = null;
-    if (!owned(S.weapon)) { S.weapon = 'rifle'; S.scoped = false; S.reloading = null; }
+    if (!owned(S.weapon)) { S.weapon = gunSlots()[0] || 'blade'; S.scoped = false; S.reloading = null; }
   },
 
-  // you picked up a gun (fresh) or more ammo for one you have
-  ammo(msg) {
-    if (msg.fresh) { S.mag[msg.weapon] = msg.mag; S.inv[msg.weapon] = msg.add; }
-    else S.inv[msg.weapon] = (S.inv[msg.weapon] || 0) + msg.add;
+  // pad states, and which gun each gun pad is showing this time
+  pickups(msg) {
+    S.pickupActive = msg.active;
+    msg.weapons.forEach((w, i) => { if (S.pickupSpots[i]) S.pickupSpots[i].weapon = w; });
   },
-
-  pickups(msg) { S.pickupActive = msg.active; },
-  drops(msg) { S.drops = msg.drops; },
+  boxes(msg) { S.boxes = msg.boxes; },
 
   pickup(msg) {
     const sp = msg;
@@ -100,6 +99,7 @@ const handlers = {
     if (msg.id !== S.myId) { playAt(heal ? 'heal' : 'pickup', sp.x, sp.y); return; }
     play(heal ? 'heal' : 'pickup');
     if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
+    else if (msg.weapon === 'ammo') banner('+ AMMO', true);
     else { banner('+ ' + msg.weapon.toUpperCase(), true); switchWeapon(msg.weapon); }
   },
 
@@ -197,6 +197,7 @@ const handlers = {
   notice(msg) { toast(msg.text); },
 
   profile(msg) { showProfile(msg); },
+  settings(msg) { fromProfile(msg.settings); },
   auth(msg) { onAuth(msg); },
   leaderboard(msg) { showBoard(msg.rows); },
   friends(msg) { showFriends(msg.list); },

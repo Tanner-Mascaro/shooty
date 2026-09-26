@@ -97,3 +97,22 @@ export function canopySprite(variant) {
     },
   });
 }
+
+// --- loot box: a crate seen a little from above, banded in the level's accent color ---
+function boxPx(u, v) {
+  const top = 0.24;
+  if (v < top) { // lid, narrower toward the back
+    const inset = (top - v) / top * 0.12;
+    if (u < inset || u > 1 - inset) return 0;
+    return u < inset + 0.05 || u > 1 - inset - 0.05 || v < 0.04 ? 2 : 3;
+  }
+  if (u < 0.07 || u > 0.93 || v < top + 0.06 || v > 0.93) return 2;        // frame
+  if (v > 0.52 && v < 0.6) return 4;                                        // glowing band
+  if (Math.abs(u - 0.5) < 0.06 && v > 0.62) return 2;                       // latch
+  return (u * 9 | 0) % 3 === 0 ? 5 : 1;                                     // planks
+}
+const boxCache = {};
+export function boxSprite(accent) {
+  return boxCache[accent] ??= { w: 0.6, h: 0.5, px: boxPx, emit: [4],
+    pal: [null, [104, 76, 48], [44, 30, 20], [140, 104, 68], accent.split(',').map(Number), [88, 64, 40]] };
+}

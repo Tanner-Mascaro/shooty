@@ -19,6 +19,19 @@ set PORT=4000&& npm start      # Windows (Command Prompt)
 
 For remote play run `ngrok http 3000` and share the URL.
 
+## Weapons and loot
+
+- **Two guns plus the blade.** Everyone spawns with the rifle (unlimited spare ammo). Keys 1 and 2 pick your guns, 3 the blade, Q swaps back to the last one.
+- **Gun pads** roll a random sniper, shotgun or SMG each time they respawn. Walk up and press **E** to take it. With both slots full, the gun in your hand is swapped out and left in a box at your feet. Health pads are still taken by walking over them.
+- **Loot boxes:** when someone dies, their picked-up guns go in a box at the body with the ammo left in them. Press **E** to loot: ammo for guns you carry comes out first, then one gun per press. Boxes vanish after 30s.
+- **Reloading:** R, or automatically when the mag is empty. The server counts rounds too.
+
+Mags, reload times, pad guns and slot count are in `shared/config.js`.
+
+## Settings
+
+The ⚙ button (top right) sets the frame rate limit, FPS counter, fullscreen, master and background volume, mouse sensitivity, scope mode (click to toggle or hold to aim) and every key binding. Settings are saved in the browser and on your profile, so signing in on another device brings them along.
+
 ## Rooms, modes and friends
 
 - **Rooms:** every game is a room with a short code, and the address bar is its invite link (`/?room=ABCDE`). **Quick play** puts you in any public room with space; **New private room** makes one only people with the link (or an invite) can join. Up to 8 players; you can join a match in progress.
@@ -42,7 +55,7 @@ Speed, sight range, reaction time, fire rate and aim error are constants at the 
 
 ## Profiles, accounts and leaderboard
 
-Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses) plus their leaderboard rank. Matches with a bot in them don't count.
+Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses) plus their leaderboard rank. Matches with a bot in them don't count. Profiles also keep each player's settings.
 
 - **Guests:** no sign-up needed. The browser keeps a random secret key that identifies the profile, so clearing site data or switching browsers starts a new one.
 - **Accounts:** "Create account" puts a username + password on your current profile (stats kept). "Sign in" on any other device switches that browser to your account. Passwords are hashed with scrypt; 5 wrong tries per minute locks out that IP for the rest of the minute. There's no password reset yet (no email on file).
@@ -76,7 +89,7 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 | `public/js/profile.js`, `account.js` | Your profile key + name in the browser; lobby name, stats, sign-in, leaderboard |
 | `public/js/net.js` | WebSocket (joins the `?room=` in the URL) + a handler per server message |
 | `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/reloading/switching, movement (bhop) |
-| `public/js/settings.js` | Settings panel: FPS limit, sensitivity, key bindings, fullscreen (saved in the browser) |
+| `public/js/settings.js` | Settings panel: FPS limit, sound, sensitivity, scope mode, key bindings, fullscreen (saved in the browser and on the profile) |
 | `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds |
 | `public/js/audio.js` | Synthesized sound effects |
 | `public/js/particles.js` | Blood, sparks, embers |

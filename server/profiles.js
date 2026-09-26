@@ -1,4 +1,4 @@
-// Saved player profiles: a display name plus lifetime stats, optionally claimed with a
+// Saved player profiles: a display name, lifetime stats and game settings, optionally claimed with a
 // username + password so the same profile works on any device.
 //
 // Identity is a secret token the browser keeps (public/js/profile.js). Only hashes of tokens
@@ -44,9 +44,10 @@ export async function openProfiles(root) {
 
 // Both stores have the same methods:
 //   resolve(tokenHash)       -> profile id for this browser (a session's account, else the token's own profile)
-//   load(id, name, fallback) -> { name, username, kills, ... }; creates the profile (named `fallback` if no
-//                               name), renames it if a name is given
+//   load(id, name, fallback) -> { name, username, settings, kills, ... }; creates the profile (named
+//                               `fallback` if no name), renames it if a name is given
 //   add(id, { kills: 1 })    -> bumps stats
+//   saveSettings(id, obj)    -> stores the player's game settings (public/js/settings.js; null until saved)
 //   claim(id, username, passHash) -> false if the username is taken or the profile already has one
 //   account(username)        -> { id, passHash } or null
 //   addSession(tokenHash, id) / removeSession(tokenHash)
@@ -65,6 +66,7 @@ async function postgresStore(url) {
     kills int NOT NULL DEFAULT 0, deaths int NOT NULL DEFAULT 0, wins int NOT NULL DEFAULT 0, losses int NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(), last_seen timestamptz NOT NULL DEFAULT now())`);
   await db.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS username text, ADD COLUMN IF NOT EXISTS pass_hash text`);
+  await db.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS settings jsonb`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS profiles_username ON profiles (lower(username))`);
   await db.query(`CREATE TABLE IF NOT EXISTS sessions (
     token_hash text PRIMARY KEY, profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -82,12 +84,13 @@ async function postgresStore(url) {
     async load(id, name, fallback) {
       return one(`INSERT INTO profiles (id, name) VALUES ($1, $2)
         ON CONFLICT (id) DO UPDATE SET name = COALESCE($3, profiles.name), last_seen = now()
-        RETURNING name, username, ${STATS.join(', ')}`, [id, name || fallback, name || null]);
+        RETURNING name, username, settings, ${STATS.join(', ')}`, [id, name || fallback, name || null]);
     },
     async add(id, delta) {
       await db.query(`UPDATE profiles SET ${STATS.map((s, i) => `${s} = ${s} + $${i + 2}`).join(', ')} WHERE id = $1`,
         [id, ...STATS.map(s => delta[s] || 0)]);
     },
+    async saveSettings(id, settings) { await db.query('UPDATE profiles SET settings = $2 WHERE id = $1', [id, JSON.stringify(settings)]); },
     async claim(id, username, passHash) {
       try {
         const r = await db.query('UPDATE profiles SET username = $2, pass_hash = $3 WHERE id = $1 AND username IS NULL', [id, username, passHash]);
@@ -161,8 +164,9 @@ function fileStore(file) {
       if (name) p.name = name;
       p.lastSeen = new Date().toISOString();
       save();
-      return pick(p);
+      return { ...pick(p), settings: p.settings || null };
     },
+    async saveSettings(id, settings) { if (all[id]) { all[id].settings = settings; save(); } },
     async add(id, delta) {
       if (!all[id]) return;
       for (const s of STATS) all[id][s] += delta[s] || 0;

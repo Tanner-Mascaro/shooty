@@ -37,8 +37,10 @@ export function applyLevelUI(name, theme) {
   title.textContent = theme.name;
   title.style.color = theme.title;
   title.style.textShadow = '0 0 24px ' + theme.title + ', 0 0 60px rgba(' + theme.accent + ',0.4)';
-  wait.style.setProperty('--accent', theme.title);
-  wait.style.setProperty('--accent-rgb', theme.accent);
+  for (const el of [wait, $('corner')]) { // the corner buttons match the level too
+    el.style.setProperty('--accent', theme.title);
+    el.style.setProperty('--accent-rgb', theme.accent);
+  }
   wait.style.background = 'radial-gradient(ellipse at 50% 0%, ' + theme.bg + ', #050507 65%)';
 }
 

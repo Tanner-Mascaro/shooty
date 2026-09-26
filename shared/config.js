@@ -23,9 +23,12 @@ export const WEAPONS = {
   smg:     { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.03,  airSpread: 0.07, auto: true, mag: 35, reload: 1500 },
   blade:   { dmg: 55,  backstab: 150, cd: 450, range: 1.4, melee: true },
 };
-// pickup weapons and the spare rounds a pickup gives on top of a full mag (another pickup of a
-// gun you have adds these spares); the rifle has unlimited spares, the blade needs no ammo
+// spare rounds a pad gun comes with on top of a full mag; the rifle has unlimited spares,
+// the blade needs no ammo
 export const AMMO = { sniper: 4, shotgun: 6, smg: 55 };
-export const DROP_TIME = 30000;  // guns dropped by a dead player vanish after this long
+export const PAD_GUNS = ['sniper', 'shotgun', 'smg']; // a gun pad rolls one of these each time it respawns
+export const GUN_SLOTS = 2;      // guns you can carry, plus the blade
+export const USE_RANGE = 1.2;    // how close you must be to pick up a gun or loot a box
+export const BOX_TIME = 30000;   // loot boxes vanish after this long
 // weapon slots, keys 1-5
 export const WEAPON_ORDER = ['rifle', 'sniper', 'shotgun', 'smg', 'blade'];

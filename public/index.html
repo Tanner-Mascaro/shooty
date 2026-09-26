@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Arena</title>
+<title>Shooty</title>
 <meta name="description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
 <meta name="theme-color" content="#0c0c10">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <!-- link previews (Discord, iMessage, Slack…); the image URL must be absolute, so update it if the domain changes -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Arena">
+<meta property="og:title" content="Shooty">
 <meta property="og:description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
 <meta property="og:image" content="https://shooty-g7pv.onrender.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -21,11 +21,11 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="corner"><button class="fsToggle ghost">⛶ Fullscreen</button><button class="gear ghost">⚙ Settings</button></div>
 <div id="wait">
   <header id="lobbyHead">
-    <div id="brand">ARENA</div>
+    <div id="brand">SHOOTY</div>
     <div id="waitTitle">HELL</div>
-    <div id="headBtns"><button class="gear ghost">⚙ Settings</button> <button class="fsToggle ghost">⛶ Fullscreen</button></div>
   </header>
   <div id="lobby">
     <section id="play" class="card">
@@ -125,8 +125,12 @@
     <div class="setRow"><span>Frame rate limit</span><select id="fpsCap"></select></div>
     <label class="setRow"><span>Show FPS counter</span><input type="checkbox" id="showFps"></label>
     <div class="setRow"><span>Fullscreen <small>(no tabs or browser bars)</small></span><button id="fsBtn" class="ghost">Go fullscreen</button></div>
+    <div class="label">SOUND</div>
+    <div class="setRow"><span>Master volume <small id="volumeVal"></small></span><input type="range" id="volume" min="0" max="1" step="0.05"></div>
+    <div class="setRow"><span>Background hum <small id="ambientVal"></small></span><input type="range" id="ambient" min="0" max="1" step="0.05"></div>
     <div class="label">MOUSE</div>
     <div class="setRow"><span>Sensitivity <small id="sensVal"></small></span><input type="range" id="sens" min="0.2" max="3" step="0.05"></div>
+    <div class="setRow"><span>Scope (right click)</span><select id="ads"><option value="toggle">Click to toggle</option><option value="hold">Hold to aim</option></select></div>
     <div class="label">KEYS <small>click a key, then press the new one · Esc cancels</small></div>
     <ul id="binds"></ul>
     <button id="resetBinds" class="link">Reset keys to defaults</button>

@@ -25,7 +25,9 @@ export const S = {
 
   // current level (see level.js)
   level: null, MAP: null, T: null, theme: null, pickupSpots: [], pickupActive: [],
-  drops: [], // guns dead players dropped: { id, weapon, x, y, z }
+  boxes: [], // loot boxes on the ground: { id, x, y, z, items: [weapon] }
+  useTarget: null, // what the use key would pick up right now (see weapons.js findUseTarget)
+  aimHeld: false, // right mouse button is down
 
   // screen effects
   hitFlash: 0, healFlash: 0, killFlash: 0, muzzle: 0, recoil: 0, hitMarker: 0, hitHead: false,
@@ -39,6 +41,7 @@ export const S = {
 
 export const owned = w => w === 'blade' || S.mag[w] !== undefined;
 export const spare = w => w === 'rifle' ? Infinity : S.inv[w] || 0;
+export const gunSlots = () => Object.keys(S.mag); // your guns in slot order (at most GUN_SLOTS)
 
 // roster lookups
 export const playerInfo = id => (S.room && S.room.players.find(p => p.id === id)) || null;
