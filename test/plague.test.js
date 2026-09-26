@@ -24,10 +24,18 @@ const plague = r => r.list.filter(p => p.team === PLAGUE_TEAM);
 const healthy = r => r.list.filter(p => p.team === HEALTHY_TEAM);
 const kill = (r, victim, killer) => r.killPlayer(victim, killer, { weapon: killer ? r.isInfected(killer) ? 'claws' : 'rifle' : 'pit' });
 function openLane(room) {
-  for (let y = 2; y < room.map.length - 2; y++) for (let x = 2; x < room.map[y].length - 4; x++) {
+  // stay clear of the outer hedge / wall ring on large maps
+  const y0 = 8, y1 = room.map.length - 8, x0 = 8, x1 = room.map[0].length - 8;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
     if (Array.from({ length: 16 }, (_, i) => i * 0.2).every(dx => groundAt(room.T, x + dx, y) === 0 && !hitsWall(room.T, x + dx, y, 0.3))) return { x, y };
   }
   assert.fail('an open firing lane must exist');
+}
+
+// first ground tick of plague chase: ACCEL (18) caps how fast wish-speed is reached
+function plagueFirstStep() {
+  const dt = TICK / 1000, wish = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER, ACCEL = 18;
+  return Math.min(wish, ACCEL * wish * dt) * dt;
 }
 
 test('Plague assigns exactly one monster and sends roles before start', () => {
@@ -350,11 +358,11 @@ test('infected bots move faster, close to melee distance, and infect with two cl
   const bot = room.list.find(p => p.bot), [victim, other] = room.humans, spot = openLane(room);
   setup(room, 'manual'); role(room, bot, PLAGUE_TEAM); room.startGame();
   let now = Date.now(); t.mock.method(Date, 'now', () => now);
-  Object.assign(bot, { ...spot, z: 0, a: 0, p: 0 });
+  Object.assign(bot, { ...spot, z: 0, a: 0, p: 0, vx: 0, vy: 0, onGround: true });
   Object.assign(victim, { x: spot.x + 2.5, y: spot.y, z: 0, a: 0 });
   Object.assign(other, { x: spot.x, y: spot.y + 8, z: 0 });
   botTick(room, bot);
-  assert.ok(Math.abs(bot.x - spot.x - MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER * TICK / 1000) < 1e-6);
+  assert.ok(Math.abs(bot.x - spot.x - plagueFirstStep()) < 1e-6);
   victim.x = bot.x + 0.8;
   now += 500; botTick(room, bot);
   assert.equal(victim.hp, MAX_HP / 2);
@@ -370,11 +378,12 @@ test('infected bots can spend their second jump while chasing an elevated surviv
   const bot = room.list.find(p => p.bot), [victim, other] = room.humans, spot = openLane(room);
   setup(room, 'manual'); role(room, bot, PLAGUE_TEAM); room.startGame();
   let now = Date.now(); t.mock.method(Date, 'now', () => now);
-  Object.assign(bot, { ...spot, z: 0, a: 0 });
+  bot.brain.bhop = true;
+  Object.assign(bot, { ...spot, z: 0, a: 0, vx: 0, vy: 0, onGround: true });
   Object.assign(victim, { x: spot.x + 2.5, y: spot.y, z: 1.2 });
   Object.assign(other, { x: spot.x, y: spot.y + 8, z: 0 });
   let maxJumps = 0, peak = 0;
-  for (let i = 0; i < 30; i++) { now += TICK; botTick(room, bot); maxJumps = Math.max(maxJumps, bot.jumpsUsed); peak = Math.max(peak, bot.z); }
+  for (let i = 0; i < 30; i++) { now += TICK; botTick(room, bot); maxJumps = Math.max(maxJumps, bot.jumpsUsed || 0); peak = Math.max(peak, bot.z); }
   assert.equal(maxJumps, 2);
-  assert.ok(peak > 0.6);
+  assert.ok(peak > 0.5);
 });

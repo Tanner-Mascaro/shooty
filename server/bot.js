@@ -292,7 +292,7 @@ export function botTick(game, p) {
   if (!b.seenAt) b.seenAt = now;
   const d = Math.hypot(foe.x - p.x, foe.y - p.y);
   p.a = turnToward(p.a, Math.atan2(foe.y - p.y, foe.x - p.x), L.turn * dt);
-  p.p = (foe.z + BODY_H * 0.55 - (p.z + EYE)) / (d || 1); // bullet pitch is a slope
+  p.p = Math.atan2(foe.z + BODY_H * 0.55 - (p.z + EYE), d || 1); // look angle; combat turns this into a slope
   if (!game.gameOn || now - b.seenAt < L.reaction || now < b.nextShot) return;
   if (infected) {
     if (d <= WEAPONS.claws.range) {

@@ -52,16 +52,29 @@ const FLOOR_DRAW = {
   robot(ctx, w, h) {
     const cell = 16;
     for (let y = 0; y < h; y += cell) for (let x = 0; x < w; x += cell) {
-      const v = ((x / cell + y / cell) & 1) ? 0.88 : 0.78;
-      ctx.fillStyle = rgb(48 * v, 54 * v, 62 * v);
+      const v = ((x / cell + y / cell) & 1) ? 0.95 : 0.82;
+      ctx.fillStyle = rgb(52 * v, 60 * v, 72 * v);
       ctx.fillRect(x, y, cell, cell);
-      ctx.strokeStyle = '#16181c';
-      ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
-      ctx.fillStyle = '#6a727c';
+      ctx.strokeStyle = '#0e1218';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
+      ctx.fillStyle = '#8a96a8';
       ctx.fillRect(x + 3, y + 3, 2, 2);
       ctx.fillRect(x + cell - 5, y + 3, 2, 2);
       ctx.fillRect(x + 3, y + cell - 5, 2, 2);
       ctx.fillRect(x + cell - 5, y + cell - 5, 2, 2);
+      // floor glow tiles
+      if ((x / cell + y / cell) % 4 === 0) {
+        ctx.fillStyle = 'rgba(40,220,255,0.55)';
+        ctx.beginPath();
+        ctx.arc(x + cell / 2, y + cell / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // hazard stripe band
+    for (let i = 0; i < w; i += 8) {
+      ctx.fillStyle = (i / 8 | 0) % 2 ? '#e8b010' : '#1a1a1a';
+      ctx.fillRect(i, h - 10, 8, 6);
     }
   },
   witch(ctx, w, h) {
@@ -99,13 +112,18 @@ const FLOOR_DRAW = {
     }
   },
   castle(ctx, w, h) {
-    const cell = 20;
+    const cell = 18;
     for (let y = 0; y < h; y += cell) for (let x = 0; x < w; x += cell) {
-      const tone = 0.7 + 0.3 * noise(x, y);
-      ctx.fillStyle = rgb(72 * tone, 64 * tone, 52 * tone);
+      const tone = 0.75 + 0.3 * noise(x * 0.4, y * 0.4);
+      ctx.fillStyle = rgb(88 * tone, 78 * tone, 104 * tone);
       ctx.fillRect(x, y, cell, cell);
-      ctx.strokeStyle = '#2a241c';
+      ctx.strokeStyle = 'rgba(120,80,160,0.45)';
       ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
+      if (((x / cell) + (y / cell)) % 3 === 0) {
+        ctx.fillStyle = 'rgba(220,140,70,0.4)';
+        ctx.fillRect(x + cell / 2 - 2, y + 4, 4, cell - 8);
+        ctx.fillRect(x + 4, y + cell / 2 - 2, cell - 8, 4);
+      }
     }
   },
   nuke(ctx, w, h) {
@@ -136,15 +154,30 @@ const WALL_DRAW = {
     ctx.fillRect(0, h * 0.45, w, 4);
   },
   robot(ctx, w, h, theme) {
-    ctx.fillStyle = rgb(...theme.wall);
+    ctx.fillStyle = '#3a424e';
     ctx.fillRect(0, 0, w, h);
-    for (let x = 0; x < w; x += 16) {
-      ctx.fillStyle = '#1a1e24';
-      ctx.fillRect(x + 2, 8, 12, h - 16);
-      for (let y = 14; y < h - 14; y += 10) {
-        ctx.fillStyle = (y / 10 | 0) % 3 === 0 ? rgb(...theme.band) : '#2a3038';
-        ctx.fillRect(x + 4, y, 8, 4);
+    const [br, bg, bb] = theme.band;
+    for (let x = 0; x < w; x += 18) {
+      ctx.fillStyle = '#12161c';
+      ctx.fillRect(x + 1, 4, 16, h - 8);
+      ctx.fillStyle = '#2a323c';
+      ctx.fillRect(x + 3, 6, 12, h - 12);
+      // vent slots
+      for (let y = 10; y < h - 12; y += 7) {
+        ctx.fillStyle = '#0a0c10';
+        ctx.fillRect(x + 4, y, 10, 2);
       }
+      // status LEDs (cyan / green / amber)
+      for (let y = 14; y < h - 14; y += 14) {
+        const kind = (y / 14 + x / 18 | 0) % 3;
+        ctx.fillStyle = kind === 0 ? rgb(br, bg, bb) : kind === 1 ? '#40ff88' : '#ffb020';
+        ctx.fillRect(x + 5, y, 8, 3);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(x + 5, y, 8, 1);
+      }
+      // cable channel
+      ctx.fillStyle = '#080a0e';
+      ctx.fillRect(x + 8, 6, 2, h - 12);
     }
   },
   witch(ctx, w, h) {
@@ -180,10 +213,20 @@ const WALL_DRAW = {
     for (let y = 0; y < h; y += bh) {
       const ox = ((y / bh) & 1) * (bw / 2);
       for (let x = -bw; x < w; x += bw) {
-        const tone = 0.75 + 0.25 * noise(x, y);
+        const tone = 0.82 + 0.22 * noise(x, y);
         ctx.fillStyle = rgb(theme.wall[0] * tone, theme.wall[1] * tone, theme.wall[2] * tone);
         ctx.fillRect(x + ox, y, bw - 1, bh - 1);
+        ctx.strokeStyle = 'rgba(40,28,60,0.35)';
+        ctx.strokeRect(x + ox + 0.5, y + 0.5, bw - 2, bh - 2);
       }
+    }
+    // torch / stained-glass band
+    const [br, bg, bb] = theme.band;
+    for (let x = 4; x < w - 4; x += 14) {
+      ctx.fillStyle = rgb(br, bg, bb, 0.7 + 0.25 * noise(x, 3));
+      ctx.fillRect(x, h * 0.38, 8, 12);
+      ctx.fillStyle = 'rgba(255,230,160,0.45)';
+      ctx.fillRect(x + 1, h * 0.38 + 1, 6, 3);
     }
   },
   nuke(ctx, w, h, theme) {
@@ -220,10 +263,10 @@ export function texturesFor(theme) {
   if (cache.has(theme.id)) return cache.get(theme.id);
   const floorDraw = FLOOR_DRAW[theme.id] || FLOOR_DRAW.hell;
   const wallDraw = WALL_DRAW[theme.id] || WALL_DRAW.hell;
-  const floor = makeTexture((ctx, w, h) => floorDraw(ctx, w, h));
-  floor.repeat.set(30, 30);
-  const wall = makeTexture((ctx, w, h) => wallDraw(ctx, w, h, theme));
-  wall.repeat.set(2, 1);
+  const floor = makeTexture((ctx, w, h) => floorDraw(ctx, w, h), { size: 256 });
+  floor.repeat.set(18, 18);
+  const wall = makeTexture((ctx, w, h) => wallDraw(ctx, w, h, theme), { size: 256 });
+  wall.repeat.set(1.5, 1);
   const rock = makeTexture((ctx, w, h) => {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const n = 0.65 + 0.35 * noise(x * 0.12, y * 0.12);

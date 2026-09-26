@@ -13,7 +13,7 @@ export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', plague: 'Plague
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
 export const PLAGUE_TEAM = 1;
 export const HEALTHY_TEAM = 2;
-export const PLAGUE_SKIN = 'demon';
+export const PLAGUE_SKIN = 'plagueWitch';
 export const PLAGUE_SPEED_MULTIPLIER = 2;
 export const PLAGUE_MAX_HP = MAX_HP * 3;
 export const PLAGUE_JUMPS = 2;
@@ -24,7 +24,7 @@ export const MOVE_SPEED = 3, MOVE_SPEED_LIMIT = 10, MOVE_GRAVITY = 7.5, MOVE_JUM
 export const PLAGUE_TEAMS = { [PLAGUE_TEAM]: 'PLAGUE', [HEALTHY_TEAM]: 'HEALTHY' };
 export const isTeamMode = mode => mode === 'teams' || mode === 'plague';
 export const teamName = (mode, team) => (mode === 'plague' ? PLAGUE_TEAMS : TEAMS)[team] || '';
-export const PLAYER_SKINS = ['demon', 'robot', 'witch', 'cowboy', 'nun', 'knight', 'bodybuilder', 'ghost', 'goose', 'construction', 'superhero', 'ninja', 'werewolf', 'zombie', 'astronaut', 'mummy', 'vampire', 'slime', 'naked', 'penis'];
+export const PLAYER_SKINS = ['witch', 'robotWitch', 'gothicWitch', 'infernalWitch', 'iceWitch', 'ghostWitch', 'plagueWitch'];
 
 // silly cheat mode: set your display name to one of these (case-insensitive)
 export const HACK_NAMES = new Set(['hacker', 'hackerman', 'godmode', 'cheater']);

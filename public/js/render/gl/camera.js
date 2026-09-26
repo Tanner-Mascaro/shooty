@@ -41,18 +41,18 @@ export function project(x, y, z) {
   };
 }
 
-// Cheap LOS: step along the ground-plane view ray and see if a wall blocks before the target.
+// Cheap LOS: step along the view ray; walls/props taller than eye hide HUD glows and names.
 export function occluded(p) {
   if (p.f < 0.15) return true;
   if (p.x < -40 || p.y < -40 || p.x > view.W + 40 || p.y > view.H + 40) return true;
   if (!S.me || !S.T || !S.cam) return false;
-  const steps = Math.min(12, 2 + (p.f | 0));
+  const steps = Math.min(16, 3 + (p.f | 0));
   const eye = S.cam.eye;
   for (let i = 1; i < steps; i++) {
-    const t = (i / steps) * 0.9;
+    const t = (i / steps) * 0.92;
     const x = S.me.x + S.cam.fwdx * p.f * t;
     const y = S.me.y + S.cam.fwdy * p.f * t;
-    if (kindAt(S.T, x, y) === 1 && groundAt(S.T, x, y) > eye - 0.15) return true;
+    if (kindAt(S.T, x, y) === 1 && groundAt(S.T, x, y) > eye - 0.2) return true;
   }
   return false;
 }

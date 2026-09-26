@@ -12,6 +12,7 @@ import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponV
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
+import { colors } from '../level.js';
 
 function interpolateOthers(now) {
   for (const o of Object.values(S.others)) {
@@ -61,7 +62,7 @@ export function render(dt) {
   if (!S.started) return;
   ensureCanvas();
   initGL();
-  setLevelWorld(S.level, S.T, S.theme);
+  setLevelWorld(S.level, S.T, S.theme, colors);
 
   const now = performance.now();
   interpolateOthers(now);

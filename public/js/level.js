@@ -164,10 +164,10 @@ const FLOORS = {
   },
   witch(x, y, n, glow, ld, k, EM) {
     // mossy swamp ground with dark grass tufts, mud patches and glowing mushrooms
-    const v = 0.65 + n * 0.5, m = 0.5 + 0.5 * Math.sin(x * 0.9 + Math.sin(y * 0.7) * 2) * Math.sin(y * 1.1);
+    const v = 0.9 + n * 0.45, m = 0.5 + 0.5 * Math.sin(x * 0.9 + Math.sin(y * 0.7) * 2) * Math.sin(y * 1.1);
     const mud = noise(x * 1.8, y * 1.8) > 0.78;
-    let r = mud ? 42 * v : (26 + 16 * m) * v, g = mud ? 36 * v : (48 + 28 * m) * v, b = mud ? 22 * v : (20 + 8 * m) * v;
-    if (n > 0.9) { r *= 0.45; g *= 0.55; b *= 0.45; } // grass tufts
+    let r = mud ? 68 * v : (42 + 22 * m) * v, g = mud ? 58 * v : (78 + 36 * m) * v, b = mud ? 36 * v : (32 + 12 * m) * v;
+    if (n > 0.9) { r *= 0.55; g *= 0.65; b *= 0.55; } // grass tufts
     else if (noise(x * 9, y * 9) > 0.9) { r *= 1.15; g *= 1.25; b *= 0.9; } // leaf flecks
     r += 18 * glow; g += 95 * glow; b += 22 * glow;
     const cx = Math.floor(x), cy = Math.floor(y);
@@ -185,13 +185,13 @@ const FLOORS = {
     return [r, g, b];
   },
   castle(x, y, n, glow) {
-    // worn flagstones with mortar seams and torch-warmed edges
+    // pale gothic flagstones with violet mortar and warm torch edges
     const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
-    const tone = 0.7 + 0.35 * hash(cx, cy) + n * 0.08;
-    let r = 72 * tone, g = 64 * tone, b = 52 * tone;
-    if (fx < 0.06 || fy < 0.06) { r = 38; g = 34; b = 28; }
-    else if (noise(x * 5, y * 5) > 0.85) { r *= 0.82; g *= 0.82; b *= 0.8; } // scuffs
-    r += 40 * glow; g += 18 * glow; b += 5 * glow;
+    const tone = 0.95 + 0.28 * hash(cx, cy) + n * 0.12;
+    let r = 118 * tone, g = 108 * tone, b = 132 * tone;
+    if (fx < 0.06 || fy < 0.06) { r = 72; g = 58; b = 92; }
+    else if (noise(x * 5, y * 5) > 0.85) { r *= 0.9; g *= 0.9; b *= 0.94; }
+    r += 70 * glow; g += 36 * glow; b += 40 * glow;
     return [r, g, b];
   },
   nuke(x, y, n, glow) {

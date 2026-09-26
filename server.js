@@ -1,4 +1,4 @@
-// Shooty — Networked 3D Shooter
+// Pistols and Potion — Networked 3D Shooter
 // Run: npm start   (or npm run dev to restart on file changes)
 // Then: npx ngrok http 3000  (or ngrok http 3000)
 // Everyone opens the URL; share a room's invite link to play together.
@@ -35,7 +35,7 @@ setInterval(() => hub.tick(), TICK);
 
 server.listen(PORT, () => {
   console.log(`
-  SHOOTY v${VERSION} — 3D Shooter
+  PISTOLS & POTION v${VERSION} — 3D Shooter
   Local:  http://localhost:${PORT}
   Remote: ngrok http ${PORT}, then share the ngrok URL.
 

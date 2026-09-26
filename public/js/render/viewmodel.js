@@ -280,7 +280,7 @@ const MUZZLE = {
 const LIGHT = { py: 1.25, ny: 0.45, px: 0.72, nx: 0.95, pz: 0.6, nz: 0.85 };
 const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const METAL = { hell: ['#2a2022', '#4a383a', '#6e5656'], robot: ['#262b33', '#46505e', '#6c7888'], witch: ['#20241c', '#3a4232', '#5a6450'],
-  haunt: ['#241f18', '#443c2e', '#665a44'], ice: ['#1e2834', '#3a4a5c', '#5c7088'], castle: ['#242018', '#40382c', '#5e5244'] };
+  castle: ['#1a1424', '#342848', '#4e3c68'] };
 
 let ads = 0, lastT = 0;
 export const aimAmount = () => ads; // 0 at the hip .. 1 fully aimed

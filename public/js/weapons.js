@@ -171,7 +171,8 @@ export function fire() {
       setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
     }
   }
-  send({ type: 'shoot', weapon: w, scoped: S.scoped });
+  // include look angles so the server aims where the crosshair is (recoil punch included)
+  send({ type: 'shoot', weapon: w, scoped: S.scoped, a: S.me.a, p: S.pitch + (S.punch || 0) });
   play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt' }[w] || w);
   S.muzzle = 6; S.fireT = now;
   const k = KICK[w] || KICK.pistol;

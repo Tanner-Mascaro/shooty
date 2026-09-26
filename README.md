@@ -1,4 +1,4 @@
-# shooty
+# pistols and potion
 
 Networked 3D arena shooter for up to 8 players per room, free-for-all or red vs blue teams. No build step: the browser loads the ES modules directly.
 

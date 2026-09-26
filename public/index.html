@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Shooty</title>
+<title>Pistols and Potion</title>
 <meta name="description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
 <meta name="theme-color" content="#12100e">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -11,13 +11,13 @@
 <link rel="manifest" href="manifest.webmanifest">
 <!-- link previews (Discord, iMessage, Slack…); the image URL must be absolute, so update it if the domain changes -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Shooty">
+<meta property="og:title" content="Pistols and Potion">
 <meta property="og:description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
 <meta property="og:image" content="https://shooty-g7pv.onrender.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
 {
@@ -30,8 +30,8 @@
 <body class="on-home">
 <div id="home">
   <div id="homeInner">
-    <div id="homeBrand">SHOOTY</div>
-    <p id="homeTag">Sign in, then jump into a match — or just play vs bots.</p>
+    <div id="homeBrand">PISTOLS &amp; POTION</div>
+    <p id="homeTag">Sign the coven scroll — then jump into a match, or duel the bots.</p>
 
     <div id="homePanel">
       <div id="homeSigned" hidden>
@@ -76,9 +76,9 @@
 <div id="corner"><button class="fsToggle ghost">Fullscreen</button><button class="gear ghost">Settings</button></div>
 <div id="wait">
   <header id="lobbyHead">
-    <div id="brand">SHOOTY</div>
-    <div id="waitTitle">HELL</div>
-    <p id="tagline">Pick a map. Load in. Don’t miss.</p>
+    <div id="brand">PISTOLS &amp; POTION</div>
+    <div id="waitTitle">WITCH SWAMP</div>
+    <p id="tagline">Choose your realm and coven form — then seal the match.</p>
   </header>
   <div id="lobby">
     <section id="play" class="card">
@@ -116,17 +116,12 @@
         </div>
       </div>
       <div class="field">
-        <div class="label">MAP <small id="mapVote" style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">Click a map to vote</small></div>
+        <div class="label">REALM <small id="mapVote" style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">Click a map to vote</small></div>
         <div class="map-stage">
           <button id="mapPrev" class="skin-arrow" type="button" aria-label="Previous map">&#x2039;</button>
           <div id="levels" class="choice maps">
-            <button data-level="hell"><b>HELL</b><small>Lava &amp; brimstone</small></button>
-            <button data-level="robot"><b>ROBOT FACTORY</b><small>Acid &amp; steel</small></button>
             <button data-level="witch"><b>WITCH SWAMP</b><small>Bog &amp; fireflies</small></button>
-            <button data-level="haunt"><b>HAUNTED HOUSE</b><small>Backrooms &amp; things that hunt</small></button>
-            <button data-level="ice"><b>ICE FIELDS</b><small>Snow &amp; black ice</small></button>
-            <button data-level="castle"><b>CASTLE KEEP</b><small>Stone halls &amp; torches</small></button>
-            <button data-level="nuke"><b>NUKETOWN</b><small>Houses &amp; a bus in the street</small></button>
+            <button data-level="castle"><b>GOTHIC CASTLE</b><small>Moonlit stone &amp; torches</small></button>
           </div>
           <button id="mapNext" class="skin-arrow" type="button" aria-label="Next map">&#x203A;</button>
         </div>
@@ -244,8 +239,8 @@
 <button id="gameGear" class="gear" title="Settings">⚙</button>
 <button id="gameLeave" title="Leave the match">Leave</button>
 <div id="settings" hidden>
-  <div class="card" role="dialog" aria-label="Settings">
-    <div id="setHead"><b>SETTINGS</b><span><button id="leaveGame" class="ghost">Leave game</button> <button id="closeSettings" class="ghost">Done</button></span></div>
+  <div class="card spellbook" role="dialog" aria-label="Spell book">
+    <div id="setHead"><b>SPELL BOOK</b><span><button id="leaveGame" class="ghost">Leave game</button> <button id="closeSettings" class="ghost">Close</button></span></div>
     <div class="label">DISPLAY</div>
     <div class="setRow"><span>Frame rate limit</span><select id="fpsCap"></select></div>
     <label class="setRow"><span>Show FPS counter</span><input type="checkbox" id="showFps"></label>
@@ -265,9 +260,9 @@
     <div class="setRow"><span>Sensitivity <small id="sensVal"></small></span><input type="range" id="sens" min="0.2" max="3" step="0.05"></div>
     <label class="setRow"><span>Invert look (Y)</span><input type="checkbox" id="invertY"></label>
     <div class="setRow"><span>Scope (right click)</span><select id="ads"><option value="toggle">Click to toggle</option><option value="hold">Hold to aim</option></select></div>
-    <div class="label">KEYS <small>click a key, then press the new one · Esc cancels</small></div>
+    <div class="label">INCANTATIONS <small>click a rune, then press the new key · Esc cancels</small></div>
     <ul id="binds"></ul>
-    <button id="resetBinds" class="link">Reset keys to defaults</button>
+    <button id="resetBinds" class="link">Restore the old runes</button>
   </div>
 </div>
 <script type="module" src="js/main.js"></script>

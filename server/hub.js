@@ -227,6 +227,7 @@ Hub.prototype.handlers = {
     if (typeof msg.token !== 'string' || msg.token.length < 16 || msg.token.length > 128) return;
     const before = this.who(p), first = !p.tokenHash, oldName = p.name, oldSkin = p.skin;
     if (PLAYER_SKINS.includes(msg.skin)) p.skin = msg.skin;
+    else if (!PLAYER_SKINS.includes(p.skin)) p.skin = 'witch';
     p.tokenHash = hashToken(msg.token);
     const pid = await this.profiles.resolve(p.tokenHash);
     if (!await this.useProfile(p, pid, cleanName(msg.name) || null)) return;

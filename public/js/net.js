@@ -142,7 +142,7 @@ const handlers = {
     play(heal ? 'heal' : 'pickup');
     if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
     else if (msg.weapon === 'ammo') banner('+ AMMO', true);
-    else if (msg.weapon === 'nade') banner('+ GRENADE', true);
+    else if (msg.weapon === 'nade') banner('+ POTION', true);
     else { banner('+ ' + msg.weapon.toUpperCase(), true); switchWeapon(msg.weapon); }
   },
 
@@ -180,7 +180,7 @@ const handlers = {
     }
     let whizzed = false;
     for (const r of msg.rays) {
-      const ex = msg.x + Math.cos(r.a) * r.dist, ey = msg.y + Math.sin(r.a) * r.dist, ez = msg.z + EYE + r.p * r.dist;
+      const ex = msg.x + Math.cos(r.a) * r.dist, ey = msg.y + Math.sin(r.a) * r.dist, ez = msg.z + EYE + Math.tan(r.p) * r.dist;
       S.tracers.push({ x0: msg.x, y0: msg.y, z0: msg.z + EYE - 0.12, x1: ex, y1: ey, z1: ez, weapon: msg.weapon, t: now, mine });
       if (!r.hit) burst(ex, ey, ez, msg.weapon === 'sniper' ? 28 : msg.weapon === 'beam' ? 18 : msg.weapon === 'shotgun' ? 3 : 8, 'spark');
       if (!mine && !r.hit && !whizzed) {
@@ -214,8 +214,7 @@ const handlers = {
     if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); }
     else if (S.others[msg.who]) S.others[msg.who].hitT = now;
     if (msg.by === S.myId) {
-      if (S.others[msg.who]) S.others[msg.who].markT = now; // they glow through walls for a bit (render/index.js)
-      S.hitMarker = 14; S.hitHead = msg.head;
+      S.hitMarker = 18; S.hitHead = msg.head;
       play(msg.head ? 'headshot' : 'hitmarker');
     }
   },

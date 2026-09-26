@@ -15,7 +15,7 @@ const $ = id => document.getElementById(id);
 export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
   jump: ['Jump', 'Space'], slide: ['Slide / infected dash', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
-  melee: ['Quick melee', 'KeyF'], nade: ['Throw grenade', 'KeyG'],
+  melee: ['Quick melee', 'KeyF'], nade: ['Throw potion', 'KeyG'],
   slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
@@ -165,7 +165,7 @@ export function showControlsHint() {
     return;
   }
   $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} nade | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('clip')} clip | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('clip')} clip | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {

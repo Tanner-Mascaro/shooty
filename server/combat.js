@@ -8,16 +8,18 @@ const rnd = () => Math.random() * 2 - 1;
 // march one bullet ray; returns where it stopped and who it hit (the first body in the way)
 function castShot(T, shooter, a, pch, targets) {
   const r = { a, p: pch, dist: MAX_DEPTH, hit: null, head: false };
+  // pitch is a look angle (same as the client camera); bullets march in horizontal steps so use the slope
+  const slope = Math.tan(Math.max(-1.2, Math.min(1.2, pch)));
   const eye = shooter.z + EYE - (shooter.sl ? SLIDE.drop : 0), cos = Math.cos(a), sin = Math.sin(a), step = 0.04;
   for (let d = step; d < MAX_DEPTH; d += step) {
-    const rx = shooter.x + cos * d, ry = shooter.y + sin * d, rz = eye + pch * d;
+    const rx = shooter.x + cos * d, ry = shooter.y + sin * d, rz = eye + slope * d;
     const floor = solidAt(T, rx, ry, rz);
     if (rz < floor) { r.dist = d; return r; }
     const ceil = ceilingAt(T, rx, ry);
     if (ceil != null && rz > ceil) { r.dist = d; return r; }
     for (const o of targets) {
       const h = o.sl ? BODY_H * SLIDE.crouch : BODY_H; // sliding players are lower
-      if (Math.hypot(rx - o.x, ry - o.y) < 0.32 && rz >= o.z && rz <= o.z + h + 0.05) {
+      if (Math.hypot(rx - o.x, ry - o.y) < 0.42 && rz >= o.z && rz <= o.z + h + 0.05) {
         r.dist = d; r.hit = o;
         r.head = rz >= o.z + h - 0.2;
         return r;

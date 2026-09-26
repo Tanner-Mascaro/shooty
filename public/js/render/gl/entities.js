@@ -1,7 +1,7 @@
 // In-world sprites: pooled billboards + reusable particle buffers (updated in place each frame).
 import * as THREE from 'three';
 import { S } from '../../state.js';
-import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
+import { BODY_H, SLIDE, PLAGUE_TEAM } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
 import { GUN_COLOR } from '../../constants.js';
 import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
@@ -14,7 +14,6 @@ let attached = false;
 
 const TEAM_TINT = { 1: [230, 50, 40], 2: [40, 110, 255] };
 const PLAGUE_TINT = [100, 225, 45];
-const MARK_MS = 3000;
 
 // pools
 const playerPool = [];
@@ -134,14 +133,14 @@ export function drawPickupBillboards(now) {
   });
 
   const box = boxSprite(S.theme.accent);
-  const boxTex = spriteTexture(box.px, box.pal, 24, 24);
+  const boxTex = spriteTexture(box.px, box.pal, 32, 32);
   for (const b of S.boxes) {
     const spr = acquire(boxPool, makeSprite);
     setBillboard(spr, boxTex, b.x, b.y, b.z, box.w, box.h, false);
   }
 
   const nadeSp = pickupSprite('nade', GUN_COLOR.nade);
-  const nadeTex = spriteTexture(nadeSp.px, nadeSp.pal, 16, 16);
+  const nadeTex = spriteTexture(nadeSp.px, nadeSp.pal, 24, 32);
   for (const n of S.thrown) {
     const bob = 0.04 * Math.sin(now / 70 + n.id);
     const spr = acquire(nadePool, makeSprite);
@@ -150,7 +149,7 @@ export function drawPickupBillboards(now) {
 }
 
 function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, xray) {
-  const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES.demon;
+  const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
   let pal = s.pal;
   if (tint || flash) {
     pal = tintPalette(s.pal.map(c => c && c.slice()), tint);
@@ -183,7 +182,7 @@ export function drawParticlePoints(embers, particles) {
     geo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(particleCol, 3));
     particlePoints = new THREE.Points(geo, new THREE.PointsMaterial({
-      size: 0.1, vertexColors: true, transparent: true, depthWrite: false, sizeAttenuation: true,
+      size: 0.1, vertexColors: true, transparent: true, depthWrite: false, depthTest: true, sizeAttenuation: true,
     }));
     entityRoot.add(particlePoints);
   }
@@ -208,7 +207,6 @@ export function drawParticlePoints(embers, particles) {
 }
 
 export function drawOthersAndCorpses(now) {
-  const teams = S.room && isTeamMode(S.room.mode);
   for (const c of S.corpses) {
     if (c.mine) continue;
     const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0;
@@ -220,13 +218,11 @@ export function drawOthersAndCorpses(now) {
     const team = player ? player.team : o.now.team;
     const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM
       ? PLAGUE_TINT : (S.room && S.room.mode === 'teams') ? TEAM_TINT[team] : null;
-    const ally = teams && o.now.team === S.myTeam;
-    const xray = ally || now - o.markT < MARK_MS;
     drawPlayerBillboard(
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,
       o.now.sl ? 1.15 : 1,
-      now - o.hitT < 90, tint, player && player.skin, xray
+      now - o.hitT < 90, tint, player && player.skin, false
     );
   }
 }

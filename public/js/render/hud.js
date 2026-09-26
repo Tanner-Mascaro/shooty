@@ -62,10 +62,10 @@ export function drawPickupGlows() {
     const r = p.weapon === 'ammo' ? 0.5 : 1; // crates get a small glow, only while there
     if (on || r === 1) glow(q.x, q.y, (on ? 260 : 120) * r / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
-  for (const b of S.boxes) { // loot boxes glow in the level's color
-    const q = project(b.x, b.y, b.z + 0.05);
+  for (const b of S.boxes) { // cauldrons glow in the level's color
+    const q = project(b.x, b.y, b.z + 0.35);
     if (q.f < 0.3 || occluded(q)) continue;
-    glow(q.x, q.y, 170 / q.f, 'rgba(' + S.theme.accent + ',0.35)');
+    glow(q.x, q.y, 190 / q.f, 'rgba(' + S.theme.accent + ',0.4)');
   }
   for (const n of S.thrown || []) {
     const q = project(n.x, n.y, n.z);
@@ -91,14 +91,14 @@ export function drawEnemyGlows(now) {
   }
 }
 
-// names over heads: teammates always (blue), enemies red when in sight and not too far
+// names over heads: only when you can see them (no wallhacks)
 export function drawNameTags() {
   ctx.textAlign = 'center';
   for (const [id, o] of Object.entries(S.others)) {
     const e = o.now;
     if (!e) continue;
     const enemy = isEnemy(+id), p = project(e.x, e.y, e.z + BODY_H + 0.3);
-    if (p.f < 0.4 || (enemy && (p.f > 18 || occluded(p)))) continue;
+    if (p.f < 0.4 || p.f > 18 || occluded(p)) continue;
     ctx.font = 'bold ' + Math.round(Math.max(11, Math.min(16, 40 / p.f + 9))) + 'px Courier New';
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillText(nameOf(+id), p.x + 1, p.y + 1);
@@ -301,10 +301,10 @@ export function drawMinimap(now) {
     ctx.fillText((w && w === S.weapon ? '> ' : '') + key('slot' + i) + ' ' + (w ? w.toUpperCase() : 'EMPTY') + ammo, mx + size, listY + 22 * i);
   }
   ctx.font = '12px Courier New'; ctx.fillStyle = '#777';
-  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' switch · ' + key('nade') + ' nade', mx + size, listY + 22 * (slots + 1));
+  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' switch · ' + key('nade') + ' potion', mx + size, listY + 22 * (slots + 1));
   if (S.nades > 0) {
-    ctx.font = 'bold 14px Courier New'; ctx.fillStyle = '#6c6';
-    ctx.fillText('GRENADES ' + S.nades, mx + size, listY + 22 * (slots + 2));
+    ctx.font = 'bold 14px Courier New'; ctx.fillStyle = '#c8a0ff';
+    ctx.fillText('POTIONS ' + S.nades, mx + size, listY + 22 * (slots + 2));
   }
   const cd = WEAPONS[S.weapon].cd, left = S.nextFire[S.weapon] - now; // chamber bar for slow guns
   if (settings.showMinimap && cd > 400 && left > 0 && !S.reloading) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
@@ -346,7 +346,7 @@ export function drawUsePrompt() {
   const { W, H } = view, drop = gunToDrop(), items = t.items.map(w => w.toUpperCase());
   let text;
   if (t.pad !== undefined) text = S.mag[t.items[0]] !== undefined ? 'Take ' + items[0] + ' ammo' : drop ? 'Swap ' + drop.toUpperCase() + ' for ' + items[0] : 'Take ' + items[0];
-  else text = 'Loot box: ' + items.join(', ');
+  else text = 'Cauldron: ' + items.join(', ');
   const k = key('use');
   ctx.font = 'bold 16px Courier New';
   const kw = ctx.measureText(k).width + 14, tw = ctx.measureText(text).width, x = W / 2 - (kw + 10 + tw) / 2, y = H / 2 + 80;

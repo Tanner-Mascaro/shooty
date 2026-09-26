@@ -75,7 +75,7 @@ export function homeAuth(msg) {
     clearToken(); saveName('');
     signedIn = false;
     authLayout = null;
-    send({ type: 'hello', token: token(), name: '', skin: 'demon' });
+    send({ type: 'hello', token: token(), name: '', skin: 'witch' });
   }
   // profile message that follows will call homeProfile; don't thrash the layout here
 }

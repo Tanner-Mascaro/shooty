@@ -2,7 +2,7 @@
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
 import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
-import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
+import { LEVELS, LEVEL_NAMES, FEATURED_LEVELS, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName } from './bot.js';
@@ -40,7 +40,7 @@ export class Room {
     this.boxId = 0;
     this.nades = [];          // thrown grenades in flight
     this.nadeId = 0;
-    this.setLevel('hell');
+    this.setLevel('witch');
   }
 
   get list() { return Object.values(this.players); }
@@ -66,7 +66,7 @@ export class Room {
     return this.gameOn && this.isInfected(p) && tryDash(p, dx, dy, now);
   }
   get plagueRemainingMs() { return this.mode === 'plague' && this.gameOn ? Math.max(0, this.plagueEndsAt - Date.now()) : 0; }
-  skinOf(p) { return this.mode === 'plague' && this.gameOn && p.team === PLAGUE_TEAM ? PLAGUE_SKIN : p.skin || 'demon'; }
+  skinOf(p) { return this.mode === 'plague' && this.gameOn && p.team === PLAGUE_TEAM ? PLAGUE_SKIN : p.skin || 'witch'; }
   startMessage() { return { type: 'start', level: this.level, mode: this.mode, plagueRemainingMs: this.plagueRemainingMs }; }
   plagueSetupValid() {
     return this.mode !== 'plague' || this.plagueSelection === 'random'
@@ -245,7 +245,7 @@ export class Room {
 
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
-    Object.assign(p, { room: this, kills: 0, deaths: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
+    Object.assign(p, { room: this, kills: 0, deaths: 0, ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
     p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : this.mode === 'teams' ? this.smallerTeam() : 0;
@@ -529,7 +529,7 @@ Room.prototype.handlers = {
   },
 
   vote(p, msg) {
-    if (this.gameOn || !LEVELS[msg.level]) return;
+    if (this.gameOn || !FEATURED_LEVELS.includes(msg.level) || !LEVELS[msg.level]) return;
     p.vote = msg.level;
     p.ready = !!p.bot;
     const winner = this.voteWinner();
@@ -748,8 +748,13 @@ Room.prototype.handlers = {
     }
     const cd = w.cd * (msg.weapon === 'claws' ? 1 : 0.85) * (p.hacks ? HACK_FIRE : 1);
     p.nextFire[msg.weapon] = now + cd;
+    // prefer the aim snapshot from the shot so bullets match the crosshair (incl. recoil)
+    const prevA = p.a, prevP = p.p;
+    if (Number.isFinite(msg.a)) p.a = msg.a;
+    if (Number.isFinite(msg.p)) p.p = Math.max(-1.2, Math.min(1.2, msg.p));
     const targets = this.enemies(p);
     const res = w.melee ? doMelee(this.T, p, targets, msg.weapon) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped);
+    p.a = prevA; p.p = prevP;
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,
       rays: res.rays.map(r => ({ a: r.a, p: r.p, dist: r.dist, hit: !!r.hit })) });
     for (const h of res.hits) {
@@ -761,7 +766,7 @@ Room.prototype.handlers = {
       o.hp -= dmg;
       this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg, head: h.head, weapon: msg.weapon,
         x: p.x + Math.cos(r.a) * r.dist, y: p.y + Math.sin(r.a) * r.dist,
-        z: w.melee ? o.z + BODY_H / 2 : p.z + EYE + r.p * r.dist });
+        z: w.melee ? o.z + BODY_H / 2 : p.z + EYE + Math.tan(r.p) * r.dist });
       if (o.hp <= 0) this.killPlayer(o, p, { weapon: msg.weapon, head: h.head, backstab: h.backstab, dist: r.dist, a: r.a });
       if (!this.gameOn) break; // that kill ended the match
     }

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { glCanvas, view, ensureCanvas } from '../canvas.js';
 import { buildWorld, clearWorld } from './terrainMesh.js';
 import { MAX_DEPTH } from '/shared/config.js';
+import { MW, MH } from '/shared/levels.js';
 
 let renderer = null, scene = null, camera = null;
 let hemi = null, dir = null, orbMesh = null;
@@ -30,13 +31,19 @@ export function initGL() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(60, view.W / Math.max(1, view.H), 0.08, MAX_DEPTH + 10);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.28));
-  hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.55);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+  hemi = new THREE.HemisphereLight(0xffffff, 0x445544, 1.25);
   scene.add(hemi);
-  dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir = new THREE.DirectionalLight(0xffffff, 1.35);
   dir.castShadow = false;
   scene.add(dir);
   scene.add(dir.target);
+  // soft fill from the opposite side so walls don't silhouette to black
+  const fill = new THREE.DirectionalLight(0xc8d8ff, 0.45);
+  fill.position.set(-20, 18, -15);
+  scene.add(fill);
+  scene.add(fill.target);
+  fill.target.position.set(MW / 2, 0, MH / 2);
 
   orbMesh = new THREE.Mesh(
     new THREE.SphereGeometry(1, 12, 8),
@@ -58,25 +65,27 @@ export function applyTheme(theme) {
   if (!scene) return;
   const fogCol = new THREE.Color(theme.fog[0] / 255, theme.fog[1] / 255, theme.fog[2] / 255);
   const far = Math.min(MAX_DEPTH, 10 / Math.max(0.025, theme.fogK));
-  scene.fog = new THREE.Fog(fogCol, far * 0.3, far);
+  scene.fog = new THREE.Fog(fogCol, far * 0.35, far);
   scene.background = new THREE.Color(theme.skyHi[0] / 255, theme.skyHi[1] / 255, theme.skyHi[2] / 255);
 
   hemi.color.setRGB(theme.skyLo[0] / 255, theme.skyLo[1] / 255, theme.skyLo[2] / 255);
-  hemi.groundColor.setRGB(theme.fog[0] / 400, theme.fog[1] / 400, theme.fog[2] / 400);
-  hemi.intensity = theme.ceiling ? 0.5 : 0.75;
-
+  hemi.groundColor.setRGB(theme.fog[0] / 280, theme.fog[1] / 280, theme.fog[2] / 280);
+  hemi.intensity = theme.ceiling ? 0.85 : 1.35;
+  // cool moon fill + warm torch sun so gothic halls stay readable
   const orbCol = new THREE.Color(theme.orb[0] / 255, theme.orb[1] / 255, theme.orb[2] / 255);
-  dir.color.copy(orbCol);
-  dir.intensity = theme.ceiling ? 0.4 : (theme.mat?.sun ?? 1.0);
-  const ox = Math.cos(theme.orbA) * 35, oz = Math.sin(theme.orbA) * 35;
-  dir.position.set(30 + ox * 0.3, 28 + theme.orbE * 40, 30 + oz * 0.3);
-  dir.target.position.set(30, 0, 30);
+  const sun = theme.mat?.sun ?? 1.0;
+  dir.color.copy(theme.ceiling ? orbCol : new THREE.Color(1, 0.96, 0.9).lerp(orbCol, 0.22));
+  dir.intensity = theme.ceiling ? 0.85 : Math.max(1.15, sun);
+  const cx = MW / 2, cy = MH / 2;
+  const ox = Math.cos(theme.orbA) * 40, oz = Math.sin(theme.orbA) * 40;
+  dir.position.set(cx + ox * 0.35, 32 + theme.orbE * 40, cy + oz * 0.35);
+  dir.target.position.set(cx, 0, cy);
 
   orbMesh.visible = !theme.ceiling && theme.orbR > 0;
   if (orbMesh.visible) {
     orbMesh.material.color.copy(orbCol);
-    orbMesh.scale.setScalar(Math.max(2, theme.orbR * 80));
-    orbMesh.position.set(30 + ox, 20 + theme.orbE * 50, 30 + oz);
+    orbMesh.scale.setScalar(Math.max(2.5, theme.orbR * 90));
+    orbMesh.position.set(cx + ox, 22 + theme.orbE * 50, cy + oz);
   }
 }
 
@@ -85,7 +94,7 @@ export function invalidateWorld() {
   currentLevel = null;
 }
 
-export function setLevelWorld(name, T, theme) {
+export function setLevelWorld(name, T, theme, palette) {
   initGL();
   if (currentLevel === name && worldBuilt()) {
     applyTheme(theme);
@@ -93,7 +102,7 @@ export function setLevelWorld(name, T, theme) {
   }
   currentLevel = name;
   applyTheme(theme);
-  buildWorld(scene, T, theme);
+  buildWorld(scene, T, theme, palette);
 }
 
 function worldBuilt() {

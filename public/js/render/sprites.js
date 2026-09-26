@@ -8,10 +8,8 @@ export { PLAYER_SPRITES };
 
 export const PLAYER_SKINS = Object.keys(PLAYER_SPRITES);
 export const PLAYER_SKIN_NAMES = {
-  demon: 'Demon', robot: 'Robot', witch: 'Witch', cowboy: 'Cowboy', nun: 'Nun', knight: 'Knight',
-  bodybuilder: 'Bodybuilder', ghost: 'Ghost', goose: 'Goose', construction: 'Construction',
-  superhero: 'Superhero', ninja: 'Ninja', werewolf: 'Werewolf', zombie: 'Zombie', astronaut: 'Astronaut',
-  mummy: 'Mummy', vampire: 'Vampire', slime: 'Slime', naked: 'Naked', penis: 'Penis',
+  witch: 'Swamp Witch', robotWitch: 'Robot Witch', gothicWitch: 'Gothic Witch',
+  infernalWitch: 'Infernal Witch', iceWitch: 'Ice Witch', ghostWitch: 'Ghost Witch', plagueWitch: 'Plague Witch',
 };
 
 // --- pickups ---
@@ -78,35 +76,28 @@ export function pickupSprite(weapon, color) {
 }
 
 function nadePx(u, v) {
-  // bold front-facing MK2: fat olive body, dark cast bands, yellow spoon + pin (reads at distance)
-  const bx = (u - 0.5) / 0.34, by = (v - 0.58) / 0.36, br = bx * bx + by * by;
+  // potion flask: corked neck, round glowing belly, highlight bubble
+  const neck = u > 0.38 && u < 0.62 && v > 0.08 && v < 0.34;
+  if (neck) {
+    if (v < 0.16) return 3; // cork
+    if (u < 0.42 || u > 0.58) return 2; // glass rim
+    return 4; // liquid in neck
+  }
+  const bx = (u - 0.5) / 0.36, by = (v - 0.62) / 0.34, br = bx * bx + by * by;
   if (br < 1) {
-    const rim = br > 0.78;
-    const bandH = Math.abs(((v - 0.42) * 9) % 1 - 0.5) < 0.14;
-    const bandV = Math.abs(((u - 0.32) * 8) % 1 - 0.5) < 0.12;
-    if (rim) return 2;
-    if (bandH || bandV) return 2;
-    if (bx < -0.25 && by < -0.15 && br < 0.35) return 5; // sheen
-    return ((u * 20 | 0) + (v * 18 | 0)) & 1 ? 1 : 4;
+    if (br > 0.82) return 2; // glass outline
+    if (by < -0.15) return 5; // meniscus / highlight
+    if (Math.hypot(u - 0.38, v - 0.55) < 0.07) return 5; // bubble
+    return ((u * 18 | 0) + (v * 14 | 0)) & 1 ? 1 : 4; // swirling brew
   }
-  // fuze well
-  if (u > 0.4 && u < 0.6 && v > 0.22 && v < 0.38) return 2;
-  // spoon lever (fat yellow bar)
-  if (u > 0.52 && u < 0.86 && v > 0.1 && v < 0.3) {
-    const t = (u - 0.52) / 0.34;
-    if (Math.abs(v - (0.16 + t * 0.06)) < 0.055) return 3;
-  }
-  // pull-pin ring
-  const rd = Math.hypot(u - 0.78, v - 0.14);
-  if (rd > 0.055 && rd < 0.1) return 3;
-  // spark tip on fuze
-  if (Math.hypot(u - 0.5, v - 0.2) < 0.04) return 3;
+  // tiny drip / seal wax under cork
+  if (u > 0.44 && u < 0.56 && v > 0.32 && v < 0.38) return 3;
   return 0;
 }
 const NADE_SPRITE = {
-  w: 0.62, h: 0.72, px: nadePx,
-  pal: [null, [86, 190, 72], [18, 48, 22], [255, 220, 60], [52, 140, 48], [180, 245, 150]],
-  emit: [3, 5],
+  w: 0.55, h: 0.78, px: nadePx,
+  pal: [null, [120, 40, 180], [40, 28, 55], [180, 110, 55], [180, 70, 255], [230, 190, 255]],
+  emit: [1, 4, 5],
 };
 
 // --- hut roof billboard (collision-free; walls are terrain) ---
@@ -181,21 +172,32 @@ const AMMO_CRATE = { w: 0.42, h: 0.3, emit: [3], pal: [null, [74, 82, 44], [34, 
     return 1;
   } };
 
-// --- loot box: a crate seen a little from above, banded in the level's accent color ---
+// --- loot cauldron: iron pot with glowing brew and three feet ---
 function boxPx(u, v) {
-  const top = 0.24;
-  if (v < top) { // lid, narrower toward the back
-    const inset = (top - v) / top * 0.12;
-    if (u < inset || u > 1 - inset) return 0;
-    return u < inset + 0.05 || u > 1 - inset - 0.05 || v < 0.04 ? 2 : 3;
+  // feet
+  if (v > 0.82) {
+    if ([0.22, 0.5, 0.78].some(c => Math.abs(u - c) < 0.07)) return 2;
+    return 0;
   }
-  if (u < 0.07 || u > 0.93 || v < top + 0.06 || v > 0.93) return 2;        // frame
-  if (v > 0.52 && v < 0.6) return 4;                                        // glowing band
-  if (Math.abs(u - 0.5) < 0.06 && v > 0.62) return 2;                       // latch
-  return (u * 9 | 0) % 3 === 0 ? 5 : 1;                                     // planks
+  // rim / handles
+  if (v > 0.12 && v < 0.22) {
+    if (u > 0.08 && u < 0.92) return 3;
+    if ((u > 0.02 && u < 0.12) || (u > 0.88 && u < 0.98)) return 2; // bail ears
+    return 0;
+  }
+  // pot belly
+  const bx = (u - 0.5) / 0.42, by = (v - 0.52) / 0.34, br = bx * bx + by * by;
+  if (br < 1) {
+    if (br > 0.78) return 2; // iron shell
+    if (v < 0.42) return 4; // glowing brew surface
+    if (Math.hypot(u - 0.4, v - 0.38) < 0.06 || Math.hypot(u - 0.62, v - 0.36) < 0.045) return 5; // bubbles
+    return ((u * 11 | 0) ^ (v * 9 | 0)) & 1 ? 1 : 2;
+  }
+  return 0;
 }
 const boxCache = {};
 export function boxSprite(accent) {
-  return boxCache[accent] ??= { w: 0.6, h: 0.5, px: boxPx, emit: [4],
-    pal: [null, [104, 76, 48], [44, 30, 20], [140, 104, 68], accent.split(',').map(Number), [88, 64, 40]] };
+  const brew = accent.split(',').map(Number);
+  return boxCache[accent] ??= { w: 0.72, h: 0.7, px: boxPx, emit: [4, 5],
+    pal: [null, [36, 28, 40], [18, 14, 22], [70, 62, 78], brew, brew.map(c => Math.min(255, c + 80))] };
 }

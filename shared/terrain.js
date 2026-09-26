@@ -77,13 +77,14 @@ export function buildTerrain(MAP, RES, style) {
     const c = at(cx, cy), x = cx + 0.5, y = cy + 0.5, n = hash2(cx, cy);
     if (c === '+') {
       if (style === 'robot' || style === 'haunt' || style === 'castle' || style === 'nuke') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
-      else if (style === 'witch') dome(x, y, 0.6, 0.65, MAT.LEAVES, 0.25);
+      else if (style === 'witch') dome(x, y, 0.7, 0.5, MAT.LEAVES, 0.2);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
     // outdoor huts / lodges — walls only so the interior is walkable; roof is raised afterward
-    if (c === 'B' && (style === 'witch' || style === 'hell' || style === 'ice')) {
-      const wallH = style === 'witch' ? 1.55 : style === 'ice' ? 1.65 : 1.75;
-      const wallMat = style === 'witch' ? MAT.BARK : MAT.ROCK;
+    // hell / ice: one small hut per B cell
+    if (c === 'B' && (style === 'hell' || style === 'ice')) {
+      const wallH = style === 'ice' ? 1.65 : 1.75;
+      const wallMat = MAT.ROCK;
       const t = 0.16, W = 2.2, D = 2.2;
       const x0 = cx - 0.6, y0 = cy - 0.6, x1 = x0 + W, y1 = y0 + D;
       const doorL = x0 + W * 0.28, doorR = x0 + W * 0.72; // wide doorway on +Y
@@ -107,14 +108,13 @@ export function buildTerrain(MAP, RES, style) {
       // rebuild the wall segments after the wipe (wipe can shave wall bottoms on the door edge)
       box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
       box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
-      if (style === 'witch') box(x1 - 0.4, y0 + 0.18, x1 - 0.18, y0 + 0.4, wallH + 0.9, MAT.ROCK);
-      else if (style === 'ice') box(x0 + 0.2, y0 + 0.2, x0 + 0.42, y0 + 0.42, wallH + 0.55, MAT.ROCK);
+      if (style === 'ice') box(x0 + 0.2, y0 + 0.2, x0 + 0.42, y0 + 0.42, wallH + 0.55, MAT.ROCK);
       else box(x1 - 0.45, y1 - 0.45, x1 - 0.22, y1 - 0.22, wallH + 0.4, MAT.LAVA);
       props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir: 1 });
       continue;
     }
-    // nuketown houses: contiguous B cells become one big enterable house; door faces the street
-    if (c === 'B' && style === 'nuke' && !seen.has('B' + cx + ',' + cy)) {
+    // witch cottages + nuketown houses: contiguous B cells become one enterable building
+    if (c === 'B' && (style === 'witch' || style === 'nuke') && !seen.has('B' + cx + ',' + cy)) {
       const cells = [], stack = [[cx, cy]];
       seen.add('B' + cx + ',' + cy);
       while (stack.length) {
@@ -128,10 +128,12 @@ export function buildTerrain(MAP, RES, style) {
       const minX = Math.min(...cells.map(c => c[0])), maxX = Math.max(...cells.map(c => c[0]));
       const minY = Math.min(...cells.map(c => c[1])), maxY = Math.max(...cells.map(c => c[1]));
       const x0 = minX, y0 = minY, x1 = maxX + 1, y1 = maxY + 1;
-      const W = x1 - x0, D = y1 - y0, wallH = 2.1, t = 0.18, wallMat = MAT.WALL;
+      const W = x1 - x0, D = y1 - y0;
+      const wallH = style === 'witch' ? 1.7 : 2.1, t = style === 'witch' ? 0.16 : 0.18;
+      const wallMat = style === 'witch' ? MAT.BARK : MAT.WALL;
       const midY = (minY + maxY) * 0.5;
-      const doorDir = midY < MH / 2 ? 1 : -1; // door toward mid-map street
-      const doorHalf = Math.max(0.85, W * 0.22);
+      const doorDir = midY < MH / 2 ? 1 : -1; // door toward mid-map
+      const doorHalf = Math.max(style === 'witch' ? 0.7 : 0.85, W * 0.22);
       const doorL = x0 + W / 2 - doorHalf, doorR = x0 + W / 2 + doorHalf;
       const clearFloor = (xa, ya, xb, yb) => {
         const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
@@ -163,9 +165,10 @@ export function buildTerrain(MAP, RES, style) {
         box(x0 + t, y0, doorL, y0 + t, wallH, wallMat);
         box(doorR, y0, x1 - t, y0 + t, wallH, wallMat);
       }
-      // chimney
-      box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, MAT.ROCK);
-      // interior cover (kitchen island / couch) so fights inside aren't empty boxes
+      // chimney / cauldron stack
+      if (style === 'witch') box(x1 - 0.4, y0 + 0.18, x1 - 0.18, y0 + 0.4, wallH + 0.9, MAT.ROCK);
+      else box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, MAT.ROCK);
+      // interior cover so fights inside aren't empty boxes
       if (W > 3.5 && D > 2.5) box(x0 + W * 0.38, y0 + D * 0.4, x0 + W * 0.62, y0 + D * 0.58, 0.55, MAT.CRATE);
       props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir, doorHalf });
       continue;
@@ -178,11 +181,13 @@ export function buildTerrain(MAP, RES, style) {
       box(cx + (at(cx - 1, cy) === '#' ? 0 : m), cy + (at(cx, cy - 1) === '#' ? 0 : m),
           cx + 1 - (at(cx + 1, cy) === '#' ? 0 : m), cy + 1 - (at(cx, cy + 1) === '#' ? 0 : m), 1.9, MAT.RACK);
     } else if (style === 'witch') {
-      const tx = x + (n - 0.5) * 0.3, ty = y + (hash2(cy, cx) - 0.5) * 0.3, tr = 0.26;
-      raise(tx - 0.7, ty - 0.7, tx + 0.7, ty + 0.7, (px, py) => {
+      // thick trunk blocks shots; low leaf skirt blocks walking through the canopy without eating eye-height bullets
+      const tx = x + (n - 0.5) * 0.3, ty = y + (hash2(cy, cx) - 0.5) * 0.3, tr = 0.4, canopy = 0.75;
+      raise(tx - 0.9, ty - 0.9, tx + 0.9, ty + 0.9, (px, py) => {
         const d = Math.hypot(px - tx, py - ty);
         if (d < tr) return [2.4, MAT.BARK];
-        if (d < 0.65) return [0.08 * (1 - (d - tr) / (0.65 - tr)) ** 2 * (0.6 + 0.8 * noise(px * 6, py * 6)), MAT.ROOTS]; // root flare: low enough not to trip on
+        if (d < canopy) return [0.48, MAT.LEAVES]; // > STEP_H so you can't walk through; < EYE so guns still work
+        if (d < 0.9) return [0.08 * (1 - (d - canopy) / (0.9 - canopy)) ** 2 * (0.6 + 0.8 * noise(px * 6, py * 6)), MAT.ROOTS];
         return null;
       });
       props.push({ type: 'tree', x: tx, y: ty, h: 2.4, r: 0.95 + 0.35 * n });
@@ -321,41 +326,72 @@ export function groundAt(T, x, y) {
   return g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v;
 }
 
-// floor you stand on: under a hut roof (or in its doorway) this is the ground, not the roof heightmap
-export function walkHeight(T, x, y, z = 0) {
-  const g = groundAt(T, x, y);
+// like groundAt, but blocked cells contribute 0 so tall walls don't lift the floor beside them
+// (that bleed was making eye-height bullets die next to castle walls / cottage roofs)
+function openGroundAt(T, x, y) {
+  const fx = x * T.RES - 0.5, fy = y * T.RES - 0.5;
+  const i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
+  const g = (a, b) => {
+    a = a < 0 ? 0 : a >= T.TW ? T.TW - 1 : a;
+    b = b < 0 ? 0 : b >= T.TH ? T.TH - 1 : b;
+    const k = b * T.TW + a;
+    if (T.kind[k] === 1 || T.mat[k] === MAT.PIT) return 0;
+    return T.hgt[k];
+  };
+  return g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v;
+}
+
+function underHutFloor(T, x, y) {
   for (const p of T.props || []) {
     if (p.type !== 'hut') continue;
-    const hw = (p.w || 2.2) / 2 - 0.12, hd = (p.d || 2.2) / 2 - 0.12;
+    // inset past wall thickness so side walls stay solid for bullets / walking
+    const hw = (p.w || 2.2) / 2 - 0.28, hd = (p.d || 2.2) / 2 - 0.28;
     const fullHd = (p.d || 2.2) / 2;
-    const doorHalf = p.doorHalf || Math.min(hw * 0.7, 1.2);
+    const doorHalf = p.doorHalf || Math.min((p.w || 2.2) / 2 * 0.5, 1.2);
     const doorDir = p.doorDir || 1;
     const inside = Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd;
     const inDoor = Math.abs(x - p.x) < doorHalf && (
-      doorDir > 0 ? (y >= p.y + fullHd - 0.55 && y <= p.y + fullHd + 1.05)
-                  : (y <= p.y - fullHd + 0.55 && y >= p.y - fullHd - 1.05)
+      doorDir > 0 ? (y >= p.y + fullHd - 0.55 && y <= p.y + fullHd + 1.15)
+                  : (y <= p.y - fullHd + 0.55 && y >= p.y - fullHd - 1.15)
     );
-    if (!inside && !inDoor) continue;
-    if (z < g - 0.2) return 0;
+    if ((inside || inDoor) && kindAt(T, x, y) !== 1) return p;
   }
-  return g;
+  return null;
 }
 
-// solid height for bullets / LOS / nades: floor under a roof, otherwise the heightmap
+function underHutRoof(T, x, y) {
+  for (const p of T.props || []) {
+    if (p.type !== 'hut') continue;
+    // slightly past the walls so eaves still count as a ceiling
+    const hw = (p.w || 2.2) / 2 + 0.1, hd = (p.d || 2.2) / 2 + 0.1;
+    if (Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd) return p;
+  }
+  return null;
+}
+
+// floor you stand on: under a hut roof (or in its doorway) this is the ground, not the roof heightmap
+export function walkHeight(T, x, y, z = 0) {
+  const hut = underHutFloor(T, x, y);
+  if (hut) {
+    const roof = Math.max(hut.roof || 0, groundAt(T, x, y));
+    // anywhere under the roof volume is floor 0 — eaves / door skirts used to sit at ~0.7 and eat bullets
+    if (z < roof - 0.1) return 0;
+  }
+  if (kindAt(T, x, y) === 1) return groundAt(T, x, y);
+  return openGroundAt(T, x, y);
+}
+
+// solid height for bullets / LOS / nades: floor under a roof, otherwise open ground (no wall bleed)
 export function solidAt(T, x, y, z = 0) {
   return walkHeight(T, x, y, z);
 }
 
 // underside of a hut roof at (x,y), or null if not under one (for ceiling hits)
 export function ceilingAt(T, x, y) {
-  for (const p of T.props || []) {
-    if (p.type !== 'hut') continue;
-    const hw = (p.w || 2.2) / 2 - 0.05, hd = (p.d || 2.2) / 2 - 0.05;
-    if (Math.abs(x - p.x) >= hw || Math.abs(y - p.y) >= hd) continue;
-    const g = groundAt(T, x, y);
-    if (g > 1.2) return g;
-  }
-  return null;
+  const hut = underHutRoof(T, x, y);
+  if (!hut) return null;
+  const g = groundAt(T, x, y);
+  return g > 1.2 ? g : (hut.roof || null);
 }
 
 export function kindAt(T, x, y) {

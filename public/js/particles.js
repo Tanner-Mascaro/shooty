@@ -15,7 +15,7 @@ export function burst(x, y, z, n, kind) {
 
 export function updateEmbers() {
   const me = S.me, c = S.theme.ambient;
-  while (S.embers.length < 110) {
+  while (S.embers.length < 55) {
     const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 9;
     const life = 3 + Math.random() * 4;
     S.embers.push({ x: me.x + Math.cos(a) * r, y: me.y + Math.sin(a) * r, z: Math.random() * 2.5,

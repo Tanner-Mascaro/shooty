@@ -271,5 +271,5 @@ export function updatePlayer(dt) {
   setSizzle(inPit() ? 0.25 : 0);
   if (inPit() && Math.random() < 0.3) burst(me.x, me.y, me.z, 1, 'fire');
 
-  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
+  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
 }

@@ -1,3 +1,5 @@
+import { PLAYER_SKINS } from '/shared/config.js';
+
 // Your profile lives in this browser: a random secret token (your identity, no password)
 // and a display name. The server keeps the stats; see server/profiles.js.
 const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -18,5 +20,8 @@ export const clearToken = () => { try { localStorage.removeItem('shooty.token');
 
 export const savedName = () => get('shooty.name') || '';
 export const saveName = name => set('shooty.name', name);
-export const savedSkin = () => get('shooty.skin') || 'demon';
-export const saveSkin = skin => set('shooty.skin', skin);
+export const savedSkin = () => {
+  const s = get('shooty.skin');
+  return PLAYER_SKINS.includes(s) ? s : 'witch';
+};
+export const saveSkin = skin => set('shooty.skin', PLAYER_SKINS.includes(skin) ? skin : 'witch');

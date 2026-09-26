@@ -1,12 +1,12 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER } from '/shared/config.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
 import { toast } from './ui.js';
-import { PLAYER_SKIN_NAMES, PLAYER_SKINS, PLAYER_SPRITES } from './render/sprites.js';
+import { PLAYER_SKIN_NAMES, PLAYER_SPRITES } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
 import { LEVELS } from '/shared/levels.js';
 import { buildTerrain, MAT, noise } from '/shared/terrain.js';
@@ -15,9 +15,9 @@ import { muted, toggleMute, voiceOn } from './voice.js';
 
 const $ = id => document.getElementById(id);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const SKINS = PLAYER_SKINS.filter(s => PLAYER_SKIN_NAMES[s] && PLAYER_SPRITES[s]);
+const SKINS = SKIN_ORDER.filter(s => PLAYER_SKIN_NAMES[s] && PLAYER_SPRITES[s]);
 const skinCanvas = {};
-let browsedSkin = 'demon';
+let browsedSkin = 'witch';
 let skinCarouselBuilt = false;
 
 function renderSkinPreview(canvas, skin) {
@@ -134,7 +134,7 @@ function initSkinCarousel() {
     if (scrollTick) return;
     scrollTick = requestAnimationFrame(mark);
   }, { passive: true });
-  browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'demon';
+  browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'witch';
   scrollToSkin(browsedSkin, true);
   updateSkinButton();
 }
@@ -142,7 +142,7 @@ function initSkinCarousel() {
 function updateMapVoteLabel(level) {
   const el = $('mapVote');
   if (!el) return;
-  const names = { hell: 'Hell', robot: 'Robot Factory', witch: 'Witch Swamp', haunt: 'Haunted House', ice: 'Ice Fields', castle: 'Castle Keep', nuke: 'Nuketown' };
+  const names = { witch: 'Witch Swamp', castle: 'Gothic Castle', hell: 'Hell', robot: 'Robot Factory', haunt: 'Haunted House', ice: 'Ice Fields', nuke: 'Nuketown' };
   el.textContent = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
 }
 
@@ -160,7 +160,7 @@ function drawMapPreview(b) {
     c = document.createElement('canvas');
     c.width = T.TW; c.height = T.TH;
     const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
-    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [70, 62, 50], nuke: [70, 75, 55] }[name] || th.minimap[0];
+    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [78, 68, 98], nuke: [70, 75, 55] }[name] || th.minimap[0];
     for (let k = 0; k < T.TW * T.TH; k++) {
       const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
       let r, g, bl;
@@ -246,7 +246,7 @@ export const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.flo
 export const goToRoom = code => { location.href = code ? '?room=' + code : location.pathname; };
 
 export function initRoom() {
-  browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'demon';
+  browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'witch';
   $('chooseSkin').addEventListener('click', () => pickSkin(browsedSkin));
   $('readyBtn').addEventListener('click', () => { initAudio(); send({ type: 'ready' }); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
@@ -365,7 +365,7 @@ export function showRoom() {
     const tag = document.createElement('span');
     tag.className = 'tag';
     const side = teams || (r.mode === 'plague' && r.gameOn) ? teamName(r.mode, p.team) + ' · ' : '';
-    const skin = r.mode === 'plague' && r.gameOn && p.team === PLAGUE_TEAM ? 'Monster' : PLAYER_SKIN_NAMES[p.skin] || 'Demon';
+    const skin = r.mode === 'plague' && r.gameOn && p.team === PLAGUE_TEAM ? 'Monster' : PLAYER_SKIN_NAMES[p.skin] || 'Witch';
     tag.textContent = side + skin + ' · ' + (p.ready ? 'READY' : 'NOT READY');
     li.append(name, tag);
     if (manual && !r.gameOn) {
