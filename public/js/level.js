@@ -1,21 +1,21 @@
 // Loads a level: terrain, precomputed floor colors, minimap image and pickup pads.
 import { RES } from '/shared/config.js';
 import { LEVELS, MW, MH } from '/shared/levels.js';
-import { buildTerrain, findPickups } from '/shared/terrain.js';
+import { buildTerrain, findPickups, MAT, noise } from '/shared/terrain.js';
 import { S } from './state.js';
 import { THEMES } from './themes.js';
 import { pk } from './render/canvas.js';
 import { updateDrone } from './audio.js';
 import { applyLevelUI } from './ui.js';
 
-// per heightmap sample: base color and emissive flag (1 = glowing detail, 2 = pit)
+// per heightmap sample: base color and emissive flag (1 = glowing detail, 2 = pit, 3 = lava on a volcano)
 export const colors = { CR: null, CG: null, CB: null, EM: null };
 export const mini = document.createElement('canvas');
 
 export function setLevel(name) {
   if (!LEVELS[name] || name === S.level) return;
   S.level = name; S.MAP = LEVELS[name]; S.theme = THEMES[name];
-  S.T = buildTerrain(S.MAP, RES);
+  S.T = buildTerrain(S.MAP, RES, name);
   buildColors(); buildMini();
   S.pickupSpots = findPickups(S.MAP);
   S.pickupActive = S.pickupSpots.map(() => true);
@@ -31,19 +31,52 @@ function buildColors() {
   const CR = colors.CR = new Uint8Array(NT), CG = colors.CG = new Uint8Array(NT), CB = colors.CB = new Uint8Array(NT), EM = colors.EM = new Uint8Array(NT);
   const pits = [];
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (MAP[y][x] === 'L') pits.push([x + 0.5, y + 0.5]);
+  // shapes are lit from the side the level's moon / planet is on
+  const lx = Math.cos(theme.orbA) * 0.6, ly = Math.sin(theme.orbA) * 0.6, lz = 0.8;
+  const h = (i, j) => T.hgt[Math.min(T.TH - 1, Math.max(0, j)) * T.TW + Math.min(T.TW - 1, Math.max(0, i))];
   for (let j = 0; j < T.TH; j++) for (let i = 0; i < T.TW; i++) {
-    const k = j * T.TW + i, x = (i + 0.5) / RES, y = (j + 0.5) / RES, n = hash(i, j), kd = T.kind[k];
+    const k = j * T.TW + i, x = (i + 0.5) / RES, y = (j + 0.5) / RES, n = hash(i, j), m = T.mat[k];
     let r, g, b;
-    if (kd === 0) {
+    if (m === MAT.FLOOR) {
       let ld = 99; // distance to nearest pit
       for (const L of pits) ld = Math.min(ld, Math.max(0, Math.max(Math.abs(x - L[0]), Math.abs(y - L[1])) - 0.5));
       const glow = Math.max(0, 1 - ld / 1.5) ** 2;
       [r, g, b] = FLOORS[theme.id](x, y, n, glow, ld, k, EM);
-    } else if (kd === 1) { const v = 0.85 + n * 0.3; r = theme.wallTop[0] * v; g = theme.wallTop[1] * v; b = theme.wallTop[2] * v; }
-    else { r = 255; g = 90; b = 10; EM[k] = 2; }
+    } else if (m === MAT.PIT) { r = 255; g = 90; b = 10; EM[k] = 2; }
+    else {
+      [r, g, b] = SHAPE_COLORS[m](x, y, T.hgt[k], n, theme);
+      if (m === MAT.LAVA) EM[k] = 3;
+      else {
+        // slope shading from the surface normal
+        const dx = (h(i + 1, j) - h(i - 1, j)) * RES / 2, dy = (h(i, j + 1) - h(i, j - 1)) * RES / 2;
+        const shade = 0.45 + 0.75 * Math.max(0, (-dx * lx - dy * ly + lz) / Math.hypot(dx, dy, 1));
+        r *= shade; g *= shade; b *= shade;
+      }
+    }
     CR[k] = Math.min(255, r); CG[k] = Math.min(255, g); CB[k] = Math.min(255, b);
   }
 }
+
+// obstacle surface colors by material: (world x, y, height, noise 0..1, theme) -> [r, g, b]
+const SHAPE_COLORS = {
+  [MAT.ROCK](x, y, h, n) { // volcanic rock with darker strata
+    const v = 0.75 + 0.35 * noise(x * 3, y * 3) + n * 0.1, band = Math.sin(h * 11 + noise(x, y) * 4) > 0.6 ? 0.7 : 1;
+    return [82 * v * band, 38 * v * band, 32 * v * band];
+  },
+  [MAT.LAVA]() { return [255, 90, 10]; },
+  [MAT.BARK](x, y, h, n) { const v = 0.8 + 0.3 * n; return [64 * v, 46 * v, 32 * v]; },
+  [MAT.ROOTS](x, y, h, n) { const v = 0.7 + 0.5 * noise(x * 6, y * 6); return [52 * v, 50 * v, 30 * v]; },
+  [MAT.LEAVES](x, y, h, n) { // bushes and hedges: mottled greens with light speckles
+    const v = 0.6 + 0.6 * noise(x * 5, y * 5);
+    return n > 0.9 ? [90, 140, 60] : [34 * v, 80 * v, 30 * v];
+  },
+  [MAT.WALL](x, y, h, n, theme) { const v = 0.85 + n * 0.3; return theme.wallTop.map(c => c * v); },
+  [MAT.RACK](x, y) { // rack tops: dark with vent slots
+    const vent = (x * 10) % 1 < 0.5 && (y * 3) % 1 < 0.8;
+    return vent ? [22, 25, 30] : [44, 48, 56];
+  },
+  [MAT.CRATE](x, y, h, n) { const v = 0.85 + 0.25 * n; return [118 * v, 94 * v, 46 * v]; },
+};
 
 // floor color per theme: (world x, y, noise 0..1, pit glow 0..1, pit distance, sample index, emissive array) -> [r, g, b]
 const FLOORS = {

@@ -16,7 +16,7 @@ export const BOTS = process.argv.includes('--bots') || !!process.env.BOTS;
 const PLAYER_R = 0.22; // body radius for wall collisions, as in public/js/physics.js
 
 const TERRAINS = {};
-for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES);
+for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES, k); // level key = obstacle style
 
 export class Room {
   constructor(hub, code, isPrivate) {
@@ -65,7 +65,8 @@ export class Room {
         if (M[y][x] !== '.') continue;
         let nearPit = false;
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (M[y + dy][x + dx] === 'L') nearPit = true;
-        if (!nearPit) spots.push({ x: x + 0.5, y: y + 0.5 });
+        // shapes spread past their squares (volcano slopes, cliffs): only spawn on clear flat ground
+        if (!nearPit && !hitsWall(this.T, x + 0.5, y + 0.5, 0.5) && groundAt(this.T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
       }
     if (!avoid.length) return spots[Math.floor(Math.random() * spots.length)];
     // pick one of the 10 spots furthest from the nearest enemy

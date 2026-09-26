@@ -1,7 +1,7 @@
 // Game rules shared by the server and the browser. Tweak balance here.
 
 export const TICK = 1000 / 30;   // server state broadcast interval (ms)
-export const RES = 8;            // heightmap samples per map unit
+export const RES = 12;           // heightmap samples per map unit (higher = smoother shapes)
 export const MAX_HP = 100;
 export const WIN_SCORE = 10;       // free-for-all: first player to this many kills
 export const TEAM_WIN_SCORE = 20;  // teams: first team to this many kills
