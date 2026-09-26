@@ -6,6 +6,7 @@ import { S, owned, spare, gunSlots } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
 import { settings } from './settings.js';
+import { ADS_ZOOM } from './constants.js';
 
 export function switchWeapon(w) {
   if (w === S.weapon || !owned(w)) return;
@@ -54,24 +55,26 @@ export function updateReload() {
   if (!S.reloading && S.started && S.mag[S.weapon] === 0 && now >= S.nextFire[S.weapon] && now >= S.switchUntil) reload();
 }
 
-const canScope = () => S.weapon === 'sniper' && !S.reloading && performance.now() >= S.nextFire.sniper; // not while chambering
+// the sniper scopes in; the rifle, SMG and pistol aim down their iron sights (S.scoped covers both)
+const aimable = () => (S.weapon === 'sniper' || ADS_ZOOM[S.weapon]) && !S.reloading;
+const canScope = () => aimable() && (S.weapon !== 'sniper' || performance.now() >= S.nextFire.sniper); // not while chambering
+const setScoped = on => { S.scoped = on; if (S.weapon === 'sniper') play('scope', on); };
 
-// right mouse button, pressed (down) or released; 'toggle' flips on press, 'hold' scopes while held
+// right mouse button, pressed (down) or released; 'toggle' flips on press, 'hold' aims while held
 export function aim(down) {
   S.aimHeld = down;
   if (settings.ads === 'hold') return; // updateScope does it
-  if (!down || S.weapon !== 'sniper' || S.reloading) return;
+  if (!down || !aimable()) return;
   if (!S.scoped && !canScope()) return;
-  S.scoped = !S.scoped;
-  play('scope', S.scoped);
+  setScoped(!S.scoped);
 }
 
-// hold mode, every frame: scoped exactly while the button is down and the sniper is ready
-// (so it scopes back in by itself once the bolt is cycled after a shot)
+// hold mode, every frame: aimed exactly while the button is down and the gun is ready
+// (so the sniper scopes back in by itself once the bolt is cycled after a shot)
 function updateScope() {
   if (settings.ads !== 'hold') return;
-  const want = S.aimHeld && (S.scoped ? S.weapon === 'sniper' && !S.reloading : canScope());
-  if (want !== S.scoped) { S.scoped = want; play('scope', want); }
+  const want = S.aimHeld && (S.scoped ? aimable() : canScope());
+  if (want !== S.scoped) setScoped(want);
 }
 
 // --- picking things up ---

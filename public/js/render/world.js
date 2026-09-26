@@ -241,7 +241,7 @@ export function drawPlayer(x, y, z, hScale, wScale, flash, glint, tint, skin, ou
   let pal = s.pal;
   if (tint) {
     const key = (skin || S.theme.sprite) + tint;
-    pal = tinted[key] ??= s.pal.map((c, i) => c && (i === 1 || i === 2) ? c.map((v, j) => v * 0.35 + tint[j] * (i === 1 ? 0.65 : 0.4)) : c);
+    pal = tinted[key] ??= s.pal.map((c, i) => c && i >= 1 && i <= 3 ? c.map((v, j) => v * 0.35 + tint[j] * (i === 2 ? 0.4 : 0.65)) : c); // outfit, its shadow and highlight
   }
   drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, pal, s.emit, flash, glint, outline);
 }

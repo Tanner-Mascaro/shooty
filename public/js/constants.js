@@ -1,6 +1,8 @@
 // Client-only tuning. Game rules shared with the server live in /shared/config.js.
 
 export const BASE_FOV = Math.PI / 3, SCOPE_FOV = Math.PI / 14;
+// aiming down sights (right mouse) with these guns zooms the view to this much of the normal FOV
+export const ADS_ZOOM = { pistol: 0.8, smg: 0.75, rifle: 0.65 };
 export const SENS = 0.0025; // mouse sensitivity (radians per pixel)
 
 // Quake-style movement, scaled so 320 qu/s = 3 map units/s

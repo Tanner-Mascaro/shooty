@@ -21,11 +21,11 @@ export const SLIDE = { time: 850, boost: 2.0, friction: 0.05, cooldown: 600, min
 
 // mag: rounds per magazine, reload: ms to reload it
 export const WEAPONS = {
-  pistol:  { dmg: 24,  head: 2,   cd: 200,  spread: 0.012, scopedSpread: 0.012, airSpread: 0.045, mag: 12, reload: 1300 },
-  rifle:   { dmg: 20,  head: 2,   cd: 120,  spread: 0.015, scopedSpread: 0.015, airSpread: 0.05, auto: true, mag: 30, reload: 1600 },
+  pistol:  { dmg: 24,  head: 2,   cd: 200,  spread: 0.012, scopedSpread: 0.006, airSpread: 0.045, mag: 12, reload: 1300 },
+  rifle:   { dmg: 20,  head: 2,   cd: 120,  spread: 0.015, scopedSpread: 0.006, airSpread: 0.05, auto: true, mag: 30, reload: 1600 },
   sniper:  { dmg: 100, head: 1.5, cd: 1400, spread: 0.12,  scopedSpread: 0,     airSpread: 0.08, mag: 4, reload: 2400 },
   shotgun: { dmg: 12,  head: 1.5, cd: 850,  spread: 0.07,  pellets: 8, falloff: 12, mag: 6, reload: 2200 },
-  smg:     { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.03,  airSpread: 0.07, auto: true, mag: 35, reload: 1500 },
+  smg:     { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.018, airSpread: 0.07, auto: true, mag: 35, reload: 1500 },
   blade:   { dmg: 55,  backstab: 150, cd: 450, range: 1.4, melee: true },
 };
 // Every gun's ammo runs out; only the blade needs none. A gun you've emptied completely is gone.

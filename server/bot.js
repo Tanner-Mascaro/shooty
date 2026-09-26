@@ -1,6 +1,7 @@
 // Server-side bot. It wanders between random reachable spots and shoots whatever gun it has
 // (the starting pistol, as it never picks up guns) at the nearest enemy it can see. It refills
 // from ammo crates it happens to walk over. How good it is depends on its level (LEVELS).
+// Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
 import { TICK, EYE, BODY_H, WEAPONS } from '../shared/config.js';
 import { MW, MH } from '../shared/levels.js';
 import { groundAt, kindAt } from '../shared/terrain.js';
@@ -13,6 +14,8 @@ export const BOT_LEVELS = {
   medium: { speed: 2.4, sight: 25, reaction: 400, fireGap: 320, aim: 0.06, turn: 6 },
   hard:   { speed: 2.8, sight: 32, reaction: 200, fireGap: 220, aim: 0.025, turn: 11 },
 };
+
+export const KNIFE_CHANCE = 0.25;
 
 // true if feet can stand at (x, y) coming from height z: no walls, no pits
 function walkable(T, x, y, z) {
@@ -63,14 +66,21 @@ export function botTick(game, p) {
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
   const foe = game.enemies(p).filter(o => canSee(T, p, o, L.sight)).sort((x, y) => dist(x) - dist(y))[0];
 
+  // knife bots run straight at whoever they can see, unless that path just got them stuck
+  const chasing = p.knife && foe && now >= (b.wanderUntil || 0);
+  if (chasing) {
+    b.goal = { x: foe.x, y: foe.y };
+    if (b.stuck > 10) { b.wanderUntil = now + 1500; b.goal = null; }
+  }
   // move toward the current goal, picking a new one on arrival or when blocked
   if (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10) {
     b.goal = pickGoal(game, p); b.stuck = 0;
   }
   let heading = p.a;
-  if (b.goal) {
+  if (b.goal && !(chasing && dist(foe) < 0.8)) { // knife bots stop at arm's length
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
-    const nx = p.x + Math.cos(heading) * L.speed * dt, ny = p.y + Math.sin(heading) * L.speed * dt;
+    const speed = L.speed * (chasing ? 1.2 : 1); // blade out: faster, like a player
+    const nx = p.x + Math.cos(heading) * speed * dt, ny = p.y + Math.sin(heading) * speed * dt;
     if (walkable(T, nx, ny, p.z)) { p.x = nx; p.y = ny; p.z = groundAt(T, nx, ny); }
     else b.stuck++;
   }
@@ -89,6 +99,12 @@ export function botTick(game, p) {
   p.a = turnToward(p.a, Math.atan2(foe.y - p.y, foe.x - p.x), L.turn * dt);
   p.p = (foe.z + BODY_H * 0.55 - (p.z + EYE)) / (d || 1); // bullet pitch is a slope
   if (!game.gameOn || now - b.seenAt < L.reaction || now < b.nextShot) return;
+  if (p.knife) {
+    if (d > WEAPONS.blade.range * 0.9) return;
+    b.nextShot = now + Math.max(WEAPONS.blade.cd, L.fireGap);
+    game.handlers.shoot.call(game, p, { weapon: 'blade' });
+    return;
+  }
   const gun = Object.keys(p.mag)[0];
   if (!gun) return; // out of ammo altogether
   if (!(p.mag[gun] > 0)) { // out: reload, a little after the last shot like a player would

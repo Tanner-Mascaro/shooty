@@ -2,7 +2,7 @@
 import { TICK, EYE, SLIDE } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
-import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
+import { BASE_FOV, SCOPE_FOV, ADS_ZOOM, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
 import { pickupSprite, canopySprite, boxSprite } from './sprites.js';
@@ -48,7 +48,8 @@ function updateCorpses(now, dt) {
 }
 
 function setupCamera() {
-  S.fov += ((S.scoped ? SCOPE_FOV : BASE_FOV) - S.fov) * 0.3;
+  const target = !S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1);
+  S.fov += (target - S.fov) * 0.3;
   const tanH = Math.tan(S.fov / 2) * (1 + S.fovKick), focal = (view.RW / 2) / tanH;
   const ox = S.shake ? (Math.random() - 0.5) * S.shake : 0, oy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
   const a = S.me.a;

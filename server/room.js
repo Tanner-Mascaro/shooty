@@ -5,7 +5,7 @@ import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYE
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
-import { newBrain, botTick, BOT_LEVELS } from './bot.js';
+import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE } from './bot.js';
 import { log } from './log.js';
 import { VERSION } from './version.js';
 
@@ -201,7 +201,7 @@ export class Room {
     if (this.list.length >= MAX_PLAYERS || !BOT_LEVELS[level]) return;
     const id = this.hub.nextId++;
     const skin = PLAYER_SKINS[Math.floor(Math.random() * PLAYER_SKINS.length)];
-    const bot = { id, bot: true, level, skin, brain: newBrain(), a: 0, p: 0, seq: 0 };
+    const bot = { id, bot: true, level, skin, knife: Math.random() < KNIFE_CHANCE, brain: newBrain(), a: 0, p: 0, seq: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
   }

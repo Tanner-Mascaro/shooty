@@ -183,7 +183,7 @@ export function updatePlayer(dt) {
   if (!S.started || !S.me) { setWind(0); setSizzle(0); return; }
   const me = S.me;
 
-  const sens = SENS * settings.sens * (S.scoped ? 0.3 : 1);
+  const sens = SENS * settings.sens * (!S.scoped ? 1 : S.weapon === 'sniper' ? 0.3 : 0.8);
   me.a += S.mouseDX * sens;
   S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens));
   // the gun trails fast mouse movement a little, then settles (see drawViewmodel)
@@ -201,7 +201,7 @@ export function updatePlayer(dt) {
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
-  const wishSpeed = wl > 0 ? MAX_SPEED * (S.scoped ? 0.55 : S.weapon === 'blade' ? 1.15 : 1) : 0;
+  const wishSpeed = wl > 0 ? MAX_SPEED * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
   updateSlide(wx, wy, wl);
   if (S.onGround && held('jump')) { S.vz = JUMP_V; S.onGround = false; play('jump'); }
@@ -248,5 +248,5 @@ export function updatePlayer(dt) {
   setSizzle(inPit() ? 0.25 : 0);
   if (inPit() && Math.random() < 0.3) burst(me.x, me.y, me.z, 1, 'fire');
 
-  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped, sl: S.sliding, seq: S.mySeq });
+  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
 }

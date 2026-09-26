@@ -20,10 +20,10 @@ let browsedSkin = 'demon';
 
 function renderSkinPreview(canvas, skin) {
   const sprite = PLAYER_SPRITES[skin], ctx = canvas.getContext('2d');
-  canvas.width = 36; canvas.height = 54;
+  canvas.width = 40; canvas.height = 60; // 2x the 20 x 30 art, so every pixel stays square
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
-    const color = sprite.pal[sprite.px((x + 0.5) / canvas.width, (y + 0.5) / canvas.height, true)];
+    const color = sprite.pal[sprite.px((x + 0.5) / canvas.width, (y + 0.5) / canvas.height, false)];
     if (!color) continue;
     ctx.fillStyle = 'rgb(' + color.join(',') + ')';
     ctx.fillRect(x, y, 1, 1);
@@ -94,6 +94,7 @@ function initMapCarousel() {
 }
 
 export const inviteLink = code => location.origin + location.pathname + '?room=' + code;
+const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 export const goToRoom = code => { location.href = code ? '?room=' + code : location.pathname; };
 
 export function initRoom() {
@@ -139,7 +140,9 @@ export function initRoom() {
     catch { toast(link); } // clipboard blocked (plain http on another device): show it to copy by hand
   });
   $('quickPlay').addEventListener('click', () => goToRoom(null));
-  $('newRoom').addEventListener('click', () => goToRoom(Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('')));
+  $('newRoom').addEventListener('click', () => goToRoom(newCode()));
+  // leave the match for a lobby of your own (quick play could drop you right back into it)
+  for (const id of ['leaveGame', 'gameLeave']) $(id).addEventListener('click', () => goToRoom(newCode()));
 }
 
 export function showRoom() {
