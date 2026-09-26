@@ -292,6 +292,12 @@ export function initRoom() {
   $('removeBot').addEventListener('click', () => send({ type: 'removeBot', count: 1 }));
   $('removeBots3').addEventListener('click', () => send({ type: 'removeBot', count: 3 }));
   $('clearBots').addEventListener('click', () => send({ type: 'clearBots' }));
+  // kick a specific bot from the roster (event delegation — rows are rebuilt often)
+  $('roster').addEventListener('click', e => {
+    const btn = e.target.closest('[data-kick-bot]');
+    if (!btn || S.room?.gameOn) return;
+    send({ type: 'removeBot', id: +btn.dataset.kickBot });
+  });
 
   $('copyLink').addEventListener('click', async () => {
     if (!S.room) return;
@@ -398,8 +404,19 @@ export function showRoom() {
     tag.className = 'tag';
     const side = teams || (r.mode === 'plague' && r.gameOn) ? teamName(r.mode, p.team) + ' · ' : '';
     const skin = r.mode === 'plague' && r.gameOn && p.team === PLAGUE_TEAM ? 'Monster' : PLAYER_SKIN_NAMES[p.skin] || 'Witch';
-    tag.textContent = side + skin + ' · ' + (p.ready ? 'READY' : 'NOT READY');
+    const botLvl = p.bot && p.level ? p.level.toUpperCase() + ' · ' : '';
+    tag.textContent = side + botLvl + skin + (p.bot ? '' : ' · ' + (p.ready ? 'READY' : 'NOT READY'));
     li.append(name, tag);
+    if (p.bot && !r.gameOn) {
+      const kick = document.createElement('button');
+      kick.type = 'button';
+      kick.className = 'bot-kick';
+      kick.dataset.kickBot = p.id;
+      kick.title = 'Remove ' + p.name;
+      kick.setAttribute('aria-label', 'Remove ' + p.name);
+      kick.textContent = '×';
+      li.append(kick);
+    }
     if (manual && !r.gameOn) {
       const role = document.createElement('select');
       role.className = 'plague-role';
@@ -445,15 +462,25 @@ export function showRoom() {
   updateMapVoteLabel(myVote);
 
   // what's needed before the match can start
-  const ready = r.players.filter(p => p.ready).length, n = r.players.length;
+  const humans = r.players.filter(p => !p.bot);
+  const bots = r.players.filter(p => p.bot);
+  const humanReady = humans.filter(p => p.ready).length;
+  const aloneWithBots = humans.length === 1 && bots.length > 0;
   const btn = $('readyBtn');
-  btn.disabled = !me || me.ready || r.gameOn || S.disconnected || r.plagueSetupValid === false;
-  btn.textContent = me && me.ready ? 'Ready!' : "I'm Here";
+  btn.disabled = !me || me.ready || r.gameOn || S.disconnected || r.plagueSetupValid === false || r.players.length < 2;
+  btn.textContent = me && me.ready
+    ? (aloneWithBots || humanReady >= humans.length ? 'Starting…' : 'Waiting…')
+    : aloneWithBots ? "I'm Ready — Start"
+    : "I'm Ready";
   if (S.disconnected) return;
   $('waitMsg').textContent =
     r.gameOn ? 'Match in progress — joining...'
-    : n < 2 ? 'Waiting for players — send friends the invite link, or fill with bots'
+    : r.players.length < 2 ? 'Waiting for players — send friends the invite link, or add bots'
     : r.plagueSetupValid === false ? 'Choose at least one infected and one healthy player in the list above.'
-    : me && me.ready ? `Waiting for everyone (${ready}/${n}) · votes decide the map and mode`
-    : `Vote a map and mode, then click "I'm Here" (${ready}/${n} ready)`;
+    : me && me.ready ? (aloneWithBots
+      ? 'Starting match…'
+      : `Waiting for players (${humanReady}/${humans.length} ready) · votes decide the map and mode`)
+    : aloneWithBots
+      ? `Vote map & mode, then hit I'm Ready to start vs ${bots.length} bot${bots.length === 1 ? '' : 's'}`
+      : `Vote a map and mode, then click I'm Ready (${humanReady}/${humans.length} ready)`;
 }

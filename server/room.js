@@ -392,9 +392,10 @@ export class Room {
     if (!this.maybeStart()) this.roster(); // the one who wasn't ready left
   }
 
-  // start the match once there are two or more players and all of them are ready; true if it did
+  // start once every human is ready (bots are always ready) and there is someone to fight
   maybeStart() {
-    if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid() || !this.list.every(pl => pl.ready)) return false;
+    if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid()) return false;
+    if (!this.humans.every(pl => pl.ready)) return false;
     this.startGame();
     return true;
   }
@@ -414,10 +415,12 @@ export class Room {
     return true;
   }
 
-  // take out the newest bot; false if there are none
-  dropBot() {
-    const bot = this.list.filter(p => p.bot).pop();
-    if (!bot) return false;
+  // take out one bot by id, or the newest bot if no id; false if there are none
+  dropBot(id) {
+    const bot = id != null
+      ? this.players[id]
+      : this.list.filter(p => p.bot).pop();
+    if (!bot || !bot.bot) return false;
     delete this.players[bot.id];
     if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     log(`${this.hub.name(bot)} left room ${this.code}`);
@@ -804,8 +807,12 @@ Room.prototype.handlers = {
     this.roster();
   },
   removeBot(p, msg) {
-    const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
-    for (let i = 0; i < n; i++) if (!this.dropBot()) break;
+    if (msg.id != null) {
+      this.dropBot(+msg.id);
+    } else {
+      const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+      for (let i = 0; i < n; i++) if (!this.dropBot()) break;
+    }
     if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
   },

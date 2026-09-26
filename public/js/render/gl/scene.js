@@ -105,6 +105,13 @@ export function setLevelWorld(name, T, theme, palette) {
   buildWorld(scene, T, theme, palette);
 }
 
+// build the mesh before the match UI flips, so the first in-game frame isn't a hitch
+export function prewarmWorld(name, T, theme, palette) {
+  if (!name || !T || !theme) return;
+  ensureCanvas();
+  setLevelWorld(name, T, theme, palette);
+}
+
 function worldBuilt() {
   return scene && scene.getObjectByName('terrain');
 }

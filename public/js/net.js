@@ -2,11 +2,12 @@
 import { EYE, HEAL, PLAGUE_TEAM, teamName } from '/shared/config.js';
 import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S, owned, nameOf, gunSlots } from './state.js';
-import { setLevel } from './level.js';
+import { setLevel, colors } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
 import { showWait, hideWait, setWaitText, showMsg, showSummary, banner, toast, pushFeed } from './ui.js';
+import { prewarmWorld } from './render/gl/scene.js';
 import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 import { showFriends, showInvite } from './friends.js';
@@ -93,6 +94,8 @@ const handlers = {
 
   start(msg) {
     setLevel(msg.level);
+    // build the WebGL world before flipping UI so the first frame isn't a hitch
+    try { prewarmWorld(S.level, S.T, S.theme, colors); } catch {}
     S.started = true;
     S.hardpoint = msg.hardpoint || null;
     S.damageIndicators = [];
