@@ -11,7 +11,7 @@ export const PLAYER_SKIN_NAMES = {
   demon: 'Demon', robot: 'Robot', witch: 'Witch', cowboy: 'Cowboy', nun: 'Nun', knight: 'Knight',
   bodybuilder: 'Bodybuilder', ghost: 'Ghost', goose: 'Goose', construction: 'Construction',
   superhero: 'Superhero', ninja: 'Ninja', werewolf: 'Werewolf', zombie: 'Zombie', astronaut: 'Astronaut',
-  mummy: 'Mummy', vampire: 'Vampire', slime: 'Slime', naked: 'Naked',
+  mummy: 'Mummy', vampire: 'Vampire', slime: 'Slime', naked: 'Naked', penis: 'Penis',
 };
 
 // --- pickups ---
