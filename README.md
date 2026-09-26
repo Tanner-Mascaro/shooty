@@ -28,9 +28,11 @@ For remote play run `ngrok http 3000` and share the URL.
 
 Win scores and room size are in `shared/config.js`.
 
-## Solo testing with a bot
+## Bots
 
-`npm run bots` (or `npm start -- --bots` without auto-restart) puts a server-side bot in every new room, and the lobby gets **+ BOT / − BOT** buttons to fill a room for testing free-for-all or teams. Bots are always ready, so just pick a level and click "I'm Here". They leave when the last person does.
+Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.
+
+`npm run bots` (or `npm start -- --bots` without auto-restart) also starts every new room with one bot, for local testing.
 
 - **Roams** between random spots it can walk to in a straight line, avoiding walls and pits
 - **Shoots** the rifle at the nearest enemy it can see within 25 units, after a short reaction delay and with some aim wobble

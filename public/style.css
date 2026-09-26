@@ -89,6 +89,7 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #teamPick .team1 { color:#f88; } #teamPick .team2 { color:#8bf; }
 #teamPick .team1.sel { background:#c33; border-color:#f66; color:#fff; } #teamPick .team2.sel { background:#36c; border-color:#6af; color:#fff; }
 #botCtl { display:flex; gap:8px; margin-top:4px; }
+#botCtl button:disabled { opacity:.35; cursor:default; border-color:var(--line); color:#aab; }
 #botCtl button { flex:0 0 auto; font-size:12px; padding:6px 12px; }
 
 /* roster */

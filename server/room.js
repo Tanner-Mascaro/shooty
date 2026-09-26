@@ -8,9 +8,10 @@ import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
 import { log } from './log.js';
 
-// `node server.js --bots` (or BOTS=1): every room starts with a bot, and the lobby gets
-// add/remove bot buttons (local testing). The flag works in every shell; env vars need
-// different syntax on Windows.
+// Anyone can add bots to a room with the lobby's + BOT / − BOT buttons; they only fill empty
+// seats, so a person joining a full room takes a bot's place. `node server.js --bots` (or
+// BOTS=1) also starts every new room with one (local testing). The flag works in every shell;
+// env vars need different syntax on Windows.
 export const BOTS = process.argv.includes('--bots') || !!process.env.BOTS;
 
 const PLAYER_R = 0.22; // body radius for wall collisions, as in public/js/physics.js
@@ -33,7 +34,7 @@ export class Room {
 
   get list() { return Object.values(this.players); }
   get humans() { return this.list.filter(p => !p.bot); }
-  get full() { return this.list.length >= MAX_PLAYERS; }
+  get full() { return this.humans.length >= MAX_PLAYERS; } // bots give up their seats
   get hasBots() { return this.list.some(p => p.bot); }
 
   // --- messaging ---
@@ -45,7 +46,7 @@ export class Room {
   // who's here, teams and ready state: sent whenever any of it changes
   roster() {
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS,
+      gameOn: this.gameOn, max: MAX_PLAYERS,
       players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, ready: p.ready, bot: !!p.bot })) });
   }
 
@@ -134,6 +135,7 @@ export class Room {
   }
 
   add(p) {
+    if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
     Object.assign(p, { room: this, kills: 0, ready: !!p.bot, seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false });
     p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
@@ -156,11 +158,20 @@ export class Room {
   }
 
   addBot() {
-    if (this.full) return;
+    if (this.list.length >= MAX_PLAYERS) return;
     const id = this.hub.nextId++;
     const bot = { id, bot: true, brain: newBrain(), a: 0, p: 0, seq: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
+  }
+
+  // take out the newest bot; false if there are none
+  dropBot() {
+    const bot = this.list.filter(p => p.bot).pop();
+    if (!bot) return false;
+    delete this.players[bot.id];
+    log(`${this.hub.name(bot)} left room ${this.code}`);
+    return true;
   }
 
   killPlayer(victim, killer, info) {
@@ -293,12 +304,9 @@ Room.prototype.handlers = {
     else this.roster();
   },
 
-  addBot() { if (BOTS) this.addBot(); },
+  addBot() { this.addBot(); },
   removeBot() {
-    const bot = BOTS && this.list.filter(p => p.bot).pop();
-    if (!bot) return;
-    delete this.players[bot.id];
-    log(`${this.hub.name(bot)} left room ${this.code}`);
+    if (!this.dropBot()) return;
     if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
   },
