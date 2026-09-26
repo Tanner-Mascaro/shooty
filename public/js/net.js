@@ -61,6 +61,7 @@ const handlers = {
     document.getElementById('version').textContent = 'v' + msg.version;
     setLevel(msg.level);
     S.me = { x: msg.x, y: msg.y, z: msg.z, a: msg.a, hp: msg.hp };
+    S.damageIndicators = [];
     S.mySeq = msg.seq;
     S.others = {};
     lastRoster = null;
@@ -92,6 +93,7 @@ const handlers = {
   start(msg) {
     setLevel(msg.level);
     S.started = true;
+    S.damageIndicators = [];
     S.myKills = 0;
     S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
     S.jumpsUsed = 0; S.jumpHeld = false; S.quickUntil = 0;
@@ -159,6 +161,7 @@ const handlers = {
           S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false; S.sliding = false; S.slideDip = 0;
           S.jumpsUsed = 0; S.jumpHeld = false;
           S.dashUntil = 0; S.nextDash = 0;
+          S.damageIndicators = [];
         }
         continue;
       }
@@ -211,7 +214,18 @@ const handlers = {
   hit(msg, now) {
     burst(msg.x, msg.y, msg.z, msg.weapon === 'sniper' ? 40 : msg.weapon === 'shotgun' ? 30 : msg.head ? 20 : 12, 'blood');
     if (msg.weapon === 'blade' || msg.weapon === 'claws') playAt('slash', msg.x, msg.y);
-    if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); }
+    if (msg.who === S.myId) {
+      S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6);
+      if (msg.dmg > 0 && S.me) {
+        const other = S.others[msg.by]?.now;
+        const fromX = Number.isFinite(msg.fromX) ? msg.fromX : other?.x ?? msg.x;
+        const fromY = Number.isFinite(msg.fromY) ? msg.fromY : other?.y ?? msg.y;
+        if (Number.isFinite(fromX) && Number.isFinite(fromY)) {
+          S.damageIndicators.push({ angle: Math.atan2(fromY - S.me.y, fromX - S.me.x), t: now });
+          if (S.damageIndicators.length > 8) S.damageIndicators.shift();
+        }
+      }
+    }
     else if (S.others[msg.who]) S.others[msg.who].hitT = now;
     if (msg.by === S.myId) {
       S.hitMarker = 18; S.hitHead = msg.head;

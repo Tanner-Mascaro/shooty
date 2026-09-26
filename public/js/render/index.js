@@ -8,7 +8,7 @@ import { view, present, ensureCanvas } from './canvas.js';
 import { initGL, setLevelWorld, renderGL } from './gl/scene.js';
 import { syncCamera } from './gl/camera.js';
 import { beginEntities, endEntities, drawPickupBillboards, drawOthersAndCorpses, drawParticlePoints } from './gl/entities.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -90,6 +90,7 @@ export function render(dt) {
   drawWeaponView(now);
   drawHitMarker();
   drawFlashes();
+  drawDamageIndicators(now);
   drawBanner(now);
   drawMinimap(now);
   drawSpeed();
