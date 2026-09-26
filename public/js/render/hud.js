@@ -178,8 +178,10 @@ function drawCrosshair() {
 }
 
 export function drawWeaponView(now) {
-  if (S.clawsOnly) drawCrosshair();
-  else if (S.scoped && S.weapon === 'sniper' && S.fov < BASE_FOV * 0.6) drawScope(now);
+  if (S.clawsOnly) {
+    drawViewmodel(now);
+    if (aimAmount() < 0.5) drawCrosshair();
+  } else if (S.scoped && S.weapon === 'sniper' && S.fov < BASE_FOV * 0.6) drawScope(now);
   else { drawViewmodel(now); if (aimAmount() < 0.5) drawCrosshair(); } // aimed: the iron sights are the crosshair
   if (S.muzzle > 0) S.muzzle--;
 }

@@ -126,8 +126,10 @@ export function melee(quick) {
   if (now < S.nextFire[weapon]) return;
   S.nextFire[weapon] = now + WEAPONS[weapon].cd;
   S.swingT = now;
-  if (!S.clawsOnly && quick && S.weapon !== 'blade') { S.quickUntil = now + 320; S.switchUntil = Math.max(S.switchUntil, now + 320); }
+  if (!S.clawsOnly && quick && S.weapon !== 'blade') { S.quickUntil = now + 360; S.switchUntil = Math.max(S.switchUntil, now + 360); }
   S.scoped = false;
+  S.punch = Math.max(S.punch, S.clawsOnly ? 0.08 : 0.05);
+  S.shake = Math.max(S.shake, S.clawsOnly ? 4 : 2.5);
   send({ type: 'shoot', weapon });
   play('swing');
   if (S.clawsOnly) return;

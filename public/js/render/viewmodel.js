@@ -120,6 +120,16 @@ const MODELS = {
     sym(0.0025, 0.0, 0.012, 0.17, 0.19, 's'),
     sym(0.0035, 0.014, 0.022, 0.06, 0.135, 'g'),                      // glowing spine
   ],
+  claws: [
+    // monster forearm
+    sym(0.028, -0.05, 0.04, -0.12, 0.02, 'd'),
+    sym(0.032, -0.055, 0.045, -0.02, 0.08, 'm'),
+    // knuckles
+    ...[-0.028, -0.01, 0.01, 0.028].map(x => box(x - 0.01, x + 0.01, -0.02, 0.035, 0.07, 0.1, 'l')),
+    // long claws
+    ...[-0.028, -0.01, 0.01, 0.028].map((x, i) => box(x - 0.004, x + 0.004, -0.01, 0.03, 0.1, 0.22 + i * 0.01, 's')),
+    ...[-0.028, -0.01, 0.01, 0.028].map(x => box(x - 0.003, x + 0.003, 0.005, 0.025, 0.16, 0.26, 'g')),
+  ],
   deagle: [
     sym(0.018, -0.038, -0.002, -0.02, 0.22, 'm', 'slide'),            // chunky slide
     ...notch(0.004, 0.01, 0.0035).map(p => ({ ...p, anim: 'slide' })),
@@ -234,6 +244,7 @@ const HIP = {
   sniper:   [0.1, -0.07, 0.23, -0.08, 0.18],
   crossbow: [0.1, -0.072, 0.23, -0.08, 0.16],
   blade:    [0.11, -0.085, 0.24, -0.25, 0],
+  claws:    [0.12, -0.09, 0.22, -0.15, 0.1],
 };
 const ADS_Z = { pistol: 0.34, deagle: 0.34, revolver: 0.34, rifle: 0.3, burst: 0.3, carbine: 0.3, smg: 0.3, uzi: 0.32, lmg: 0.28, crossbow: 0.32 };
 const MUZZLE = {
@@ -339,34 +350,35 @@ function outline(bb) {
 export function drawViewmodel(now) {
   fitBuffer();
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
-  const showBlade = S.weapon === 'blade' || now < S.quickUntil, w = showBlade ? 'blade' : S.weapon;
-  const canAds = !showBlade && ADS_Z[w] && S.scoped;
+  const quickBlade = now < S.quickUntil;
+  const w = S.clawsOnly ? 'claws' : quickBlade ? 'blade' : S.weapon;
+  const melee = w === 'blade' || w === 'claws';
+  const canAds = !melee && ADS_Z[w] && S.scoped;
   ads += ((canAds ? 1 : 0) - ads) * Math.min(1, dt * 14);
-  if (!ADS_Z[w] || showBlade) ads = 0;
+  if (!ADS_Z[w] || melee) ads = 0;
 
-  const hip = HIP[w], a = ads, loose = 1 - 0.8 * a;
+  const hip = HIP[w] || HIP.blade, a = ads, loose = 1 - 0.8 * a;
   const moving = S.onGround ? Math.min(S.speed, 4) : 0;
   const bx = Math.sin(S.bobPhase) * moving * 0.004 * loose, by = -Math.abs(Math.cos(S.bobPhase)) * moving * 0.003 * loose;
-  const r = !showBlade && S.reloading, reload = r ? Math.sin(Math.min(1, (now - r.start) / (r.until - r.start)) * Math.PI) : 0;
+  const r = !melee && S.reloading, reload = r ? Math.sin(Math.min(1, (now - r.start) / (r.until - r.start)) * Math.PI) : 0;
   const drawIn = Math.max(0, (S.switchUntil - now) / 350);
   const dip = Math.max(reload, drawIn);
   const kick = S.recoil * (w === 'sniper' || w === 'shotgun' ? 1 : 0.5);
-  // a stab: the knife lunges forward and across
-  const sp = Math.min(1, (now - S.swingT) / 250), sw = showBlade && sp < 1 ? Math.sin(sp * Math.PI) : 0;
+  const swing = meleePose(now);
 
-  const yaw = hip[3] * (1 - a) + S.swayX * 0.012 * loose - sw * 0.5;
-  const pitch = kick * (0.1 + 0.05 * a) - dip * 0.7 - S.swayY * 0.012 * loose + (w === 'blade' ? 0.2 * (1 - sw) : 0);
-  const roll = hip[4] * (1 - a) + dip * 0.5 * (reload ? 1 : 0) + (w === 'blade' ? -0.5 + sw * 0.6 : 0) + (S.slideDip || 0) * 0.3;
+  const yaw = hip[3] * (1 - a) + S.swayX * 0.012 * loose + swing.yaw;
+  const pitch = kick * (0.1 + 0.05 * a) - dip * 0.7 - S.swayY * 0.012 * loose + (melee ? 0.15 : 0) + swing.pitch;
+  const roll = hip[4] * (1 - a) + dip * 0.5 * (reload ? 1 : 0) + (melee ? -0.35 : 0) + (S.slideDip || 0) * 0.3 + swing.roll;
   const t = {
-    x: hip[0] * (1 - a) + bx - sw * 0.08, y: hip[1] * (1 - a) + by - dip * 0.12 - (S.slideDip || 0) * 0.02 + sw * 0.03,
-    z: hip[2] + ((ADS_Z[w] || hip[2]) - hip[2]) * a - kick * 0.04 + sw * 0.12,
+    x: hip[0] * (1 - a) + bx + swing.x, y: hip[1] * (1 - a) + by - dip * 0.12 - (S.slideDip || 0) * 0.02 + swing.y,
+    z: hip[2] + ((ADS_Z[w] || hip[2]) - hip[2]) * a - kick * 0.04 + swing.z,
     cr: Math.cos(roll), sr: Math.sin(roll), cp: Math.cos(pitch), sp: Math.sin(pitch), cy: Math.cos(yaw), sy: Math.sin(yaw),
   };
   const F = (view.RW / 2) / Math.tan(VM_FOV / 2);
 
   // accents glow in the gun's own color (same as its pickup), so you can tell what you're holding
   const m = METAL[S.theme.id] || METAL.hell, accent = GUN_COLOR[w] || S.theme.accent.split(',').map(Number), pulse = 0.8 + 0.2 * Math.sin(now / 250);
-  const pal = { d: hex(m[0]), m: hex(m[1]), l: hex(m[2]), b: [22, 22, 26], w: [92, 60, 38], s: [170, 176, 186],
+  const pal = { d: hex(m[0]), m: hex(m[1]), l: hex(m[2]), b: [22, 22, 26], w: [92, 60, 38], s: w === 'claws' ? [220, 230, 240] : [170, 176, 186],
     g: accent.map(c => c * pulse), x: [110, 200, 255] };
   const bp = now - S.fireT - 450;
   const offs = {
@@ -376,18 +388,67 @@ export function drawViewmodel(now) {
   };
 
   pix.fill(0); zb.fill(0);
-  const bb = drawModel(MODELS[w], t, F, pal, offs);
+  const model = MODELS[w];
+  if (!model) return;
+  const bb = drawModel(model, t, F, pal, offs);
   if (bb[0] > bb[1]) return;
   outline(bb);
   bctx.putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(buf, 0, 0, view.W, view.H);
 
-  if (S.muzzle > 0 && !showBlade) {
+  if (swing.trail > 0.05) drawSlashTrail(swing, w === 'claws');
+
+  if (S.muzzle > 0 && !melee) {
     const [x, y, z] = xf(MUZZLE[w], t), sc = view.W / view.RW;
     const px = (view.RW / 2 + x / z * F) * sc, py = (view.RH / 2 - y / z * F) * sc, u = Math.min(view.W, view.H * 1.6) / 100;
     const rad = (w === 'sniper' || w === 'shotgun' ? 11 : 6) * u * S.muzzle / 6, g = ctx.createRadialGradient(px, py, 0, px, py, rad);
     g.addColorStop(0, 'rgba(255,230,160,0.95)'); g.addColorStop(0.35, 'rgba(255,170,60,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
   }
+}
+
+// wind-up → slash → recover; returns pose offsets + trail strength
+const SWING_MS = 340;
+function meleePose(now) {
+  const sp = Math.min(1, (now - S.swingT) / SWING_MS);
+  if (sp >= 1 || sp <= 0) return { yaw: 0, pitch: 0, roll: 0, x: 0, y: 0, z: 0, trail: 0 };
+  if (sp < 0.2) {
+    const e = (sp / 0.2) ** 2;
+    return { yaw: 0.45 * e, pitch: -0.3 * e, roll: -0.55 * e, x: 0.05 * e, y: 0.03 * e, z: -0.05 * e, trail: 0 };
+  }
+  if (sp < 0.52) {
+    const t = (sp - 0.2) / 0.32, e = t * t * (3 - 2 * t);
+    return {
+      yaw: 0.45 - 1.55 * e, pitch: -0.3 + 0.7 * e, roll: -0.55 + 1.85 * e,
+      x: 0.05 - 0.26 * e, y: 0.03 - 0.08 * e, z: -0.05 + 0.2 * e,
+      trail: Math.sin(t * Math.PI),
+    };
+  }
+  const t = (sp - 0.52) / 0.48, e = 1 - (1 - t) ** 2;
+  return {
+    yaw: -1.1 * (1 - e), pitch: 0.4 * (1 - e), roll: 1.3 * (1 - e),
+    x: -0.21 * (1 - e), y: -0.05 * (1 - e), z: 0.15 * (1 - e),
+    trail: (1 - e) * 0.35,
+  };
+}
+
+// bright arc that follows the slash so the attack reads clearly
+function drawSlashTrail(swing, claws) {
+  const cx = view.W * 0.62, cy = view.H * 0.55, r = Math.min(view.W, view.H) * 0.38;
+  const a0 = -0.9 + swing.yaw * 0.35, a1 = a0 + 1.1 * swing.trail;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = claws ? `rgba(140,255,80,${0.55 * swing.trail})` : `rgba(220,240,255,${0.5 * swing.trail})`;
+  ctx.lineWidth = claws ? 7 : 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, a0, a1);
+  ctx.stroke();
+  ctx.strokeStyle = claws ? `rgba(200,255,120,${0.85 * swing.trail})` : `rgba(255,255,255,${0.75 * swing.trail})`;
+  ctx.lineWidth = claws ? 2.5 : 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.92, a0 + 0.05, a1 - 0.02);
+  ctx.stroke();
+  ctx.restore();
 }
