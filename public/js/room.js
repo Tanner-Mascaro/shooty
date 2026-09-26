@@ -1,5 +1,5 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
-// who's here and ready, bots (local testing), and the ready button.
+// who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
 import { TEAMS } from '/shared/config.js';
 import { S } from './state.js';
@@ -58,7 +58,9 @@ export function showRoom() {
   $('rosterHead').textContent = `PLAYERS ${r.players.length}/${r.max}`;
   $('teamPick').hidden = !teams || r.gameOn;
   document.querySelectorAll('#teamPick button').forEach(b => b.classList.toggle('sel', +b.dataset.team === S.myTeam));
-  $('botCtl').hidden = !r.bots;
+  $('botCtl').hidden = false;
+  $('addBot').disabled = r.players.length >= r.max;
+  $('removeBot').disabled = !r.players.some(p => p.bot);
 
   // what's needed before the match can start
   const me = r.players.find(p => p.id === S.myId), ready = r.players.filter(p => p.ready).length, n = r.players.length;
@@ -68,7 +70,7 @@ export function showRoom() {
   if (S.disconnected) return;
   $('waitMsg').textContent =
     r.gameOn ? 'Match in progress — joining...'
-    : n < 2 ? 'Waiting for players — send friends the invite link'
+    : n < 2 ? 'Waiting for players — send friends the invite link, or add a bot'
     : me && me.ready ? `Waiting for everyone to ready up (${ready}/${n})`
     : `Pick a level, then click "I'm Here" (${ready}/${n} ready)`;
 }
