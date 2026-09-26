@@ -12,6 +12,18 @@ PORT=4000 npm start
 
 For remote play run `ngrok http 3000` and share the URL.
 
+## Solo testing with a bot
+
+`npm run bots` (or `BOTS=1 npm start`) adds a server-side bot as your opponent the moment you connect. It's always ready, so just pick a level and click "I'm Here". It leaves when you do.
+
+- **Roams** between random spots it can walk to in a straight line, avoiding walls and pits
+- **Shoots** the rifle when it can see you within 25 units, after a short reaction delay and with some aim wobble
+- Fires through the same `shoot` handler as a real player, so hits, kills, tracers, sounds and scoring all work normally
+
+Speed, sight range, reaction time, fire rate and aim error are constants at the top of `server/bot.js`.
+
+The game is 1v1, so there's one bot and it takes the second player slot: nobody else can join while `BOTS` is on.
+
 ## Layout
 
 | Path | What's in it |
