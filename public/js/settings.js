@@ -24,7 +24,7 @@ export const ACTIONS = {
 // ads: right click scopes while held ('hold') or until clicked again ('toggle');
 // voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
 const DEFAULTS = {
-  fps: 0, showFps: false, fov: 1, crosshair: 1, showMinimap: true, showFeed: true,
+  fps: 0, showFps: false, fov: 1, crosshair: 1, showMinimap: true, showFeed: true, displayTheme: 'light',
   volume: 1, sfx: 1, ambient: 1, voice: 'ptt', voiceVol: 1, sens: 1, invertY: false, ads: 'toggle',
   keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])),
 };
@@ -47,6 +47,7 @@ function normalize(saved) {
     crosshair: num(saved.crosshair, 0.6, 1.8, DEFAULTS.crosshair),
     showMinimap: typeof saved.showMinimap === 'boolean' ? saved.showMinimap : DEFAULTS.showMinimap,
     showFeed: typeof saved.showFeed === 'boolean' ? saved.showFeed : DEFAULTS.showFeed,
+    displayTheme: ['light', 'dark', 'system'].includes(saved.displayTheme) ? saved.displayTheme : DEFAULTS.displayTheme,
     volume: num(saved.volume, 0, 1, DEFAULTS.volume), sfx: num(saved.sfx, 0, 1, DEFAULTS.sfx),
     ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient),
     sens: num(saved.sens, 0.2, 3, DEFAULTS.sens),
@@ -63,9 +64,22 @@ function load() {
 }
 export const settings = load();
 
+const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)');
+function applyDisplayTheme() {
+  const dark = settings.displayTheme === 'dark' || (settings.displayTheme === 'system' && systemTheme?.matches);
+  document.body.classList.toggle('display-dark', !!dark);
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#080a0e' : '#12100e');
+}
+applyDisplayTheme();
+systemTheme?.addEventListener('change', () => {
+  if (settings.displayTheme === 'system') applyDisplayTheme();
+});
+
 let upload = null;
 function save() {
   try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
+  applyDisplayTheme();
   showControlsHint();
   applyVolume(); applyVoiceVolume(); refreshChat();
   clearTimeout(upload); // sliders fire a lot: send the profile copy once they settle
@@ -78,6 +92,7 @@ export function fromProfile(saved) {
   if (!saved) { send({ type: 'settings', settings }); return; }
   Object.assign(settings, normalize(saved));
   try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
+  applyDisplayTheme();
   showControlsHint();
   applyVolume(); applyVoiceVolume(); syncVoice(); refreshChat();
   if (settingsOpen()) render();
@@ -137,6 +152,7 @@ function render() {
   $('crosshair').value = settings.crosshair;
   $('showMinimap').checked = settings.showMinimap;
   $('showFeed').checked = settings.showFeed;
+  $('displayTheme').value = settings.displayTheme;
   $('sens').value = settings.sens;
   $('invertY').checked = settings.invertY;
   $('ads').value = settings.ads;
@@ -181,6 +197,7 @@ export function initSettings() {
   $('showFps').addEventListener('change', e => { settings.showFps = e.target.checked; save(); });
   $('showMinimap').addEventListener('change', e => { settings.showMinimap = e.target.checked; save(); });
   $('showFeed').addEventListener('change', e => { settings.showFeed = e.target.checked; save(); });
+  $('displayTheme').addEventListener('change', e => { settings.displayTheme = e.target.value; save(); });
   $('invertY').addEventListener('change', e => { settings.invertY = e.target.checked; save(); });
   $('sens').addEventListener('input', e => { settings.sens = +e.target.value; $('sensVal').textContent = settings.sens.toFixed(2) + '×'; save(); });
   $('fov').addEventListener('input', e => { settings.fov = +e.target.value; $('fovVal').textContent = Math.round(settings.fov * 100) + '%'; save(); });
