@@ -34,8 +34,10 @@ export function applyLevelUI(name, theme) {
   const title = $('waitTitle');
   title.textContent = theme.name;
   title.style.color = theme.title;
-  title.style.textShadow = '0 0 18px ' + theme.title;
-  wait.style.background = 'radial-gradient(circle at 50% 40%, ' + theme.bg + ', #000 70%)';
+  title.style.textShadow = '0 0 24px ' + theme.title + ', 0 0 60px rgba(' + theme.accent + ',0.4)';
+  wait.style.setProperty('--accent', theme.title);
+  wait.style.setProperty('--accent-rgb', theme.accent);
+  wait.style.background = 'radial-gradient(ellipse at 50% 0%, ' + theme.bg + ', #050507 65%)';
 }
 
 // center-screen text; fades after 1.5s unless persist
