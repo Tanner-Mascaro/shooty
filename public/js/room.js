@@ -161,7 +161,7 @@ export function initRoom() {
     try { await navigator.clipboard.writeText(link); toast('Invite link copied'); }
     catch { toast(link); } // clipboard blocked (plain http on another device): show it to copy by hand
   });
-  $('quickPlay').addEventListener('click', () => goToRoom(null));
+  $('quickPlay').addEventListener('click', () => { location.href = '?play=1'; });
   $('newRoom').addEventListener('click', () => goToRoom(newCode()));
   // leave the match for a lobby of your own (quick play could drop you right back into it)
   for (const id of ['leaveGame', 'gameLeave']) $(id).addEventListener('click', () => goToRoom(newCode()));

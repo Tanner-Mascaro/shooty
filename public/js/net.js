@@ -21,10 +21,11 @@ export function send(msg) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
 }
 
-// the room code in the page URL (?room=ABCDE) picks the room; none means quick play
+// ?room=ABCDE joins a private room, ?play=1 joins quick play, and bare / stays in the menu.
 export function connect() {
-  const code = new URLSearchParams(location.search).get('room');
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + (code ? '?room=' + encodeURIComponent(code) : ''));
+  const query = new URLSearchParams(location.search), code = query.get('room');
+  const route = code ? '?room=' + encodeURIComponent(code) : query.get('play') === '1' ? '?play=1' : '';
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + route);
   ws.onopen = () => sendHello();
   ws.onclose = () => { S.disconnected = true; setWaitText('Disconnected — refresh to reconnect.'); };
   ws.onerror = () => { S.disconnected = true; setWaitText('Connection failed — refresh to retry.'); };
@@ -63,7 +64,8 @@ const handlers = {
     S.mySeq = msg.seq;
     S.others = {};
     lastRoster = null;
-    history.replaceState(null, '', '?room=' + msg.room); // the address bar is now this room's invite link
+    // only pin the invite link once you're actually in a match room (menu stays bare /)
+    if (msg.room) history.replaceState(null, '', '?room=' + msg.room);
   },
 
   room(msg) {
