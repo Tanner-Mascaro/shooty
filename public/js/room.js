@@ -16,68 +16,125 @@ import { muted, toggleMute, voiceOn } from './voice.js';
 const $ = id => document.getElementById(id);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const SKINS = Object.keys(PLAYER_SKIN_NAMES);
+const skinCanvas = {};
 let browsedSkin = 'demon';
+let skinWheelBuilt = false;
 
 function renderSkinPreview(canvas, skin) {
-  const sprite = PLAYER_SPRITES[skin], ctx = canvas.getContext('2d');
-  canvas.width = 40; canvas.height = 60; // 2x the 20 x 30 art, so every pixel stays square
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
-    const color = sprite.pal[sprite.px((x + 0.5) / canvas.width, (y + 0.5) / canvas.height, false)];
-    if (!color) continue;
-    ctx.fillStyle = 'rgb(' + color.join(',') + ')';
-    ctx.fillRect(x, y, 1, 1);
+  const cached = skinCanvas[skin];
+  if (cached) {
+    canvas.width = cached.width; canvas.height = cached.height;
+    canvas.getContext('2d').drawImage(cached, 0, 0);
+    return;
   }
+  const sprite = PLAYER_SPRITES[skin], ctx = canvas.getContext('2d');
+  const W = 40, H = 60; // 2x the 20 x 30 art
+  canvas.width = W; canvas.height = H;
+  const img = ctx.createImageData(W, H), data = img.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const color = sprite.pal[sprite.px((x + 0.5) / W, (y + 0.5) / H, false)];
+    if (!color) continue;
+    const i = (y * W + x) * 4;
+    data[i] = color[0]; data[i + 1] = color[1]; data[i + 2] = color[2]; data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const copy = document.createElement('canvas');
+  copy.width = W; copy.height = H;
+  copy.getContext('2d').drawImage(canvas, 0, 0);
+  skinCanvas[skin] = copy;
 }
 
-function renderSkinWheel(direction) {
+function updateSkinButton() {
+  const chosen = savedSkin() === browsedSkin;
+  const name = (PLAYER_SKIN_NAMES[browsedSkin] || browsedSkin).toUpperCase();
+  const btn = $('chooseSkin');
+  btn.textContent = chosen ? 'SELECTED · ' + name : 'USE ' + name;
+  btn.disabled = chosen || !!(S.room && S.room.gameOn);
+  btn.classList.toggle('picked', chosen);
+  const status = $('skinStatus');
+  if (status) status.textContent = 'Playing as ' + (PLAYER_SKIN_NAMES[savedSkin()] || savedSkin());
+}
+
+function renderSkinWheel() {
   const current = SKINS.indexOf(browsedSkin), wheel = $('skinWheel');
-  wheel.dataset.direction = direction || '';
   wheel.replaceChildren();
   [-1, 0, 1].forEach(offset => {
     const skin = SKINS[(current + offset + SKINS.length) % SKINS.length];
     const card = document.createElement('div');
     card.className = 'skin-preview' + (offset ? (offset < 0 ? ' side left' : ' side right') : ' front');
+    if (!offset && savedSkin() === skin) card.classList.add('picked');
     const canvas = document.createElement('canvas');
     renderSkinPreview(canvas, skin);
     const label = document.createElement('span');
     label.textContent = PLAYER_SKIN_NAMES[skin];
     card.append(canvas, label);
+    if (!offset) card.addEventListener('click', () => pickSkin(skin));
     wheel.append(card);
   });
-  const chosen = savedSkin() === browsedSkin;
-  $('chooseSkin').textContent = chosen ? 'SELECTED' : 'SELECT CHARACTER';
-  $('chooseSkin').disabled = chosen || !!(S.room && S.room.gameOn);
+  skinWheelBuilt = true;
+  updateSkinButton();
+}
+
+function pickSkin(skin) {
+  if (S.room && S.room.gameOn) return;
+  browsedSkin = skin;
+  if (savedSkin() !== skin) {
+    saveSkin(skin);
+    send({ type: 'skin', skin });
+  }
+  renderSkinWheel();
+}
+
+function browseSkin(dir) {
+  browsedSkin = SKINS[(SKINS.indexOf(browsedSkin) + dir + SKINS.length) % SKINS.length];
+  renderSkinWheel();
+}
+
+function updateMapVoteLabel(level) {
+  const el = $('mapVote');
+  if (!el) return;
+  const names = { hell: 'Hell', robot: 'Robot Factory', witch: 'Witch Swamp', haunt: 'Haunted House', ice: 'Ice Fields', castle: 'Castle Keep' };
+  el.textContent = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
 }
 
 // --- map carousel: scroll or swipe through the maps, arrows step one card; clicking a card picks it ---
 const cards = () => [...document.querySelectorAll('#levels button')];
+const mapPreviewCache = {};
 
-// a top-down picture of each map on its card, shaded by height and material
+// a top-down picture of each map on its card, shaded by height and material (built once)
 function drawMapPreview(b) {
-  const name = b.dataset.level, T = buildTerrain(LEVELS[name], 3, name), th = THEMES[name];
-  const c = document.createElement('canvas');
-  c.className = 'preview'; c.width = T.TW; c.height = T.TH;
-  const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
-  const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [70, 62, 50] }[name] || th.minimap[0];
-  for (let k = 0; k < T.TW * T.TH; k++) {
-    const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
-    let r, g, bl;
-    if (kind === 2) { r = pit[0]; g = pit[1]; bl = pit[2]; }
-    else if (m === MAT.LAVA) { r = 255; g = 90; bl = 20; }
-    else if (kind === 1) {
-      const shade = 0.55 + 0.45 * Math.min(1, h / 2.2), top = th.wallTop || th.wall;
-      const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [50, 55, 65] : m === MAT.CRATE ? [120, 95, 50] : top;
-      const mott = 0.85 + 0.2 * noise((k % T.TW) * 0.4, (k / T.TW | 0) * 0.4);
-      r = base[0] * shade * mott; g = base[1] * shade * mott; bl = base[2] * shade * mott;
-    } else {
-      const mott = 0.8 + 0.3 * noise((k % T.TW) * 0.5, (k / T.TW | 0) * 0.5);
-      r = floor[0] * mott; g = floor[1] * mott; bl = floor[2] * mott;
+  const name = b.dataset.level;
+  if (b.querySelector('canvas.preview')) return;
+  let c = mapPreviewCache[name];
+  if (!c) {
+    const T = buildTerrain(LEVELS[name], 2, name), th = THEMES[name];
+    c = document.createElement('canvas');
+    c.width = T.TW; c.height = T.TH;
+    const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
+    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [70, 62, 50] }[name] || th.minimap[0];
+    for (let k = 0; k < T.TW * T.TH; k++) {
+      const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
+      let r, g, bl;
+      if (kind === 2) { r = pit[0]; g = pit[1]; bl = pit[2]; }
+      else if (m === MAT.LAVA) { r = 255; g = 90; bl = 20; }
+      else if (kind === 1) {
+        const shade = 0.55 + 0.45 * Math.min(1, h / 2.2), top = th.wallTop || th.wall;
+        const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [50, 55, 65] : m === MAT.CRATE ? [120, 95, 50] : top;
+        const mott = 0.85 + 0.2 * noise((k % T.TW) * 0.4, (k / T.TW | 0) * 0.4);
+        r = base[0] * shade * mott; g = base[1] * shade * mott; bl = base[2] * shade * mott;
+      } else {
+        const mott = 0.8 + 0.3 * noise((k % T.TW) * 0.5, (k / T.TW | 0) * 0.5);
+        r = floor[0] * mott; g = floor[1] * mott; bl = floor[2] * mott;
+      }
+      img.data.set([r, g, bl, 255], k * 4);
     }
-    img.data.set([r, g, bl, 255], k * 4);
+    ctx.putImageData(img, 0, 0);
+    mapPreviewCache[name] = c;
   }
-  ctx.putImageData(img, 0, 0);
-  b.prepend(c);
+  const view = document.createElement('canvas');
+  view.className = 'preview'; view.width = c.width; view.height = c.height;
+  view.getContext('2d').drawImage(c, 0, 0);
+  b.prepend(view);
 }
 
 // which card is in the middle of the strip
@@ -92,22 +149,47 @@ export function scrollToMap(name) {
 
 function initMapCarousel() {
   const strip = $('levels');
-  cards().forEach(drawMapPreview);
+  // paint previews one frame each so opening the lobby doesn't hitch
+  const list = cards();
+  let i = 0;
+  const pump = () => {
+    if (i >= list.length) return;
+    drawMapPreview(list[i++]);
+    requestAnimationFrame(pump);
+  };
+  requestAnimationFrame(pump);
   const step = dir => {
-    const list = cards(), i = list.indexOf(centered());
-    scrollToMap(list[(i + dir + list.length) % list.length].dataset.level);
+    const all = cards(), idx = all.indexOf(centered());
+    scrollToMap(all[(idx + dir + all.length) % all.length].dataset.level);
   };
   $('mapPrev').addEventListener('click', () => step(-1));
   $('mapNext').addEventListener('click', () => step(1));
-  // a mouse wheel scrolls the strip sideways
   strip.addEventListener('wheel', e => {
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
     e.preventDefault();
     strip.scrollBy({ left: e.deltaY });
   }, { passive: false });
-  const mark = () => { const c = centered(); cards().forEach(b => b.classList.toggle('centered', b === c)); };
-  strip.addEventListener('scroll', mark);
+  let scrollTick = 0;
+  const mark = () => {
+    scrollTick = 0;
+    const c = centered();
+    cards().forEach(b => b.classList.toggle('centered', b === c));
+  };
+  strip.addEventListener('scroll', () => {
+    if (scrollTick) return;
+    scrollTick = requestAnimationFrame(mark);
+  }, { passive: true });
   requestAnimationFrame(mark);
+}
+
+function setLocalMapVote(level) {
+  cards().forEach(b => {
+    const mine = b.dataset.level === level;
+    b.classList.toggle('sel', mine);
+    b.classList.toggle('voted', mine);
+  });
+  updateMapVoteLabel(level);
+  scrollToMap(level);
 }
 
 export const inviteLink = code => location.origin + location.pathname + '?room=' + code;
@@ -116,22 +198,13 @@ export const goToRoom = code => { location.href = code ? '?room=' + code : locat
 
 export function initRoom() {
   browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'demon';
-  $('skinPrev').addEventListener('click', () => {
-    browsedSkin = SKINS[(SKINS.indexOf(browsedSkin) - 1 + SKINS.length) % SKINS.length];
-    renderSkinWheel('previous');
-  });
-  $('skinNext').addEventListener('click', () => {
-    browsedSkin = SKINS[(SKINS.indexOf(browsedSkin) + 1) % SKINS.length];
-    renderSkinWheel('next');
-  });
-  $('chooseSkin').addEventListener('click', () => {
-    saveSkin(browsedSkin);
-    send({ type: 'skin', skin: browsedSkin });
-    renderSkinWheel();
-  });
+  $('skinPrev').addEventListener('click', () => browseSkin(-1));
+  $('skinNext').addEventListener('click', () => browseSkin(1));
+  $('chooseSkin').addEventListener('click', () => pickSkin(browsedSkin));
   $('readyBtn').addEventListener('click', () => { initAudio(); send({ type: 'ready' }); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
     initAudio();
+    setLocalMapVote(b.dataset.level);
     send({ type: 'vote', level: b.dataset.level });
   }));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
@@ -246,7 +319,9 @@ export function showRoom() {
     return li;
   }));
   $('rosterHead').textContent = `PLAYERS ${r.players.length}/${r.max}`;
-  renderSkinWheel();
+  // only rebuild the wheel once; room updates just refresh the selected label
+  if (!skinWheelBuilt) renderSkinWheel();
+  else updateSkinButton();
   $('teamPick').hidden = !teams || r.gameOn;
   document.querySelectorAll('#teamPick button').forEach(b => b.classList.toggle('sel', +b.dataset.team === S.myTeam));
   $('botCtl').hidden = false;
@@ -254,16 +329,19 @@ export function showRoom() {
   for (const id of ['addBot', 'addBots3', 'fillBots']) $(id).disabled = full || r.gameOn;
   for (const id of ['removeBot', 'removeBots3', 'clearBots']) $(id).disabled = !hasBot || r.gameOn;
 
-  // map vote counts on each card
+  // map vote counts on each card — sel/voted = your pick
   const votes = r.votes || {};
   const myVote = me && me.vote;
   document.querySelectorAll('#levels button').forEach(b => {
     const n = votes[b.dataset.level] || 0;
-    b.classList.toggle('voted', myVote === b.dataset.level);
+    const mine = myVote === b.dataset.level;
+    b.classList.toggle('sel', mine);
+    b.classList.toggle('voted', mine);
     let badge = b.querySelector('.votes');
     if (!badge) { badge = document.createElement('span'); badge.className = 'votes'; b.appendChild(badge); }
-    badge.textContent = n ? n + ' vote' + (n === 1 ? '' : 's') : '';
+    badge.textContent = mine ? (n > 1 ? 'YOUR VOTE · ' + n : 'YOUR VOTE') : (n ? n + ' vote' + (n === 1 ? '' : 's') : '');
   });
+  updateMapVoteLabel(myVote);
 
   // what's needed before the match can start
   const ready = r.players.filter(p => p.ready).length, n = r.players.length;

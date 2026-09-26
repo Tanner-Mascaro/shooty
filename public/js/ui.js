@@ -38,7 +38,8 @@ export function hideWait() {
 }
 
 export function applyLevelUI(name, theme) {
-  document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('sel', b.dataset.level === name));
+  // leading = what the room is on / will play; sel/voted = what you picked (set in showRoom)
+  document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('leading', b.dataset.level === name));
   scrollToMap(name); // the picked map slides to the middle of the carousel
   const title = $('waitTitle');
   title.textContent = theme.name;
