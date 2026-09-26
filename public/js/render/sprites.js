@@ -13,12 +13,6 @@ export const PLAYER_SKIN_NAMES = {
 };
 
 // --- pickups ---
-function healthPx(u, v) {
-  if (u < 0.08 || u > 0.92 || v < 0.08 || v > 0.92) return 0;
-  if ((Math.abs(u - 0.5) < 0.14 && v > 0.18 && v < 0.82) || (Math.abs(v - 0.5) < 0.14 && u > 0.18 && u < 0.82)) return 3;
-  return 1;
-}
-
 // side views, muzzle to the right: [u0, u1, v0, v1, color] boxes, later ones on top.
 // Colors: 1 body (tinted with the gun's color), 2 black metal, 3 glowing accent, 4 wood
 const GUN_SHAPES = {
@@ -67,38 +61,18 @@ function gunPx(w) {
 }
 
 // world size + shape for a floating pickup
+// health / potion / cauldron use Koalerina Cozy Witchcraft 32×32 PNGs (see /img/CREDITS.txt)
 export function pickupSprite(weapon, color) {
   if (weapon === 'ammo') return AMMO_CRATE;
   if (weapon === 'nade') return NADE_SPRITE;
-  if (weapon === 'health') return { w: 0.4, h: 0.4, px: healthPx, pal: [null, [235, 235, 235], null, [230, 30, 30]], emit: [1, 3] };
+  if (weapon === 'health') return HEALTH_SPRITE;
   const g = GUN_SHAPES[weapon] || GUN_SHAPES.pistol, body = color.map(c => 40 + c * 0.35); // each gun's body carries its color
   return { w: g.w, h: g.h, px: gunPx(weapon in GUN_SHAPES ? weapon : 'pistol'), pal: [null, body, [26, 26, 30], color, [110, 70, 40]], emit: [3] };
 }
 
-function nadePx(u, v) {
-  // potion flask: corked neck, round glowing belly, highlight bubble
-  const neck = u > 0.38 && u < 0.62 && v > 0.08 && v < 0.34;
-  if (neck) {
-    if (v < 0.16) return 3; // cork
-    if (u < 0.42 || u > 0.58) return 2; // glass rim
-    return 4; // liquid in neck
-  }
-  const bx = (u - 0.5) / 0.36, by = (v - 0.62) / 0.34, br = bx * bx + by * by;
-  if (br < 1) {
-    if (br > 0.82) return 2; // glass outline
-    if (by < -0.15) return 5; // meniscus / highlight
-    if (Math.hypot(u - 0.38, v - 0.55) < 0.07) return 5; // bubble
-    return ((u * 18 | 0) + (v * 14 | 0)) & 1 ? 1 : 4; // swirling brew
-  }
-  // tiny drip / seal wax under cork
-  if (u > 0.44 && u < 0.56 && v > 0.32 && v < 0.38) return 3;
-  return 0;
-}
-const NADE_SPRITE = {
-  w: 0.55, h: 0.78, px: nadePx,
-  pal: [null, [120, 40, 180], [40, 28, 55], [180, 110, 55], [180, 70, 255], [230, 190, 255]],
-  emit: [1, 4, 5],
-};
+const HEALTH_SPRITE = { w: 0.55, h: 0.55, src: '/img/health-potion.png' };
+const NADE_SPRITE = { w: 0.55, h: 0.55, src: '/img/potion.png' };
+const AMMO_CRATE = { w: 0.5, h: 0.5, src: '/img/ammo.png' };
 
 // --- hut roof billboard (collision-free; walls are terrain) ---
 // Sprite v=0 is the top of the billboard, v=1 the bottom (sits on the walls).
@@ -162,52 +136,7 @@ export function canopySprite(variant) {
   });
 }
 
-// --- small ammo crate: olive box with a brass band and a bullet stencil ---
-const AMMO_CRATE = { w: 0.42, h: 0.3, emit: [3], pal: [null, [74, 82, 44], [34, 38, 20], [230, 200, 90], [104, 114, 62]],
-  px(u, v) {
-    if (u < 0.06 || u > 0.94 || v < 0.08 || v > 0.94) return 2;
-    if (v < 0.24) return 4;                                                 // lid
-    if (v > 0.44 && v < 0.54) return 3;                                     // brass band
-    if (v > 0.6 && v < 0.86 && [0.3, 0.5, 0.7].some(c => Math.abs(u - c) < 0.04)) return 3; // rounds
-    return 1;
-  } };
-
-// --- classic black loot cauldron: iron pot, bail, three feet, green brew ---
-function boxPx(u, v) {
-  // three feet
-  if (v > 0.86) {
-    if ([0.22, 0.5, 0.78].some(c => Math.abs(u - c) < 0.07)) return v > 0.95 ? 2 : 1;
-    return 0;
-  }
-  // arched bail
-  if (v < 0.16) {
-    const hx = (u - 0.5) / 0.4, hy = (v - 0.16) / 0.14;
-    const r = hx * hx + hy * hy;
-    if (r < 1 && r > 0.52 && Math.abs(hx) > 0.18) return 3;
-    return 0;
-  }
-  // rim
-  if (v < 0.28) {
-    if (u < 0.08 || u > 0.92) return Math.abs(u - 0.5) > 0.38 ? 1 : 0; // ears
-    if (u > 0.12 && u < 0.88) return v < 0.2 ? 3 : 2;
-    return 0;
-  }
-  // round belly
-  const bx = (u - 0.5) / 0.42, by = (v - 0.56) / 0.34, br = bx * bx + by * by;
-  if (br >= 1) return 0;
-  if (br > 0.78) return 2; // outer lip
-  if (v < 0.44) {
-    // brew surface
-    if (Math.hypot(u - 0.4, v - 0.34) < 0.05 || Math.hypot(u - 0.6, v - 0.36) < 0.035) return 5;
-    return 4;
-  }
-  return br > 0.55 ? 1 : 2; // dark body with slight depth
-}
-let classicCauldron = null;
+// --- loot cauldron billboard (Cozy Witchcraft 32×32 at /img/cauldron.png) ---
 export function boxSprite() {
-  // classic black iron + toxic green brew (not theme-tinted)
-  return classicCauldron ??= {
-    w: 0.78, h: 0.74, px: boxPx, emit: [4, 5],
-    pal: [null, [22, 22, 24], [6, 6, 8], [70, 70, 74], [36, 170, 48], [160, 255, 130]],
-  };
+  return { w: 0.72, h: 0.72, src: '/img/cauldron.png' };
 }

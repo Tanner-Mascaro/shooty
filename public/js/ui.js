@@ -1,8 +1,9 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
-import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP } from '/shared/config.js';
+import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS } from '/shared/config.js';
 import { LEVEL_NAMES } from '/shared/levels.js';
-import { S, nameOf, isEnemy } from './state.js';
+import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
+import { MAX_SPEED } from './constants.js';
 import { initRoom, showRoom, scrollToMap } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
@@ -218,6 +219,34 @@ export function updateHud() {
     $('plagueObjective').textContent = `${healthy} healthy remaining · ${infected ? 'Infect everyone' : 'Survive until time runs out'}`;
   }
   drawScores();
+  updateSpeedHud();
+  updateAmmoHud();
   $('feed').hidden = !settings.showFeed;
   if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
+}
+
+function updateSpeedHud() {
+  const el = $('speedHud');
+  if (!el) return;
+  const n = Math.round(S.speed * 320 / MAX_SPEED);
+  el.textContent = n + ' u/s';
+  el.classList.toggle('fast', S.speed > MAX_SPEED + 0.1);
+}
+
+function updateAmmoHud() {
+  const el = $('ammoHud'), w = S.weapon;
+  if (!el) return;
+  if (w === 'blade' || w === 'claws' || !WEAPONS[w]) { el.hidden = true; return; }
+  el.hidden = false;
+  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w);
+  $('ammoWeapon').textContent = w;
+  const count = $('ammoCount');
+  count.innerHTML = '';
+  count.append(document.createTextNode(String(mag)));
+  const spareEl = document.createElement('span');
+  spareEl.className = 'spare';
+  spareEl.textContent = ' / ' + left;
+  count.append(spareEl);
+  count.classList.toggle('empty', mag === 0);
+  count.classList.toggle('low', mag > 0 && mag <= full / 4);
 }

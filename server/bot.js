@@ -27,12 +27,14 @@ const GUN_RANGES = {
   lmg: [9, 16], crossbow: [10, 19], sniper: [13, 23],
 };
 
-// random human-looking names for bots (not "Bot 3")
-const FIRST = ['Ash', 'Blake', 'Casey', 'Drew', 'Eden', 'Finn', 'Gray', 'Harper', 'Indie', 'Jules',
-  'Kai', 'Lane', 'Morgan', 'Nova', 'Oak', 'Parker', 'Quinn', 'Remy', 'Sage', 'Tate',
-  'Vale', 'Wren', 'York', 'Zane', 'Ari', 'Beau', 'Cruz', 'Dale', 'Echo', 'Fox'];
-const LAST = ['Cole', 'Voss', 'Reed', 'Shaw', 'Pike', 'Cross', 'Stone', 'Frost', 'Drake', 'Hayes',
-  'Kane', 'Lane', 'Moss', 'Nash', 'Page', 'Quinn', 'Rook', 'Steel', 'Vance', 'West'];
+// random witchy names for bots (not "Bot 3")
+const FIRST = ['Willow', 'Raven', 'Nyx', 'Luna', 'Briar', 'Thorn', 'Ivy', 'Circe', 'Hex',
+  'Rowan', 'Sable', 'Vesper', 'Aster', 'Fern', 'Hazel', 'Onyx', 'Rue', 'Twyla',
+  'Yarrow', 'Agatha', 'Morrigan', 'Elspeth', 'Juniper', 'Coven', 'Wisp', 'Bramble',
+  'Hecate', 'Morgana', 'Selene', 'Ophelia'];
+const LAST = ['Grim', 'Crowe', 'Shade', 'Bramble', 'Ashwood', 'Night', 'Hollow',
+  'Boggs', 'Dusk', 'Ember', 'Grave', 'Hexwell', 'Thorn', 'Wyrd', 'Moss',
+  'Raven', 'Spell', 'Blackwood', 'Fog', 'Cinder'];
 export function randomBotName(taken = new Set()) {
   for (let i = 0; i < 40; i++) {
     const n = FIRST[Math.floor(Math.random() * FIRST.length)] + ' ' + LAST[Math.floor(Math.random() * LAST.length)];

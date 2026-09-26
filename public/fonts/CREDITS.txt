@@ -1,0 +1,9 @@
+Caslon Antique
+Source: 1001fonts.com
+License: 1001Fonts Free For Commercial Use (FFC) — see 1001fonts-caslon-antique-eula.txt
+Files: CaslonAntique.ttf, CaslonAntique-Bold.ttf, CaslonAntique-Italic.ttf, CaslonAntique-BoldItalic.ttf
+
+Scroll UI Container
+Artist: Chloe Wolfe / Cairo Creative Studios
+License: CC0
+Source: https://opengameart.org/content/scroll-ui-container

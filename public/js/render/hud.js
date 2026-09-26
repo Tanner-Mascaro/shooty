@@ -3,7 +3,7 @@
 import { MW, MH } from '/shared/levels.js';
 import { WEAPONS, GUN_SLOTS, EYE, BODY_H } from '/shared/config.js';
 import { S, spare, isEnemy, nameOf } from '../state.js';
-import { BASE_FOV, SCOPE_FOV, MAX_SPEED, GUN_COLOR } from '../constants.js';
+import { BASE_FOV, SCOPE_FOV, GUN_COLOR } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
@@ -44,12 +44,12 @@ export function drawTracers(now) {
       }
     } else if (t.weapon === 'beam') {
       const k = 1 - age / 520, hot = Math.max(0, 1 - age / 120);
-      line(A, B, 'rgba(160,40,140,' + (k * 0.4) + ')', 5 + age / 80);
+      line(A, B, 'rgba(120,40,100,' + (k * 0.4) + ')', 5 + age / 80);
       if (hot > 0) {
-        line(A, B, 'rgba(255,60,220,' + (hot * 0.85) + ')', 6);
-        line(A, B, 'rgba(255,220,250,' + hot + ')', 2);
+        line(A, B, 'rgba(160,70,140,' + (hot * 0.75) + ')', 6);
+        line(A, B, 'rgba(220,180,210,' + hot + ')', 2);
       }
-    } else line(A, B, 'rgba(255,210,120,' + (0.7 * (1 - age / 90)) + ')', 1.5);
+    } else line(A, B, 'rgba(200,160,100,' + (0.65 * (1 - age / 90)) + ')', 1.5);
   }
 }
 
@@ -59,20 +59,20 @@ export function drawPickupGlows() {
     const q = project(p.x, p.y, 0.05);
     if (q.f < 0.3 || occluded(q)) return;
     const on = S.pickupActive[i];
-    const r = p.weapon === 'ammo' ? 0.5 : 1; // crates get a small glow, only while there
+    const r = p.weapon === 'ammo' ? 0.65 : 1; // candles get a smaller glow
     if (on || r === 1) glow(q.x, q.y, (on ? 260 : 120) * r / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
-  for (const b of S.boxes) { // classic cauldrons glow green brew
+  for (const b of S.boxes) { // cauldrons glow swamp green brew
     const q = project(b.x, b.y, b.z + 0.4);
     if (q.f < 0.3 || occluded(q)) continue;
     const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 220 + b.id);
-    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(50,220,70,' + (0.32 + 0.18 * pulse) + ')');
+    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(60,120,50,' + (0.28 + 0.14 * pulse) + ')');
   }
   for (const n of S.thrown || []) {
     const q = project(n.x, n.y, n.z);
     if (q.f < 0.3 || occluded(q)) continue;
     const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 90 + n.id);
-    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(255,210,60,' + (0.35 + 0.35 * pulse) + ')');
+    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(122,80,136,' + (0.3 + 0.25 * pulse) + ')');
   }
 }
 
@@ -103,7 +103,7 @@ export function drawNameTags() {
     ctx.font = 'bold ' + Math.round(Math.max(11, Math.min(16, 40 / p.f + 9))) + 'px Courier New';
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillText(nameOf(+id), p.x + 1, p.y + 1);
-    ctx.fillStyle = enemy ? '#ff6655' : '#66aaff';
+    ctx.fillStyle = enemy ? '#b05050' : '#9a78b8';
     ctx.fillText(nameOf(+id), p.x, p.y);
   }
   ctx.textAlign = 'left';
@@ -157,7 +157,7 @@ function drawScope(now) {
 
   // lit center: small red dot with a soft glow, pulsing faintly
   glow(cx, cy, 10, 'rgba(255,40,30,' + (0.35 + 0.1 * Math.sin(now / 300)) + ')');
-  ctx.fillStyle = '#ff3a2a'; ctx.beginPath(); ctx.arc(cx, cy, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#a84840'; ctx.beginPath(); ctx.arc(cx, cy, 1.8, 0, Math.PI * 2); ctx.fill();
 
   // bolt still cycling after a shot: a thin arc around the edge fills up
   const left = S.nextFire.sniper - now, cd = WEAPONS.sniper.cd;
@@ -240,9 +240,9 @@ export function drawFlashes() {
     ctx.fillStyle = 'rgba(' + rgb + ',' + (S[key] / frames * max) + ')'; ctx.fillRect(0, 0, W, H);
     S[key]--;
   };
-  flash('killFlash', 10, '255,230,200', 0.25);
-  flash('hitFlash', 8, '255,0,0', 0.35);
-  flash('healFlash', 10, '80,255,120', 0.2);
+  flash('killFlash', 10, '200,180,140', 0.2);
+  flash('hitFlash', 8, '140,40,40', 0.3);
+  flash('healFlash', 10, '60,110,70', 0.18);
   if (inPit()) {
     const o = S.theme.pitOverlay, v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7);
     v.addColorStop(0, 'rgba(' + o + ',0.05)'); v.addColorStop(1, 'rgba(' + o + ',0.55)');
@@ -258,16 +258,9 @@ export function drawBanner(now) {
   ctx.save(); ctx.translate(view.W / 2, view.H * 0.3); ctx.scale(sc, sc);
   ctx.font = 'bold 40px Courier New'; ctx.textAlign = 'center';
   ctx.shadowColor = 'rgb(' + S.theme.accent + ')'; ctx.shadowBlur = 20;
-  ctx.fillStyle = S.bannerGold ? 'rgba(255,200,60,' + a + ')' : 'rgba(255,90,60,' + a + ')';
+  ctx.fillStyle = S.bannerGold ? 'rgba(122,80,136,' + a + ')' : 'rgba(168,64,64,' + a + ')';
   ctx.fillText(S.bannerText, 0, 0);
   ctx.restore();
-}
-
-export function drawSpeed() {
-  ctx.font = 'bold 16px Courier New'; ctx.textAlign = 'center';
-  ctx.fillStyle = S.speed > MAX_SPEED + 0.1 ? '#6f6' : '#aaa';
-  ctx.fillText(Math.round(S.speed * 320 / MAX_SPEED) + ' u/s', view.W / 2, view.H - 40);
-  ctx.textAlign = 'left';
 }
 
 // rotating minimap (forward is up) with the weapon list under it
@@ -276,7 +269,12 @@ export function drawMinimap(now) {
   const size = Math.min(230, Math.round(Math.min(W, H) * 0.3)), mx = W - size - 12, my = 12, cx = mx + size / 2, cy = my + size / 2, ms = size / 20;
   if (settings.showMinimap) {
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(mx, my, size, size);
+    // parchment panel + wood rim
+    ctx.fillStyle = 'rgba(232, 212, 170, 0.88)';
+    ctx.fillRect(mx - 4, my - 4, size + 8, size + 8);
+    ctx.strokeStyle = '#6a4a28'; ctx.lineWidth = 3; ctx.strokeRect(mx - 4, my - 4, size + 8, size + 8);
+    ctx.strokeStyle = 'rgba(196, 160, 96, 0.7)'; ctx.lineWidth = 1; ctx.strokeRect(mx - 1, my - 1, size + 2, size + 2);
+    ctx.fillStyle = 'rgba(42, 30, 18, 0.55)'; ctx.fillRect(mx, my, size, size);
     ctx.beginPath(); ctx.rect(mx, my, size, size); ctx.clip();
     ctx.translate(cx, cy);
     ctx.rotate(-me.a - Math.PI / 2);
@@ -293,88 +291,78 @@ export function drawMinimap(now) {
     ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
     for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
     for (const n of S.thrown) {
-      ctx.fillStyle = '#2a2'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.38, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#8f8'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ff0'; ctx.beginPath(); ctx.arc(n.x + 0.12, n.y - 0.14, 0.1, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#4a2860'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.38, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#7a5088'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#c07070'; ctx.beginPath(); ctx.arc(n.x + 0.12, n.y - 0.14, 0.1, 0, Math.PI * 2); ctx.fill();
     }
     for (const [id, o] of Object.entries(S.others)) {
       if (!o.now) continue;
-      ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';
+      ctx.fillStyle = isEnemy(+id) ? '#a83838' : '#6a5088';
       ctx.beginPath(); ctx.arc(o.now.x, o.now.y, 0.3, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
-    ctx.fillStyle = '#fa4'; // you: arrow pointing up
+    ctx.fillStyle = '#8b1e2d'; // you: arrow pointing up
     ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 5, cy + 6); ctx.lineTo(cx - 5, cy + 6); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.85)'; ctx.lineWidth = 3; ctx.strokeRect(mx, my, size, size);
-    ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '700 12px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const [label, angle] of [['N', -Math.PI / 2], ['E', 0], ['S', Math.PI / 2], ['W', Math.PI]]) {
       const screenAngle = angle - me.a - Math.PI / 2;
       const dx = Math.cos(screenAngle), dy = Math.sin(screenAngle), edge = size / 2 - 8;
       const scale = edge / Math.max(Math.abs(dx), Math.abs(dy));
       const x = cx + dx * scale, y = cy + dy * scale;
       const highlighted = label === 'N';
-      ctx.fillStyle = highlighted ? 'rgb(' + S.theme.accent + ')' : 'rgba(0,0,0,0.92)'; ctx.fillRect(x - 9, y - 9, 18, 18);
-      ctx.strokeStyle = highlighted ? '#fff' : 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1; ctx.strokeRect(x - 9, y - 9, 18, 18);
-      ctx.fillStyle = '#fff'; ctx.fillText(label, x, y + 0.5);
+      ctx.fillStyle = highlighted ? 'rgba(232, 212, 170, 0.95)' : 'rgba(42, 30, 18, 0.85)'; ctx.fillRect(x - 9, y - 9, 18, 18);
+      ctx.strokeStyle = highlighted ? '#8b1e2d' : 'rgba(168, 136, 88, 0.9)'; ctx.lineWidth = 1; ctx.strokeRect(x - 9, y - 9, 18, 18);
+      ctx.fillStyle = highlighted ? '#8b1e2d' : '#f0e6d0'; ctx.fillText(label, x, y + 0.5);
     }
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   }
 
-  ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';
-  const listY = settings.showMinimap ? my + size : my;
+  ctx.font = '700 14px Caslon Antique, Georgia, serif'; ctx.textAlign = 'right';
+  const row = 26;
+  const listY = settings.showMinimap ? my + size + 10 : my;
   if (S.clawsOnly) {
-    ctx.fillStyle = '#a9e66c';
-    ctx.fillText('CLAWS', mx + size, listY + 22);
-    ctx.font = '12px Courier New'; ctx.fillStyle = '#ddd';
-    ctx.fillText('Hold left click: attack', mx + size, listY + 44);
-    ctx.fillText(key('jump') + ' twice: double jump', mx + size, listY + 62);
+    ctx.fillStyle = '#5a8a48';
+    ctx.fillText('CLAWS', mx + size, listY + row);
     const cooldown = Math.max(0, S.nextDash - now);
-    ctx.fillStyle = cooldown ? '#aaa' : '#a9e66c';
-    ctx.fillText(key('slide') + ' dash: ' + (cooldown ? (cooldown / 1000).toFixed(1) + 's' : 'READY'), mx + size, listY + 80);
+    ctx.fillStyle = cooldown ? '#7a6a58' : '#5a8a48';
+    ctx.fillText(key('slide') + ' ' + (cooldown ? (cooldown / 1000).toFixed(1) + 's' : 'READY'), mx + size, listY + row * 2);
     ctx.textAlign = 'left';
     return;
   }
   const slots = GUN_SLOTS + 1; // two guns, then the blade
   for (let i = 1; i <= slots; i++) {
     const w = slotWeapon(i), ammo = w && w !== 'blade' ? ' ' + S.mag[w] + '/' + spare(w) : '';
-    ctx.fillStyle = w && w === S.weapon ? '#fc6' : w ? '#aaa' : '#444';
-    ctx.fillText((w && w === S.weapon ? '> ' : '') + key('slot' + i) + ' ' + (w ? w.toUpperCase() : 'EMPTY') + ammo, mx + size, listY + 22 * i);
+    ctx.fillStyle = w && w === S.weapon ? '#7a5088' : w ? '#c8b898' : '#6a5a48';
+    ctx.fillText((w && w === S.weapon ? '> ' : '') + (w ? w.toUpperCase() : '—') + ammo, mx + size, listY + row * i);
   }
-  ctx.font = '12px Courier New'; ctx.fillStyle = '#777';
-  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' switch · ' + key('nade') + ' potion', mx + size, listY + 22 * (slots + 1));
   if (S.nades > 0) {
-    ctx.font = 'bold 14px Courier New'; ctx.fillStyle = '#c8a0ff';
-    ctx.fillText('POTIONS ' + S.nades, mx + size, listY + 22 * (slots + 2));
+    ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#7a5088';
+    ctx.fillText('POTIONS ' + S.nades, mx + size, listY + row * (slots + 1));
   }
   const cd = WEAPONS[S.weapon].cd, left = S.nextFire[S.weapon] - now; // chamber bar for slow guns
-  if (settings.showMinimap && cd > 400 && left > 0 && !S.reloading) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
+  if (settings.showMinimap && cd > 400 && left > 0 && !S.reloading) {
+    ctx.fillStyle = 'rgba(232, 212, 170, 0.5)'; ctx.fillRect(mx, my + size + 6, size, 4);
+    ctx.fillStyle = '#8b1e2d'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 4);
+  }
   ctx.textAlign = 'left';
 }
 
-// big ammo count, bottom right, and the reload bar under the crosshair
+// reload / low-ammo prompts under the crosshair (mag count is DOM #ammoHud)
 export function drawAmmo(now) {
   const { W, H } = view, w = S.weapon;
   if (w === 'blade' || w === 'claws') return;
-  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w), tail = ' / ' + left;
-  ctx.textAlign = 'right'; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
-  ctx.font = 'bold 20px Courier New'; ctx.fillStyle = '#aaa';
-  ctx.fillText(tail, W - 20, H - 24);
-  const tw = ctx.measureText(tail).width;
-  ctx.font = 'bold 40px Courier New'; ctx.fillStyle = mag === 0 ? '#f55' : mag <= full / 4 ? '#fc6' : '#fff';
-  ctx.fillText(mag, W - 20 - tw, H - 24);
-  ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#999';
-  ctx.fillText(w.toUpperCase(), W - 20, H - 70);
-  ctx.shadowBlur = 0; ctx.textAlign = 'center';
+  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w);
+  ctx.textAlign = 'center';
   const r = S.reloading, y = H / 2 + 44;
   if (r) {
     const k = Math.min(1, (now - r.start) / (r.until - r.start)), bw = 120;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(W / 2 - bw / 2, y, bw, 5);
+    ctx.fillStyle = 'rgba(42,30,18,0.55)'; ctx.fillRect(W / 2 - bw / 2, y, bw, 5);
     ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(W / 2 - bw / 2, y, bw * k, 5);
-    ctx.font = 'bold 12px Courier New'; ctx.fillStyle = '#ddd'; ctx.fillText('RELOADING', W / 2, y - 6);
+    ctx.font = '700 12px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#f0e6d0'; ctx.fillText('RELOADING', W / 2, y - 6);
   } else if (mag <= full / 4 && left > 0) {
-    ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#fc6'; ctx.fillText(key('reload') + ' RELOAD', W / 2, y);
+    ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#a88850'; ctx.fillText('RELOAD', W / 2, y);
   } else if (mag <= full / 4) {
-    ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#f55'; ctx.fillText(mag ? 'LOW AMMO' : 'NO AMMO — find an ammo crate', W / 2, y);
+    ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#a84848'; ctx.fillText(mag ? 'LOW AMMO' : 'NO AMMO', W / 2, y);
   }
   ctx.textAlign = 'left';
 }
@@ -390,8 +378,8 @@ export function drawUsePrompt() {
   const k = key('use');
   ctx.font = 'bold 16px Courier New';
   const kw = ctx.measureText(k).width + 14, tw = ctx.measureText(text).width, x = W / 2 - (kw + 10 + tw) / 2, y = H / 2 + 80;
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - 8, y - 18, kw + 10 + tw + 16, 28);
-  ctx.strokeStyle = '#fc6'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y - 14, kw, 20);
-  ctx.fillStyle = '#fc6'; ctx.textAlign = 'center'; ctx.fillText(k, x + kw / 2, y + 1);
-  ctx.fillStyle = '#eee'; ctx.textAlign = 'left'; ctx.fillText(text, x + kw + 10, y + 1);
+  ctx.fillStyle = 'rgba(20,12,18,0.7)'; ctx.fillRect(x - 8, y - 18, kw + 10 + tw + 16, 28);
+  ctx.strokeStyle = '#7a5088'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y - 14, kw, 20);
+  ctx.fillStyle = '#c8b898'; ctx.textAlign = 'center'; ctx.fillText(k, x + kw / 2, y + 1);
+  ctx.fillStyle = '#e8dcc8'; ctx.textAlign = 'left'; ctx.fillText(text, x + kw + 10, y + 1);
 }
