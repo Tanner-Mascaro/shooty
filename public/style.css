@@ -1,0 +1,23 @@
+:root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; height:100vh; font-family:'Courier New',monospace; }
+canvas { display:block; position:absolute; top:0; left:0; }
+
+#hud { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:30px; z-index:10; pointer-events:none; }
+.ph { color:#fff; font-size:13px; text-align:center; text-shadow:0 0 4px #000; }
+.hp-bar { width:140px; height:8px; background:#111; border:1px solid #444; margin-top:2px; }
+.hp-fill { height:100%; transition:width .15s; }
+#msg { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); color:#fc3; font-size:32px; font-weight:bold; text-shadow:0 0 12px #000; z-index:20; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
+#controls { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); color:#666; font-size:11px; z-index:10; pointer-events:none; white-space:nowrap; }
+
+/* lobby */
+#wait { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#bbb; font-size:20px; z-index:100; gap:16px; }
+#waitTitle { font-size:40px; font-weight:bold; letter-spacing:6px; }
+#levels { display:flex; gap:12px; }
+#levels button, #readyBtn { font-family:'Courier New',monospace; font-size:16px; padding:10px 20px; border:2px solid #555; border-radius:4px; cursor:pointer; font-weight:bold; background:#111; color:#aaa; }
+#levels button.sel { color:#000; }
+#levels button[data-level=hell].sel { background:#e33; border-color:#f66; }
+#levels button[data-level=robot].sel { background:#3ce; border-color:#8ef; }
+#levels button[data-level=witch].sel { background:#6d3; border-color:#af7; }
+#readyBtn { font-size:18px; padding:12px 28px; background:#ddd; color:#000; border-color:#fff; }
+#readyBtn:disabled { background:#333; color:#777; border-color:#444; cursor:default; }
