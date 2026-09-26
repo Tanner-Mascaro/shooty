@@ -62,10 +62,11 @@ export function drawPickupGlows() {
     const r = p.weapon === 'ammo' ? 0.5 : 1; // crates get a small glow, only while there
     if (on || r === 1) glow(q.x, q.y, (on ? 260 : 120) * r / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
-  for (const b of S.boxes) { // cauldrons glow in the level's color
-    const q = project(b.x, b.y, b.z + 0.35);
+  for (const b of S.boxes) { // classic cauldrons glow green brew
+    const q = project(b.x, b.y, b.z + 0.4);
     if (q.f < 0.3 || occluded(q)) continue;
-    glow(q.x, q.y, 190 / q.f, 'rgba(' + S.theme.accent + ',0.4)');
+    const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 220 + b.id);
+    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(50,220,70,' + (0.32 + 0.18 * pulse) + ')');
   }
   for (const n of S.thrown || []) {
     const q = project(n.x, n.y, n.z);

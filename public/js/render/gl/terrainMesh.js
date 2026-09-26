@@ -75,8 +75,22 @@ export function buildWorld(scene, T, theme, palette) {
   const hAt = (i, j) => hgt[Math.min(TH - 1, Math.max(0, j)) * TW + Math.min(TW - 1, Math.max(0, i))];
   const kAt = (i, j) => kind[Math.min(TH - 1, Math.max(0, j)) * TW + Math.min(TW - 1, Math.max(0, i))];
   const mAt = (i, j) => mat[Math.min(TH - 1, Math.max(0, j)) * TW + Math.min(TW - 1, Math.max(0, i))];
-  // floor height never climbs walls — blocked cells sit at 0 so the ground stays flat
-  const floorZ = (i, j) => (kAt(i, j) === 1 ? 0 : Math.max(0, hAt(i, j)));
+  // floor height never climbs walls or hut roofs (roof lives in the heightmap for bullets;
+  // walkable dirt under cottages stays at ground level so you can go inside)
+  const underHutCell = (i, j) => {
+    const x = (i + 0.5) / RES, y = (j + 0.5) / RES;
+    for (const p of T.props || []) {
+      if (p.type !== 'hut') continue;
+      const hw = (p.w || 2.2) / 2 + 0.12, hd = (p.d || 2.2) / 2 + 0.12;
+      if (Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd) return true;
+    }
+    return false;
+  };
+  const floorZ = (i, j) => {
+    if (kAt(i, j) === 1) return 0;
+    if (underHutCell(i, j)) return 0;
+    return Math.max(0, hAt(i, j));
+  };
 
   // --- colorful floor heightfield (walkable surface only) ---
   const sw = Math.ceil((TW - 1) / STRIDE), sh = Math.ceil((TH - 1) / STRIDE);
@@ -110,24 +124,48 @@ export function buildWorld(scene, T, theme, palette) {
   const cratePos = [], crateUV = [], crateCol = [], crateIdx = [];
   const wallPos = [], wallUV = [], wallCol = [], wallIdx = [];
 
+  // Emit a box only where heightmap cells are blocked. Coarse STRIDE blocks that also
+  // contain walkable cells used to skip the corner check and leave holes you could see through.
   const step = STRIDE;
-  for (let j = 0; j < TH; j += step) for (let i = 0; i < TW; i += step) {
-    if (kAt(i, j) !== 1) continue;
-    let maxH = 0;
-    const i1 = Math.min(TW, i + step), j1 = Math.min(TH, j + step);
-    for (let jj = j; jj < j1; jj++) for (let ii = i; ii < i1; ii++)
-      if (kAt(ii, jj) === 1) maxH = Math.max(maxH, hAt(ii, jj));
-    if (maxH < 0.15) continue;
-    const x0 = i / RES, y0 = j / RES, x1 = i1 / RES, y1 = j1 / RES;
-    const tint = sampleColor(palette, i, j, TW, TH);
-    // brighten a bit so racks/walls pop under Lambert
+  const pushObstacle = (i0, j0, i1, j1, maxH, m) => {
+    if (maxH < 0.15) return;
+    const x0 = i0 / RES, y0 = j0 / RES, x1 = i1 / RES, y1 = j1 / RES;
+    const tint = sampleColor(palette, i0, j0, TW, TH);
     const lit = [Math.min(1, tint[0] * 1.25), Math.min(1, tint[1] * 1.25), Math.min(1, tint[2] * 1.25)];
-    const m = mAt(i, j);
     if (m === MAT.RACK) addBox(rackPos, rackUV, rackCol, rackIdx, x0, y0, x1, y1, 0, maxH, lit, 1.2);
     else if (m === MAT.CRATE) addBox(cratePos, crateUV, crateCol, crateIdx, x0, y0, x1, y1, 0, maxH, lit, 1);
     else if (m === MAT.ROCK || m === MAT.LAVA || m === MAT.BARK || m === MAT.ROOTS || m === MAT.LEAVES)
       addBox(rockPos, rockUV, rockCol, rockIdx, x0, y0, x1, y1, 0, maxH, lit, 0.8);
     else addBox(wallPos, wallUV, wallCol, wallIdx, x0, y0, x1, y1, 0, maxH, lit, 1);
+  };
+  for (let j = 0; j < TH; j += step) for (let i = 0; i < TW; i += step) {
+    const i1 = Math.min(TW, i + step), j1 = Math.min(TH, j + step);
+    let maxH = 0, blocked = 0, cells = 0, matBest = MAT.WALL, matN = 0;
+    const matCount = new Map();
+    for (let jj = j; jj < j1; jj++) for (let ii = i; ii < i1; ii++) {
+      cells++;
+      if (kAt(ii, jj) !== 1) continue;
+      const h = hAt(ii, jj);
+      if (h < 0.15) continue;
+      blocked++;
+      maxH = Math.max(maxH, h);
+      const m = mAt(ii, jj);
+      const n = (matCount.get(m) || 0) + 1;
+      matCount.set(m, n);
+      if (n > matN) { matN = n; matBest = m; }
+    }
+    if (!blocked) continue;
+    if (blocked === cells) {
+      pushObstacle(i, j, i1, j1, maxH, matBest);
+      continue;
+    }
+    // Mixed block: one sample-sized box per blocked cell so walls stay solid at edges/doors.
+    for (let jj = j; jj < j1; jj++) for (let ii = i; ii < i1; ii++) {
+      if (kAt(ii, jj) !== 1) continue;
+      const h = hAt(ii, jj);
+      if (h < 0.15) continue;
+      pushObstacle(ii, jj, ii + 1, jj + 1, h, mAt(ii, jj));
+    }
   }
 
   const addMesh = (vpos, vuv, vcol, vidx, map, emissive) => {
@@ -141,7 +179,7 @@ export function buildWorld(scene, T, theme, palette) {
     const matOpts = { map, vertexColors: true, side: THREE.DoubleSide };
     if (emissive) {
       matOpts.emissive = emissive;
-      matOpts.emissiveIntensity = theme.id === 'castle' ? 0.75 : theme.id === 'witch' ? 0.25 : 0.35;
+      matOpts.emissiveIntensity = theme.id === 'castle' ? 0.28 : theme.id === 'witch' ? 0.25 : 0.35;
       matOpts.emissiveMap = map;
     }
     root.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial(matOpts)));
@@ -190,9 +228,56 @@ export function buildWorld(scene, T, theme, palette) {
   }
 
   addProps(root, T, theme);
+  if (theme.id === 'castle') addCastleTorches(root, T, theme);
   scene.add(root);
   worldRoot = root;
   return root;
+}
+
+function addCastleTorches(root, T, theme) {
+  const { TW, TH, RES, kind, hgt } = T;
+  const iron = new THREE.MeshLambertMaterial({ color: 0x1a1520 });
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb040 });
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0xff6a20, transparent: true, opacity: 0.55, depthWrite: false,
+  });
+  const faces = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  let count = 0;
+  const max = 56;
+  // place along open wall faces every ~3 map units
+  for (let cy = 2; cy < MH - 2 && count < max; cy += 3) {
+    for (let cx = 2; cx < MW - 2 && count < max; cx += 3) {
+      const i = Math.min(TW - 1, Math.floor((cx + 0.5) * RES));
+      const j = Math.min(TH - 1, Math.floor((cy + 0.5) * RES));
+      if (kind[j * TW + i] !== 1 || hgt[j * TW + i] < 1.6) continue;
+      for (const [dx, dy] of faces) {
+        const oi = Math.min(TW - 1, Math.max(0, Math.floor((cx + dx + 0.5) * RES)));
+        const oj = Math.min(TH - 1, Math.max(0, Math.floor((cy + dy + 0.5) * RES)));
+        if (kind[oj * TW + oi] === 1) continue;
+        const x = cx + 0.5 + dx * 0.48;
+        const z = cy + 0.5 + dy * 0.48;
+        const y = 1.45;
+        // iron bracket flush to wall
+        const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.08), iron);
+        bracket.position.set(x - dx * 0.06, y - 0.08, z - dy * 0.06);
+        root.add(bracket);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.18), iron);
+        arm.position.set(x, y - 0.02, z);
+        if (dx) arm.rotation.y = Math.PI / 2;
+        root.add(arm);
+        // glowing flame + soft halo (MeshBasic so halls stay lit without PointLights)
+        const flame = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), flameMat);
+        flame.position.set(x + dx * 0.04, y + 0.12, z + dy * 0.04);
+        flame.scale.set(0.85, 1.35, 0.85);
+        root.add(flame);
+        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), glowMat);
+        halo.position.copy(flame.position);
+        root.add(halo);
+        count++;
+        break;
+      }
+    }
+  }
 }
 
 function addProps(root, T, theme) {
@@ -205,6 +290,12 @@ function addProps(root, T, theme) {
   const lampMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(theme.band[0] / 255, theme.band[1] / 255, theme.band[2] / 255),
   });
+  const hutRoofMats = {
+    witch: new THREE.MeshLambertMaterial({ color: 0x2f6b32, side: THREE.DoubleSide }),
+    nuke: new THREE.MeshLambertMaterial({ color: 0x6e5428, side: THREE.DoubleSide }),
+    hell: new THREE.MeshLambertMaterial({ color: 0x4a3028, side: THREE.DoubleSide }),
+    ice: new THREE.MeshLambertMaterial({ color: 0x8aa8c0, side: THREE.DoubleSide }),
+  };
   let lamps = 0;
   const maxLamps = 6;
 
@@ -222,11 +313,36 @@ function addProps(root, T, theme) {
       glow.rotation.x = -Math.PI / 2;
       glow.position.set(p.x, h + 0.05, p.y);
       root.add(glow);
-    } else if (p.type === 'hut' && lamps < maxLamps) {
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), lampMat);
-      bulb.position.set(p.x, 1.35, p.y);
-      root.add(bulb);
-      lamps++;
+    } else if (p.type === 'hut') {
+      // A-frame roof as real geometry so the heightmap roof doesn't seal the room as a floor mound
+      const hw = (p.w || 2.2) / 2 + 0.06, hd = (p.d || 2.2) / 2 + 0.06;
+      const wallH = p.h || 1.7;
+      const peakH = Math.max(0.35, (p.roof || wallH + 0.7) - wallH);
+      const ridgeZ = wallH + peakH;
+      const eaveZ = Math.max(wallH - 0.15, wallH + peakH - (peakH + 0.25));
+      const mat = hutRoofMats[p.style] || hutRoofMats.witch;
+      const addSlope = (xEave) => {
+        const geo = new THREE.BufferGeometry();
+        // ridge along Y at hut center; eaves at ±X (matches shared/terrain raise)
+        const positions = new Float32Array([
+          p.x, ridgeZ, p.y - hd,
+          p.x, ridgeZ, p.y + hd,
+          xEave, eaveZ, p.y + hd,
+          xEave, eaveZ, p.y - hd,
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setIndex([0, 1, 2, 0, 2, 3]);
+        geo.computeVertexNormals();
+        root.add(new THREE.Mesh(geo, mat));
+      };
+      addSlope(p.x - hw);
+      addSlope(p.x + hw);
+      if (lamps < maxLamps) {
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), lampMat);
+        bulb.position.set(p.x, Math.min(1.35, wallH - 0.25), p.y);
+        root.add(bulb);
+        lamps++;
+      }
     }
   }
 }

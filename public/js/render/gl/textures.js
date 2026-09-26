@@ -112,17 +112,22 @@ const FLOOR_DRAW = {
     }
   },
   castle(ctx, w, h) {
+    // cool slate flagstones matching the pixel-castle brick greys
     const cell = 18;
     for (let y = 0; y < h; y += cell) for (let x = 0; x < w; x += cell) {
-      const tone = 0.75 + 0.3 * noise(x * 0.4, y * 0.4);
-      ctx.fillStyle = rgb(88 * tone, 78 * tone, 104 * tone);
+      const n = noise(x * 0.35, y * 0.35);
+      const tone = 0.78 + 0.28 * n;
+      ctx.fillStyle = rgb(78 * tone, 82 * tone, 86 * tone);
       ctx.fillRect(x, y, cell, cell);
-      ctx.strokeStyle = 'rgba(120,80,160,0.45)';
+      ctx.strokeStyle = 'rgba(36, 40, 46, 0.85)';
       ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
-      if (((x / cell) + (y / cell)) % 3 === 0) {
-        ctx.fillStyle = 'rgba(220,140,70,0.4)';
-        ctx.fillRect(x + cell / 2 - 2, y + 4, 4, cell - 8);
-        ctx.fillRect(x + 4, y + cell / 2 - 2, cell - 8, 4);
+      // top/left lip highlight
+      ctx.fillStyle = 'rgba(160, 168, 176, 0.28)';
+      ctx.fillRect(x + 1, y + 1, cell - 3, 2);
+      ctx.fillRect(x + 1, y + 1, 2, cell - 3);
+      if (n > 0.72) {
+        ctx.fillStyle = 'rgba(28, 30, 34, 0.3)';
+        ctx.fillRect(x + 5, y + 6, 4, 3);
       }
     }
   },
@@ -208,26 +213,41 @@ const WALL_DRAW = {
       ctx.fillRect(x, y, 1, 1);
     }
   },
-  castle(ctx, w, h, theme) {
-    const bh = 14, bw = 28;
+  castle(ctx, w, h) {
+    // running-bond slate bricks: cool greys, dark mortar, light top/left lips
+    const bh = 14, bw = 24;
+    const mortar = 'rgba(36, 40, 46, 0.95)';
     for (let y = 0; y < h; y += bh) {
       const ox = ((y / bh) & 1) * (bw / 2);
       for (let x = -bw; x < w; x += bw) {
-        const tone = 0.82 + 0.22 * noise(x, y);
-        ctx.fillStyle = rgb(theme.wall[0] * tone, theme.wall[1] * tone, theme.wall[2] * tone);
+        const n = noise(x * 0.27, y * 0.41);
+        const base = 0.72 + 0.32 * n;
+        const r = (88 + 18 * n) * base, g = (92 + 16 * n) * base, b = (96 + 14 * n) * base;
+        ctx.fillStyle = rgb(r, g, b);
         ctx.fillRect(x + ox, y, bw - 1, bh - 1);
-        ctx.strokeStyle = 'rgba(40,28,60,0.35)';
+        ctx.strokeStyle = mortar;
         ctx.strokeRect(x + ox + 0.5, y + 0.5, bw - 2, bh - 2);
+        ctx.fillStyle = 'rgba(170, 176, 184, 0.35)';
+        ctx.fillRect(x + ox + 1, y + 1, bw - 4, 2);
+        ctx.fillRect(x + ox + 1, y + 1, 2, bh - 4);
+        ctx.fillStyle = 'rgba(20, 22, 26, 0.22)';
+        ctx.fillRect(x + ox + bw - 4, y + 2, 2, bh - 4);
+        ctx.fillRect(x + ox + 2, y + bh - 3, bw - 5, 1);
+        if (n > 0.82) {
+          ctx.fillStyle = 'rgba(40, 44, 48, 0.55)';
+          ctx.fillRect(x + ox + bw * 0.35, y + 4, 3, 2);
+        }
       }
     }
-    // torch / stained-glass band
-    const [br, bg, bb] = theme.band;
-    for (let x = 4; x < w - 4; x += 14) {
-      ctx.fillStyle = rgb(br, bg, bb, 0.7 + 0.25 * noise(x, 3));
-      ctx.fillRect(x, h * 0.38, 8, 12);
-      ctx.fillStyle = 'rgba(255,230,160,0.45)';
-      ctx.fillRect(x + 1, h * 0.38 + 1, 6, 3);
+    for (let x = 6; x < w - 6; x += 32) {
+      ctx.fillStyle = 'rgba(28, 30, 34, 0.55)';
+      ctx.fillRect(x - 2, h * 0.3, 12, h * 0.38);
+      ctx.fillStyle = 'rgba(140, 148, 156, 0.35)';
+      ctx.fillRect(x - 3, h * 0.3 - 2, 14, 3);
+      ctx.fillRect(x - 3, h * 0.68, 14, 3);
     }
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, h - 10, w, 10);
   },
   nuke(ctx, w, h, theme) {
     ctx.fillStyle = rgb(...theme.wall);

@@ -40,6 +40,7 @@ export function footGround(x, y) {
   if (wallHitbox(x, y)) return -Infinity;
 
   let highest = -Infinity;
+  const z = S.me?.z ?? 0;
   for (const [sx, sy] of [
     [x, y],
     [x + PLAYER_R, y + PLAYER_R],
@@ -51,17 +52,9 @@ export function footGround(x, y) {
     [x, y + PLAYER_R],
     [x, y - PLAYER_R],
   ]) {
-    const fx = sx * T.RES - 0.5, fy = sy * T.RES - 0.5;
-    const i = Math.floor(fx), j = Math.floor(fy);
-    // blend the 4 samples around this point, unless one is a wall: then use the highest non-wall one
-    let wall = false, top = -Infinity;
-    for (let jj = j; jj <= j + 1; jj++) for (let ii = i; ii <= i + 1; ii++) {
-      if (ii < 0 || jj < 0 || ii >= T.TW || jj >= T.TH) continue;
-      const k = jj * T.TW + ii;
-      if (T.kind[k] === 1) wall = true; else top = Math.max(top, T.hgt[k]);
-    }
-    if (top === -Infinity) continue; // nothing but wall here
-    highest = Math.max(highest, wall ? top : walkHeight(T, sx, sy, S.me?.z ?? 0));
+    // hut interiors store the roof in the heightmap but stay walkable (kind 0) — always use walkHeight
+    if (kindAt(T, sx, sy) === 1) continue;
+    highest = Math.max(highest, walkHeight(T, sx, sy, z));
   }
   return highest;
 }

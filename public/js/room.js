@@ -160,7 +160,7 @@ function drawMapPreview(b) {
     c = document.createElement('canvas');
     c.width = T.TW; c.height = T.TH;
     const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
-    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [78, 68, 98], nuke: [70, 75, 55] }[name] || th.minimap[0];
+    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [72, 76, 80], nuke: [70, 75, 55] }[name] || th.minimap[0];
     for (let k = 0; k < T.TW * T.TH; k++) {
       const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
       let r, g, bl;

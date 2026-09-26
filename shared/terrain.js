@@ -8,7 +8,8 @@
 //   witch  # -> trees (trunk here; the canopy is a sprite drawn by the client), + -> bushes,
 //          B -> cottages, edge -> a thick hedge with trees
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
-//   haunt / castle  # -> full-height walls (touching # join into rooms), + -> furniture / rubble,
+//   haunt  # -> full-height walls under a ceiling (CEILING_H)
+//   castle # -> stone walls of uneven height: curtain walls + taller corner/keep towers
 //          edge -> wall, under a ceiling (the client draws it at CEILING_H)
 //   nuke   # clusters -> cars / a bus, + -> junk crates, B clusters -> big enterable houses
 //          facing the street, edge -> block wall
@@ -65,6 +66,7 @@ export function buildTerrain(MAP, RES, style) {
     const e = inside(x, y);
     if (style === 'hell' || style === 'ice') return e < noise(x * 1.3, y * 1.3) * 0.5 - 0.1 ? [2.2 + noise(x * 0.7 + 5, y * 0.7) + Math.min(1, -e) * 0.6, MAT.ROCK] : null;
     if (style === 'witch') return e < noise(x * 1.1, y * 1.1) * 0.3 - 0.05 ? [1.7 + 0.7 * noise(x * 1.5, y * 1.5), MAT.LEAVES] : null;
+    if (style === 'castle') return e < 0 ? [3.8 + Math.min(2, -e) * 0.9 + noise(x * 0.6, y * 0.6) * 1.6, MAT.WALL] : null;
     return e < 0 ? [2.8, MAT.WALL] : null;
   });
   if (style === 'witch') // trees poking out of the hedge
@@ -174,7 +176,23 @@ export function buildTerrain(MAP, RES, style) {
       continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
-    if (style === 'haunt' || style === 'castle') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; } // whole squares, so walls join flush
+    if (style === 'haunt') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; }
+    if (style === 'castle') {
+      // uneven skyline: dense clumps and corners become towers; thin walls stay lower
+      let near = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (at(cx + dx, cy + dy) === '#') near++;
+      const N = at(cx, cy - 1) === '#', S = at(cx, cy + 1) === '#', E = at(cx + 1, cy) === '#', W = at(cx - 1, cy) === '#';
+      const orth = (N ? 1 : 0) + (S ? 1 : 0) + (E ? 1 : 0) + (W ? 1 : 0);
+      const corner = orth === 2 && ((N && E) || (N && W) || (S && E) || (S && W));
+      const jitter = hash2(cx, cy);
+      let h;
+      if (near >= 7) h = 6.2 + jitter * 1.8;          // keep / tower mass
+      else if (corner && near >= 4) h = 4.8 + jitter * 1.4; // corner towers
+      else if (orth >= 3) h = 3.8 + jitter * 0.7;       // junctions / thick walls
+      else h = 2.9 + jitter * 0.55;                     // curtain walls
+      box(cx, cy, cx + 1, cy + 1, h, MAT.WALL);
+      continue;
+    }
     if (style === 'robot') {
       // rack: inset from the square's sides unless the next square is rack too, so rows join up
       const m = 0.12;

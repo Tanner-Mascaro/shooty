@@ -320,8 +320,8 @@ body.on-home #corner { z-index:210; }
 }
 .maps button[data-level=castle]::before {
   background:
-    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(180,140,255,0.45), transparent 55%),
-    linear-gradient(135deg, rgba(70,40,110,0.4), transparent 60%);
+    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(160,168,176,0.4), transparent 55%),
+    linear-gradient(135deg, rgba(70,74,80,0.45), transparent 60%);
 }
 .maps button[data-level=hell]::before { background:linear-gradient(135deg, rgba(180,40,20,0.4), transparent 60%); }
 .maps button[data-level=robot]::before { background:linear-gradient(135deg, rgba(30,140,180,0.35), transparent 60%); }

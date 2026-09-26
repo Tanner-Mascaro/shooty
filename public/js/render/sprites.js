@@ -172,32 +172,42 @@ const AMMO_CRATE = { w: 0.42, h: 0.3, emit: [3], pal: [null, [74, 82, 44], [34, 
     return 1;
   } };
 
-// --- loot cauldron: iron pot with glowing brew and three feet ---
+// --- classic black loot cauldron: iron pot, bail, three feet, green brew ---
 function boxPx(u, v) {
-  // feet
-  if (v > 0.82) {
-    if ([0.22, 0.5, 0.78].some(c => Math.abs(u - c) < 0.07)) return 2;
+  // three feet
+  if (v > 0.86) {
+    if ([0.22, 0.5, 0.78].some(c => Math.abs(u - c) < 0.07)) return v > 0.95 ? 2 : 1;
     return 0;
   }
-  // rim / handles
-  if (v > 0.12 && v < 0.22) {
-    if (u > 0.08 && u < 0.92) return 3;
-    if ((u > 0.02 && u < 0.12) || (u > 0.88 && u < 0.98)) return 2; // bail ears
+  // arched bail
+  if (v < 0.16) {
+    const hx = (u - 0.5) / 0.4, hy = (v - 0.16) / 0.14;
+    const r = hx * hx + hy * hy;
+    if (r < 1 && r > 0.52 && Math.abs(hx) > 0.18) return 3;
     return 0;
   }
-  // pot belly
-  const bx = (u - 0.5) / 0.42, by = (v - 0.52) / 0.34, br = bx * bx + by * by;
-  if (br < 1) {
-    if (br > 0.78) return 2; // iron shell
-    if (v < 0.42) return 4; // glowing brew surface
-    if (Math.hypot(u - 0.4, v - 0.38) < 0.06 || Math.hypot(u - 0.62, v - 0.36) < 0.045) return 5; // bubbles
-    return ((u * 11 | 0) ^ (v * 9 | 0)) & 1 ? 1 : 2;
+  // rim
+  if (v < 0.28) {
+    if (u < 0.08 || u > 0.92) return Math.abs(u - 0.5) > 0.38 ? 1 : 0; // ears
+    if (u > 0.12 && u < 0.88) return v < 0.2 ? 3 : 2;
+    return 0;
   }
-  return 0;
+  // round belly
+  const bx = (u - 0.5) / 0.42, by = (v - 0.56) / 0.34, br = bx * bx + by * by;
+  if (br >= 1) return 0;
+  if (br > 0.78) return 2; // outer lip
+  if (v < 0.44) {
+    // brew surface
+    if (Math.hypot(u - 0.4, v - 0.34) < 0.05 || Math.hypot(u - 0.6, v - 0.36) < 0.035) return 5;
+    return 4;
+  }
+  return br > 0.55 ? 1 : 2; // dark body with slight depth
 }
-const boxCache = {};
-export function boxSprite(accent) {
-  const brew = accent.split(',').map(Number);
-  return boxCache[accent] ??= { w: 0.72, h: 0.7, px: boxPx, emit: [4, 5],
-    pal: [null, [36, 28, 40], [18, 14, 22], [70, 62, 78], brew, brew.map(c => Math.min(255, c + 80))] };
+let classicCauldron = null;
+export function boxSprite() {
+  // classic black iron + toxic green brew (not theme-tinted)
+  return classicCauldron ??= {
+    w: 0.78, h: 0.74, px: boxPx, emit: [4, 5],
+    pal: [null, [22, 22, 24], [6, 6, 8], [70, 70, 74], [36, 170, 48], [160, 255, 130]],
+  };
 }

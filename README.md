@@ -86,7 +86,7 @@ The fourth map is half an old house and half the Backrooms, under a ceiling (`th
 
 ## Seeing players
 
-Every player has a Minecraft-style glowing outline: white in free-for-all, red / blue in teams. Teammates show through walls, and so does any enemy for 3 seconds after you hit them.
+Every player has a glowing outline: white in free-for-all, red / blue in teams.
 
 ## Profiles, accounts and leaderboard
 

@@ -226,7 +226,7 @@ const handlers = {
         }
       }
     }
-    else if (S.others[msg.who]) S.others[msg.who].hitT = now;
+    else       if (S.others[msg.who]) S.others[msg.who].hitT = now;
     if (msg.by === S.myId) {
       S.hitMarker = 18; S.hitHead = msg.head;
       play(msg.head ? 'headshot' : 'hitmarker');
@@ -243,10 +243,6 @@ const handlers = {
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');
     pushFeed(msg);
-    {
-      const kn = nameOf(msg.killer), vn = nameOf(msg.victim);
-      addSystem(pit ? vn + ' fell into the pit' : kn + ' killed ' + vn + (msg.head ? ' (HS)' : msg.backstab ? ' (BS)' : '') + ' [' + msg.weapon + ']');
-    }
     if (msg.killer === S.myId) {
       const label = msg.infected ? 'INFECTED' : msg.backstab ? 'BACKSTAB' : msg.head ? 'HEADSHOT' : 'KILL';
       banner(label + (msg.weapon === 'sniper' ? '  ' + msg.dist.toFixed(1) + 'm' : ''), msg.head || msg.backstab);

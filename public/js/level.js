@@ -185,13 +185,13 @@ const FLOORS = {
     return [r, g, b];
   },
   castle(x, y, n, glow) {
-    // pale gothic flagstones with violet mortar and warm torch edges
+    // cool slate flagstones with dark mortar (matches wall brick greys)
     const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
-    const tone = 0.95 + 0.28 * hash(cx, cy) + n * 0.12;
-    let r = 118 * tone, g = 108 * tone, b = 132 * tone;
-    if (fx < 0.06 || fy < 0.06) { r = 72; g = 58; b = 92; }
-    else if (noise(x * 5, y * 5) > 0.85) { r *= 0.9; g *= 0.9; b *= 0.94; }
-    r += 70 * glow; g += 36 * glow; b += 40 * glow;
+    const tone = 0.78 + 0.2 * hash(cx, cy) + n * 0.1;
+    let r = 78 * tone, g = 82 * tone, b = 86 * tone;
+    if (fx < 0.06 || fy < 0.06) { r = 38; g = 40; b = 44; }
+    else if (noise(x * 5, y * 5) > 0.85) { r *= 0.88; g *= 0.88; b *= 0.9; }
+    r += 50 * glow; g += 32 * glow; b += 20 * glow;
     return [r, g, b];
   },
   nuke(x, y, n, glow) {
