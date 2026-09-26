@@ -11,9 +11,14 @@ const $ = id => document.getElementById(id);
 // true while the home screen is covering the lobby
 export const homeOpen = () => !$('home').hidden;
 
+let leaveHook = null;
+export function onHomeLeave(fn) { leaveHook = fn; }
+
 export function hideHome() {
+  if ($('home').hidden) return;
   $('home').hidden = true;
   document.body.classList.remove('on-home');
+  leaveHook?.();
 }
 
 function showHome() {

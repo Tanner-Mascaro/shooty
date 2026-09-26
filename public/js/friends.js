@@ -3,9 +3,12 @@
 import { S } from './state.js';
 import { send } from './net.js';
 import { goToRoom } from './room.js';
+import { openDm } from './chat.js';
+import { homeOpen } from './home.js';
 
 const $ = id => document.getElementById(id);
 let invite = null; // the invite on screen
+let pendingFriends = undefined; // held while home is open
 
 export function initFriends() {
   $('friendForm').addEventListener('submit', e => {
@@ -28,6 +31,8 @@ const button = (label, onClick, cls) => {
 
 // list: null for guests, else [{ username, name, status, online, room, count, playing }]
 export function showFriends(list) {
+  if (homeOpen()) { pendingFriends = list; return; }
+  pendingFriends = undefined;
   $('friendsGuest').hidden = !!list;
   $('friendForm').hidden = !list;
   $('friendList').replaceChildren(...(list || []).map(f => {
@@ -54,12 +59,16 @@ export function showFriends(list) {
       li.classList.toggle('online', f.online);
       status.textContent = !f.online ? 'offline' : here ? 'in your room' : `in room ${f.room} (${f.count})${f.playing ? ' · playing' : ''}`;
       if (f.online && !here) actions.append(button('Invite', () => send({ type: 'invite', username: u })), button('Join', () => goToRoom(f.room)));
-      actions.append(button('✕', () => send({ type: 'friendRemove', username: u }), 'remove'));
+      actions.append(button('Msg', () => openDm(u, f.name)), button('✕', () => send({ type: 'friendRemove', username: u }), 'remove'));
     }
     li.append(who, status, actions);
     return li;
   }));
   $('friendEmpty').hidden = !list || list.length > 0;
+}
+
+export function flushFriends() {
+  if (pendingFriends !== undefined) showFriends(pendingFriends);
 }
 
 // { from, username, room, mode, count }

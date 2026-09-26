@@ -71,7 +71,10 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #homeAlt { display:flex; gap:8px; margin-top:4px; }
 #homeAlt .ghost { flex:1; }
 #homeSigned { flex-direction:row; align-items:baseline; justify-content:space-between; gap:12px; }
-body.on-home #wait { visibility:hidden; pointer-events:none; }
+body.on-home #wait { display:none !important; }
+body.on-home #c, body.on-home #hud, body.on-home #scores, body.on-home #feed,
+body.on-home #toasts, body.on-home #msg, body.on-home #controls, body.on-home #talking,
+body.on-home #fps, body.on-home #gameGear, body.on-home #gameLeave { display:none !important; }
 body.on-home #corner { z-index:210; }
 
 /* lobby — --accent / --accent-rgb / --wash follow the selected level (applyLevelUI in ui.js) */
@@ -318,12 +321,14 @@ body.ingame #corner { display:none; }
 #chatCard { display:flex; flex-direction:column; gap:10px; flex:1 1 auto; min-height:0; }
 #chat { font:13px 'IBM Plex Sans',system-ui,sans-serif; display:flex; flex-direction:column; gap:6px; flex:1 1 auto; min-height:0; }
 #chatCard #chatLog { min-height:140px; max-height:280px; flex:1 1 auto; background:rgba(0,0,0,0.28); border:1px solid var(--line); padding:8px 10px; }
-#chatCard #chatLog:empty::before { content:'No messages yet — say hi or wait for room events'; color:var(--muted); }
+#chatCard #chatLog:empty::before { content:'Room chat here — use Msg on a friend (or /w name) for private messages'; color:var(--muted); }
 body.ingame #chat { position:fixed; left:14px; bottom:40px; z-index:160; width:min(380px, calc(100vw - 28px)); gap:4px; }
 #chatLog { max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; color:#ddd; text-shadow:0 0 4px #000; scrollbar-width:thin; }
 #chatLog > div { overflow-wrap:anywhere; transition:opacity .6s; }
 #chatLog > div.old { opacity:0; }
 #chatLog > div.sys { color:rgba(235,228,214,0.55); font-style:italic; }
+#chatLog > div.dm { color:#e8c8ff; }
+#chat .dm-tag { color:#c9a0ff; font-weight:700; }
 body.ingame #chat { pointer-events:none; }
 body.chatting #chat { pointer-events:auto; }
 body.chatting #chatLog { background:rgba(0,0,0,0.45); border-radius:2px; padding:4px 6px; }

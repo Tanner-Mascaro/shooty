@@ -129,13 +129,11 @@ export function initRoom() {
     send({ type: 'skin', skin: browsedSkin });
     renderSkinWheel();
   });
-  renderSkinWheel();
   $('readyBtn').addEventListener('click', () => { initAudio(); send({ type: 'ready' }); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
     initAudio();
     send({ type: 'vote', level: b.dataset.level });
   }));
-  initMapCarousel();
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
   document.querySelectorAll('#teamPick button').forEach(b => b.addEventListener('click', () => send({ type: 'team', team: +b.dataset.team })));
   // bot difficulty for the next + BOT, remembered in this browser
@@ -166,7 +164,16 @@ export function initRoom() {
   for (const id of ['leaveGame', 'gameLeave']) $(id).addEventListener('click', () => goToRoom(newCode()));
 }
 
+let lobbyWarmed = false;
+export function warmLobby() {
+  if (lobbyWarmed) return;
+  lobbyWarmed = true;
+  renderSkinWheel();
+  initMapCarousel();
+}
+
 export function showRoom() {
+  warmLobby();
   const r = S.room;
   if (!r) return;
   // one-shot from the home "Play vs bots" button: fill the private room and ready up

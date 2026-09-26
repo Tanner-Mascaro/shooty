@@ -11,7 +11,7 @@ import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 import { showFriends, showInvite } from './friends.js';
 import { fromProfile } from './settings.js';
-import { addChat, addSystem, refreshChat } from './chat.js';
+import { addChat, addDm, addSystem, refreshChat } from './chat.js';
 import { LEVEL_NAMES } from '/shared/levels.js';
 import { syncVoice, onSignal } from './voice.js';
 
@@ -245,6 +245,7 @@ const handlers = {
   notice(msg) { toast(msg.text); },
 
   chat(msg) { addChat(msg); },
+  dm(msg) { addDm(msg); },
   rtc(msg) { onSignal(msg); },
 
   profile(msg) { showProfile(msg); },

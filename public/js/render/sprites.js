@@ -75,30 +75,34 @@ export function pickupSprite(weapon, color) {
 }
 
 function nadePx(u, v) {
-  // side view of a pineapple grenade: body, bands, spoon lever, pin ring
-  const dx = u - 0.48, dy = v - 0.55;
-  const body = Math.hypot(dx * 1.15, dy * 0.95);
-  if (body < 0.34) {
-    // cast bands
-    if (Math.abs(dy) < 0.04 || Math.abs(dx) < 0.035) return 2;
-    // pineapple dimples
-    const cell = ((Math.floor((u + v) * 14) + Math.floor(u * 11)) & 1) ? 1 : 4;
-    return body > 0.28 ? 2 : cell;
+  // bold front-facing MK2: fat olive body, dark cast bands, yellow spoon + pin (reads at distance)
+  const bx = (u - 0.5) / 0.34, by = (v - 0.58) / 0.36, br = bx * bx + by * by;
+  if (br < 1) {
+    const rim = br > 0.78;
+    const bandH = Math.abs(((v - 0.42) * 9) % 1 - 0.5) < 0.14;
+    const bandV = Math.abs(((u - 0.32) * 8) % 1 - 0.5) < 0.12;
+    if (rim) return 2;
+    if (bandH || bandV) return 2;
+    if (bx < -0.25 && by < -0.15 && br < 0.35) return 5; // sheen
+    return ((u * 20 | 0) + (v * 18 | 0)) & 1 ? 1 : 4;
   }
-  // fuse / neck
-  if (Math.abs(u - 0.48) < 0.07 && v > 0.18 && v < 0.38) return 2;
-  // spoon lever along the top-right
-  if (u > 0.52 && u < 0.82 && v > 0.12 && v < 0.28 && Math.abs(v - (0.2 + (u - 0.52) * 0.15)) < 0.045) return 3;
-  // pin ring
-  const rx = u - 0.72, ry = v - 0.14, rd = Math.hypot(rx, ry);
-  if (rd > 0.05 && rd < 0.09) return 3;
-  // highlight streak
-  if (body < 0.22 && dx < -0.05 && dy < -0.02) return 5;
+  // fuze well
+  if (u > 0.4 && u < 0.6 && v > 0.22 && v < 0.38) return 2;
+  // spoon lever (fat yellow bar)
+  if (u > 0.52 && u < 0.86 && v > 0.1 && v < 0.3) {
+    const t = (u - 0.52) / 0.34;
+    if (Math.abs(v - (0.16 + t * 0.06)) < 0.055) return 3;
+  }
+  // pull-pin ring
+  const rd = Math.hypot(u - 0.78, v - 0.14);
+  if (rd > 0.055 && rd < 0.1) return 3;
+  // spark tip on fuze
+  if (Math.hypot(u - 0.5, v - 0.2) < 0.04) return 3;
   return 0;
 }
 const NADE_SPRITE = {
-  w: 0.36, h: 0.42, px: nadePx,
-  pal: [null, [62, 150, 72], [28, 70, 36], [230, 200, 70], [48, 120, 58], [140, 220, 120]],
+  w: 0.62, h: 0.72, px: nadePx,
+  pal: [null, [86, 190, 72], [18, 48, 22], [255, 220, 60], [52, 140, 48], [180, 245, 150]],
   emit: [3, 5],
 };
 

@@ -27,6 +27,7 @@ const cleanName = name => String(name ?? '').replace(/[^\w .-]/g, '').trim().sli
 
 const AUTH = ['register', 'login', 'logout'];
 const INVITE_GAP = 10000; // ms between invites to the same friend
+const CHAT_MAX = 140; // same cap as room chat / public/js/chat.js
 
 export class Hub {
   constructor(profiles) {
@@ -320,5 +321,26 @@ Hub.prototype.handlers = {
       mode: p.room.mode, count: p.room.list.length });
     log(`${this.who(p)} invited ${f.username} to room ${p.room.code}`);
     this.notice(p, `Invited ${f.name}`);
+  },
+
+  // private message to a friend (works across rooms; both must be signed in)
+  async dm(p, msg) {
+    if (!p.pid || !p.username) return this.notice(p, 'Sign in to send private messages');
+    const text = String(msg.text ?? '').trim().slice(0, CHAT_MAX);
+    if (!text) return;
+    const t = await this.target(p, msg.username);
+    if (!t) return;
+    const f = (await this.profiles.friends(p.pid)).find(f => f.id === t.id);
+    if (!f || f.status !== 'friend') return this.notice(p, 'You can only message friends');
+    const now = Date.now();
+    p.dmTimes = (p.dmTimes || []).filter(t => now - t < 5000);
+    if (p.dmTimes.length >= 5) return this.notice(p, 'Slow down — too many messages');
+    p.dmTimes.push(now);
+    const payload = { type: 'dm', from: p.name, username: p.username, to: f.username, text, self: false };
+    const mine = { ...payload, self: true };
+    this.send(p, mine);
+    const conns = [...(this.online.get(t.id) || [])];
+    if (!conns.length) return this.notice(p, `${f.name} is offline`);
+    for (const c of conns) this.send(c, payload);
   },
 };

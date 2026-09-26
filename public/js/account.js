@@ -2,7 +2,7 @@
 // The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
 import { token, setToken, clearToken, savedName, saveName, savedSkin } from './profile.js';
-import { homeProfile, homeAuth } from './home.js';
+import { homeProfile, homeAuth, homeOpen } from './home.js';
 
 const $ = id => document.getElementById(id);
 let me = {}; // latest profile message, merged (stat-only updates arrive after every kill)
@@ -29,8 +29,11 @@ export function initAccount() {
 
 export function showProfile(msg) {
   me = Object.assign(me, msg);
-  const nameInput = $('nameInput');
   if (me.username) saveName(me.name); // signed in: the account's name wins over what this browser had
+  homeProfile(me);
+  if (homeOpen()) return; // home has its own auth UI — skip rebuilding the hidden lobby panel
+
+  const nameInput = $('nameInput');
   // no name picked yet: show the default ("Player 3fa2") as a hint
   if (!savedName()) { nameInput.value = ''; nameInput.placeholder = me.name; }
   else if (document.activeElement !== nameInput) nameInput.value = me.name;
@@ -52,12 +55,12 @@ export function showProfile(msg) {
   $('signedOut').hidden = !!me.username;
   $('acctName').textContent = me.username || '';
   drawBoard(); // your highlighted row may have changed
-  homeProfile(me);
 }
 
 // reply to register / login / logout
 export function onAuth(msg) {
   homeAuth(msg);
+  if (homeOpen()) return; // homeAuth already handled the home form
   if (msg.error) { $('authErr').textContent = msg.error; return; }
   $('authPass').value = '';
   $('authForm').hidden = true; // the next profile message shows signed in / signed out
@@ -69,7 +72,10 @@ export function onAuth(msg) {
   }
 }
 
-export function showBoard(rows) { board = rows; drawBoard(); }
+export function showBoard(rows) {
+  board = rows;
+  if (!homeOpen()) drawBoard();
+}
 
 function drawBoard() {
   const body = $('board').tBodies[0];

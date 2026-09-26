@@ -2,17 +2,18 @@
 // on both the server and the browser, so they always agree.
 //
 // Each map square becomes RES x RES samples. Obstacles are smooth shapes, styled per level:
-//   hell   # clusters -> volcano cones with a lava crater, + -> boulders, edge -> jagged cliffs
-//   ice    # clusters -> icebergs (no lava), + -> ice chunks, edge -> frozen cliffs
+//   hell   # clusters -> volcano cones with a lava crater, + -> boulders, B -> lava-ruin huts,
+//          edge -> jagged cliffs
+//   ice    # clusters -> icebergs (no lava), + -> ice chunks, B -> ice lodges, edge -> frozen cliffs
 //   witch  # -> trees (trunk here; the canopy is a sprite drawn by the client), + -> bushes,
-//          edge -> a thick hedge with trees
+//          B -> cottages, edge -> a thick hedge with trees
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
 //   haunt / castle  # -> full-height walls (touching # join into rooms), + -> furniture / rubble,
 //          edge -> wall, under a ceiling (the client draws it at CEILING_H)
 //
 // kind: 0 = ground (walkable, may slope), 1 = blocked (anything taller than STEP_H), 2 = pit
 // mat:  what a sample is made of, for the client's colors (MAT below)
-// props: things the client draws or animates on top: trees (canopies), volcano craters
+// props: things the client draws or animates on top: trees (canopies), volcano craters, huts
 
 export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9 };
 export const CEILING_H = 2.8; // haunted house: walls go all the way up to the ceiling
@@ -76,6 +77,33 @@ export function buildTerrain(MAP, RES, style) {
       if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.6, 0.65, MAT.LEAVES, 0.25);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
+    }
+    // outdoor huts / ruins / lodges — ~2×2 footprint so they read as buildings, not props
+    if (c === 'B' && (style === 'witch' || style === 'hell' || style === 'ice')) {
+      const wallH = style === 'witch' ? 1.65 : style === 'ice' ? 1.75 : 1.85;
+      const wallMat = style === 'witch' ? MAT.BARK : MAT.ROCK;
+      const roofMat = style === 'witch' ? MAT.LEAVES : MAT.ROCK;
+      const t = 0.22, W = 2.0, D = 2.0;
+      const x0 = cx - 0.5, y0 = cy - 0.5, x1 = x0 + W, y1 = y0 + D;
+      const doorL = x0 + W * 0.32, doorR = x0 + W * 0.68;
+      box(x0, y0, x0 + t, y1, wallH, wallMat);
+      box(x1 - t, y0, x1, y1, wallH, wallMat);
+      box(x0 + t, y0, x1 - t, y0 + t, wallH, wallMat);
+      box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
+      box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
+      raise(x0 - 0.08, y0 - 0.08, x1 + 0.08, y1 + 0.08, (px, py) => {
+        const u = Math.abs(px - (x0 + W / 2)) / (W / 2), v = Math.abs(py - (y0 + D / 2)) / (D / 2);
+        if (u > 1.02 || v > 1.02) return null;
+        const peak = wallH + 0.85 - u * 0.95 - v * 0.2;
+        return peak > wallH + 0.05 ? [peak, roofMat] : null;
+      });
+      if (style === 'witch') box(x1 - 0.45, y0 + 0.2, x1 - 0.2, y0 + 0.45, wallH + 1.05, MAT.ROCK);
+      else if (style === 'ice') {
+        box(x0 + 0.25, y0 + 0.25, x0 + 0.5, y0 + 0.5, wallH + 0.7, MAT.ROCK);
+        box(x0 + 0.32, y0 + 0.32, x0 + 0.43, y0 + 0.43, wallH + 1.15, MAT.ROCK);
+      } else box(x1 - 0.5, y1 - 0.5, x1 - 0.25, y1 - 0.25, wallH + 0.55, MAT.LAVA);
+      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH + 0.85, style });
+      continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
     if (style === 'haunt' || style === 'castle') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; } // whole squares, so walls join flush

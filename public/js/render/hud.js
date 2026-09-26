@@ -60,6 +60,12 @@ export function drawPickupGlows() {
     if (q.f < 0.3 || occluded(q)) continue;
     glow(q.x, q.y, 170 / q.f, 'rgba(' + S.theme.accent + ',0.35)');
   }
+  for (const n of S.thrown || []) {
+    const q = project(n.x, n.y, n.z);
+    if (q.f < 0.3 || occluded(q)) continue;
+    const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 90 + n.id);
+    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(255,210,60,' + (0.35 + 0.35 * pulse) + ')');
+  }
 }
 
 // other players' muzzle flashes and scope glints (only if not behind a wall)
@@ -248,7 +254,11 @@ export function drawMinimap(now) {
     });
     ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
     for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
-    for (const n of S.thrown) { ctx.fillStyle = '#4c4'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.22, 0, Math.PI * 2); ctx.fill(); }
+    for (const n of S.thrown) {
+      ctx.fillStyle = '#2a2'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.38, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#8f8'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff0'; ctx.beginPath(); ctx.arc(n.x + 0.12, n.y - 0.14, 0.1, 0, Math.PI * 2); ctx.fill();
+    }
     for (const [id, o] of Object.entries(S.others)) {
       if (!o.now) continue;
       ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';

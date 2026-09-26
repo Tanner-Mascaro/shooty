@@ -88,8 +88,9 @@ export function render(dt) {
   for (const b of S.boxes) drawSprite(b.x, b.y, b.z, box.w, box.h, box.px, box.pal, box.emit);
   const nadeSp = pickupSprite('nade', GUN_COLOR.nade);
   for (const n of S.thrown) {
-    const bob = 0.02 * Math.sin(now / 80 + n.id);
-    drawSprite(n.x, n.y, n.z + bob, nadeSp.w, nadeSp.h, nadeSp.px, nadeSp.pal, nadeSp.emit);
+    const bob = 0.04 * Math.sin(now / 70 + n.id);
+    const spin = 1 + 0.08 * Math.sin(now / 50 + n.id * 1.7);
+    drawSprite(n.x, n.y, n.z + bob, nadeSp.w * 1.15 * spin, nadeSp.h * 1.15, nadeSp.px, nadeSp.pal, nadeSp.emit);
   }
   for (const p of S.T.props) { // swamp tree canopies (the trunks are terrain)
     if (p.type !== 'tree' || Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;

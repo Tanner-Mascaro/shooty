@@ -1,4 +1,5 @@
 // Entry point: wire everything up and run the frame loop.
+// On the bare home/sign-in screen we skip terrain build and the rAF loop so the menu stays snappy.
 import { setLevel } from './level.js';
 import { connect } from './net.js';
 import { initInput } from './input.js';
@@ -9,8 +10,11 @@ import { initVoice, updateVoice } from './voice.js';
 import { updatePlayer } from './physics.js';
 import { autoFire } from './weapons.js';
 import { render } from './render/index.js';
+import { homeOpen, onHomeLeave } from './home.js';
+import { warmLobby } from './room.js';
+import { flushFriends } from './friends.js';
+import { S } from './state.js';
 
-setLevel('hell'); // the server's init message switches to the current level
 initLobby();
 initSettings();
 initChat();
@@ -20,8 +24,24 @@ connect();
 
 const fpsEl = document.getElementById('fps');
 let lastT = performance.now(), frameT = 0, frames = 0, fpsT = lastT;
+let raf = 0;
+
+function ensureWorld() {
+  if (!S.T) setLevel(S.level || 'hell');
+}
+
+function startLoop() {
+  if (raf) return;
+  warmLobby();
+  flushFriends();
+  ensureWorld();
+  lastT = performance.now();
+  frameT = lastT;
+  raf = requestAnimationFrame(loop);
+}
+
 function loop(t) {
-  requestAnimationFrame(loop);
+  raf = requestAnimationFrame(loop);
   // FPS cap: skip display refreshes until a frame is due (keeping to the beat, so 60 on a
   // 144Hz screen doesn't drift). Unlimited runs once per refresh.
   if (settings.fps) {
@@ -44,4 +64,8 @@ function loop(t) {
   }
   fpsEl.hidden = !settings.showFps;
 }
-requestAnimationFrame(loop);
+
+// home/sign-in: no 3D world and no frame loop until they enter a room (full navigation) or land with ?room=
+onHomeLeave(startLoop);
+if (!homeOpen()) startLoop();
+
