@@ -86,7 +86,9 @@
         <div id="modes" class="choice seg">
           <button data-mode="ffa">FREE-FOR-ALL</button>
           <button data-mode="teams">TEAMS</button>
+          <button data-mode="plague">PLAGUE</button>
         </div>
+        <p id="modeHelp"></p>
       </div>
       <div class="field">
         <div class="label">MAP <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">click to vote</small></div>
@@ -123,6 +125,14 @@
           <div id="botLevel" class="choice seg"><button data-level="easy">EASY</button><button data-level="medium">MEDIUM</button><button data-level="hard">HARD</button></div>
           <button id="addBot">+1</button><button id="addBots3">+3</button><button id="fillBots">FILL</button>
           <button id="removeBot">−1</button><button id="removeBots3">−3</button><button id="clearBots">CLEAR</button>
+        </div>
+        <div id="plagueSetup" class="field" hidden>
+          <div class="label">STARTING INFECTION</div>
+          <div id="plagueSelection" class="choice seg">
+            <button type="button" data-selection="random">1 RANDOM PLAYER / BOT</button>
+            <button type="button" data-selection="manual">CHOOSE PLAYERS</button>
+          </div>
+          <p id="plagueSetupHelp"></p>
         </div>
       </div>
       <div id="result"></div>
@@ -173,6 +183,10 @@
 <div id="hud">
   <div class="ph"><span style="color:#fa4;font-weight:bold">YOU</span> <span id="sk">0</span>
     <div class="hp-bar"><div class="hp-fill" id="myhp" style="width:100%;background:#fa4"></div></div>
+  </div>
+  <div id="plagueStatus" hidden>
+    <strong id="plagueRole"></strong> <span id="plagueClock"></span>
+    <div id="plagueObjective"></div>
   </div>
 </div>
 <div id="scores"></div>

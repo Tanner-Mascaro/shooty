@@ -6,8 +6,8 @@ export const ADS_ZOOM = { pistol: 0.8, deagle: 0.75, revolver: 0.72, smg: 0.75, 
 export const SENS = 0.0025; // mouse sensitivity (radians per pixel)
 
 // Quake-style movement, scaled so 320 qu/s = 3 map units/s
-export const MAX_SPEED = 3.0, ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0;
-export const GRAVITY = 7.5, JUMP_V = 2.55, SPEED_LIMIT = 10, STEP = 0.3;
+export { MOVE_SPEED as MAX_SPEED, MOVE_GRAVITY as GRAVITY, MOVE_JUMP_V as JUMP_V, MOVE_SPEED_LIMIT as SPEED_LIMIT } from '/shared/config.js';
+export const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0, STEP = 0.3;
 
 export const GUN_COLOR = {
   pistol: [200, 200, 210], deagle: [255, 200, 80], revolver: [220, 160, 90],

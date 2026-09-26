@@ -3,7 +3,9 @@
 import { groundAt, kindAt } from '/shared/terrain.js';
 import { SLIDE } from '/shared/config.js';
 import { S } from './state.js';
-import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, JUMP_V, SPEED_LIMIT, STEP } from './constants.js';
+import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
+import { PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED } from '/shared/config.js';
+import { tryJump, tryDash } from '/shared/movement.js';
 import { send } from './net.js';
 import { play, setWind, setSizzle } from './audio.js';
 import { burst } from './particles.js';
@@ -163,9 +165,21 @@ function applyFriction(dt, scale = 1) {
   S.vx *= k; S.vy *= k;
 }
 
+export function dash() {
+  if (!S.started || !S.me || !S.clawsOnly) return;
+  const forward = Number(held('forward')) - Number(held('back'));
+  const side = Number(held('right')) - Number(held('left'));
+  const cos = Math.cos(S.me.a), sin = Math.sin(S.me.a);
+  const dx = forward || side ? cos * forward - sin * side : cos;
+  const dy = forward || side ? sin * forward + cos * side : sin;
+  if (!tryDash(S, dx, dy, performance.now())) return;
+  send({ type: 'dash', dx, dy, seq: S.mySeq });
+}
+
 // start a slide on a fresh press of the slide key (or holding it as you land) while running;
 // it ends when you let go, jump, slow down or it runs out
 function updateSlide(wx, wy, wl) {
+  if (S.clawsOnly) { S.sliding = false; S.slideArmed = false; return; }
   const now = performance.now(), sp = Math.hypot(S.vx, S.vy);
   if (S.sliding && (!held('slide') || !S.onGround || now > S.slideEnd || sp < 0.8)) {
     S.sliding = false; S.slideReady = now + SLIDE.cooldown;
@@ -201,17 +215,27 @@ export function updatePlayer(dt) {
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
-  const wishSpeed = wl > 0 ? MAX_SPEED * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
+  const movementScale = S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1;
+  const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
+  const now = performance.now();
+  if (S.dashUntil && (!S.clawsOnly || now >= S.dashUntil)) {
+    S.dashUntil = 0;
+    const speed = Math.hypot(S.vx, S.vy), limit = MAX_SPEED * movementScale;
+    if (speed > limit) { S.vx *= limit / speed; S.vy *= limit / speed; }
+  }
   updateSlide(wx, wy, wl);
-  if (S.onGround && held('jump')) { S.vz = JUMP_V; S.onGround = false; play('jump'); }
-  if (S.sliding && S.onGround) { applyFriction(dt, SLIDE.friction); accelerate(wx, wy, wishSpeed * 0.3, ACCEL * 0.3, dt); } // glide, steer a little
+  if (tryJump(S, held('jump'), S.clawsOnly ? PLAGUE_JUMPS : 1)) play('jump');
+  if (S.clawsOnly && now < S.dashUntil) {
+    S.vx = S.dashX * PLAGUE_DASH_SPEED; S.vy = S.dashY * PLAGUE_DASH_SPEED;
+  } else if (S.sliding && S.onGround) { applyFriction(dt, SLIDE.friction); accelerate(wx, wy, wishSpeed * 0.3, ACCEL * 0.3, dt); }
   else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
   S.slideDip += ((S.sliding ? 1 : 0) - S.slideDip) * Math.min(1, dt * 12);
 
   let speed = Math.hypot(S.vx, S.vy);
-  if (speed > SPEED_LIMIT) { S.vx *= SPEED_LIMIT / speed; S.vy *= SPEED_LIMIT / speed; speed = SPEED_LIMIT; }
+  const speedLimit = SPEED_LIMIT * movementScale;
+  if (speed > speedLimit) { S.vx *= speedLimit / speed; S.vy *= speedLimit / speed; speed = speedLimit; }
   S.speed = speed;
 
   const prevX = me.x, prevY = me.y;

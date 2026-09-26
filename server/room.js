@@ -6,6 +6,8 @@ import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, randomBotName } from './bot.js';
+import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
+import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
 import { VERSION } from './version.js';
 
@@ -28,8 +30,10 @@ export class Room {
     this.code = code;
     this.private = isPrivate; // quick play never drops strangers into a private room
     this.players = {};        // id -> player (the hub's connection object, or a bot)
-    this.mode = 'ffa';        // 'ffa' | 'teams'
+    this.mode = 'ffa';        // 'ffa' | 'teams' | 'plague'
     this.gameOn = false;
+    this.plagueEndsAt = 0;
+    this.plagueSelection = 'random'; // 'random' | 'manual'; manual roles survive rematches
     this.boxes = [];          // loot boxes: { id, x, y, z, items: [{ w, mag, spare }], until }
     this.boxId = 0;
     this.nades = [];          // thrown grenades in flight
@@ -41,6 +45,19 @@ export class Room {
   get humans() { return this.list.filter(p => !p.bot); }
   get full() { return this.humans.length >= MAX_PLAYERS; } // bots give up their seats
   get hasBots() { return this.list.some(p => p.bot); }
+  isInfected(p) { return this.mode === 'plague' && p.team === PLAGUE_TEAM; }
+  maxHp(p) { return this.isInfected(p) ? PLAGUE_MAX_HP : MAX_HP; }
+  dash(p, dx, dy, now = Date.now()) {
+    return this.gameOn && this.isInfected(p) && tryDash(p, dx, dy, now);
+  }
+  get plagueRemainingMs() { return this.mode === 'plague' && this.gameOn ? Math.max(0, this.plagueEndsAt - Date.now()) : 0; }
+  skinOf(p) { return this.mode === 'plague' && this.gameOn && p.team === PLAGUE_TEAM ? PLAGUE_SKIN : p.skin || 'demon'; }
+  startMessage() { return { type: 'start', level: this.level, mode: this.mode, plagueRemainingMs: this.plagueRemainingMs }; }
+  plagueSetupValid() {
+    return this.mode !== 'plague' || this.plagueSelection === 'random'
+      || [PLAGUE_TEAM, HEALTHY_TEAM].every(team => this.list.some(p => p.plagueStartTeam === team));
+  }
+  resetReady() { this.list.forEach(p => p.ready = !!p.bot); }
 
   // --- messaging ---
   send(p, msg) { this.hub.send(p, msg); }
@@ -53,9 +70,9 @@ export class Room {
     const votes = {};
     for (const p of this.humans) if (p.vote && LEVELS[p.vote]) votes[p.vote] = (votes[p.vote] || 0) + 1;
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes,
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, skin: p.skin || 'demon',
-        ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
+      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, plagueRemainingMs: this.plagueRemainingMs,
+      plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
   }
 
   // --- level / pickups ---
@@ -92,7 +109,7 @@ export class Room {
   pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon, crate: !!p.crate })), active: this.pickups.map(p => p.active) }; }
   broadcastPickups() { this.broadcast(this.pickupList()); }
   boxList() { return { type: 'boxes', boxes: this.boxes.map(b => ({ id: b.id, x: b.x, y: b.y, z: b.z, items: b.items.map(it => it.w) })) }; }
-  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, nades: p.nades || 0 }); }
+  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, nades: p.nades || 0, clawsOnly: this.isInfected(p) }); }
 
   voteWinner() {
     const counts = {};
@@ -119,6 +136,7 @@ export class Room {
   // in their hand) in the same slot. Returns { dropped } (the replaced gun, if any), or null if
   // it can't be done
   takeGun(p, w, mag, spare, drop) {
+    if (this.isInfected(p)) return null;
     if (p.mag[w] !== undefined) { this.addSpare(p, w, mag + spare); return { dropped: null }; }
     const guns = Object.keys(p.mag);
     if (guns.length < GUN_SLOTS) { p.mag[w] = mag; p.inv[w] = spare; return { dropped: null }; }
@@ -135,6 +153,7 @@ export class Room {
   }
   // spare rounds for gun w, up to what you can carry (the rest is left behind); how many fit
   addSpare(p, w, n) {
+    if (this.isInfected(p)) return 0;
     const have = p.inv[w] || 0, add = Math.max(0, Math.min(n, MAX_SPARE(w) - have));
     p.inv[w] = have + add;
     return add;
@@ -160,10 +179,11 @@ export class Room {
   }
 
   // --- players ---
-  enemies(p) { return this.list.filter(o => o !== p && (this.mode !== 'teams' || o.team !== p.team)); }
+  enemies(p) { return this.list.filter(o => o !== p && (!isTeamMode(this.mode) || o.team !== p.team)); }
   smallerTeam() { return this.list.filter(p => p.team === 1).length <= this.list.filter(p => p.team === 2).length ? 1 : 2; }
   teamKills(t) { return this.list.filter(p => p.team === t).reduce((n, p) => n + p.kills, 0); }
   score() {
+    if (this.mode === 'plague') return `${this.list.filter(p => p.team === HEALTHY_TEAM).length} healthy, ${this.list.filter(p => p.team === PLAGUE_TEAM).length} infected`;
     if (this.mode === 'teams') return `${TEAMS[1]} ${this.teamKills(1)}, ${TEAMS[2]} ${this.teamKills(2)}`;
     return this.list.map(p => this.hub.name(p) + ' ' + p.kills).join(', ');
   }
@@ -178,11 +198,14 @@ export class Room {
     const near = avoid.length ? avoid.reduce((m, o) => Math.hypot(o.x - sp.x, o.y - sp.y) < Math.hypot(m.x - sp.x, m.y - sp.y) ? o : m) : null;
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
-    p.hp = MAX_HP;
-    p.mag = { [START_GUN]: WEAPONS[START_GUN].mag }; // rounds loaded; you own the guns listed here
-    p.inv = { [START_GUN]: AMMO[START_GUN] };         // spare rounds per gun
+    p.hp = this.maxHp(p);
+    p.mag = this.isInfected(p) ? {} : { [START_GUN]: WEAPONS[START_GUN].mag }; // rounds loaded; you own the guns listed here
+    p.inv = this.isInfected(p) ? {} : { [START_GUN]: AMMO[START_GUN] };         // spare rounds per gun
     p.nades = 0;
     p.lastShot = {};
+    p.sc = false; p.sl = false;
+    p.vz = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
+    p.dashUntil = 0; p.nextDash = 0; p.dashX = 0; p.dashY = 0;
     if (p.brain) p.brain = newBrain();
     p.seq++;    // client snaps to the new spawn; stale inputs from the old life are ignored
     this.syncAmmo(p);
@@ -191,29 +214,34 @@ export class Room {
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
     Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
-    p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
+    p.plagueStartTeam = HEALTHY_TEAM;
+    // Late arrivals join the plague, so reconnecting cannot undo an infection.
+    p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
+    if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     this.resetPlayer(p);
-    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: p.seq, version: VERSION });
+    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: p.hp, seq: p.seq, version: VERSION });
     this.send(p, this.pickupList());
     this.send(p, this.boxList());
-    if (this.gameOn) this.send(p, { type: 'start', level: this.level }); // drop straight into the running match
     if (BOTS && !p.bot && this.humans.length === 1 && !this.hasBots) this.addBot();
+    if (this.gameOn) this.checkPlagueWin();
     this.roster();
+    if (this.gameOn) this.send(p, this.startMessage()); // roles arrive before the match starts
   }
 
   remove(p) {
     if (!this.players[p.id]) return;
     delete this.players[p.id];
     p.room = null;
+    if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     if (!this.humans.length) { this.hub.closeRoom(this); return; } // bots go with it
-    if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
+    if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
     if (!this.maybeStart()) this.roster(); // the one who wasn't ready left
   }
 
   // start the match once there are two or more players and all of them are ready; true if it did
   maybeStart() {
-    if (this.gameOn || this.list.length < 2 || !this.list.every(pl => pl.ready)) return false;
+    if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid() || !this.list.every(pl => pl.ready)) return false;
     this.startGame();
     return true;
   }
@@ -236,6 +264,7 @@ export class Room {
     const bot = this.list.filter(p => p.bot).pop();
     if (!bot) return false;
     delete this.players[bot.id];
+    if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     log(`${this.hub.name(bot)} left room ${this.code}`);
     return true;
   }
@@ -257,16 +286,25 @@ export class Room {
   }
 
   killPlayer(victim, killer, info) {
+    if (!this.gameOn) return;
     const at = { x: victim.x, y: victim.y, z: victim.z };
+    const skin = this.skinOf(victim);
+    const infected = this.mode === 'plague' && killer && killer.team === PLAGUE_TEAM && victim.team === HEALTHY_TEAM;
     if (killer) killer.kills++;
     this.hub.record(killer, { kills: 1 });
     this.hub.record(victim, { deaths: 1 });
     this.dropLoot(victim);
+    if (infected) victim.team = PLAGUE_TEAM;
     this.resetPlayer(victim);
     this.broadcast(this.boxList());
-    this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id }, info, at));
+    this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin }, info, at));
     const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
     log(`[${this.code}] ${this.hub.name(killer || victim)} ${how} — ${this.score()}`);
+    if (this.mode === 'plague') {
+      if (infected) this.roster(); // deliver the new team before a possible victory message
+      this.checkPlagueWin();
+      return;
+    }
     if (!killer) return;
     if (this.mode === 'teams') {
       if (this.teamKills(killer.team) >= TEAM_WIN_SCORE) this.finish(this.list.filter(p => p.team === killer.team), { team: killer.team }, TEAMS[killer.team] + ' team');
@@ -274,27 +312,45 @@ export class Room {
   }
 
   startGame() {
+    if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid()) return;
     if (this.mode === 'teams' && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
     const map = this.voteWinner();
     if (map !== this.level) this.setLevel(map);
+    if (this.mode === 'plague') {
+      this.list.forEach(p => p.team = this.plagueSelection === 'manual' ? p.plagueStartTeam : HEALTHY_TEAM);
+      if (this.plagueSelection === 'random') this.list[Math.floor(Math.random() * this.list.length)].team = PLAGUE_TEAM;
+      this.plagueEndsAt = Date.now() + PLAGUE_DURATION;
+    }
     const placed = [];
     for (const p of this.list) {
       p.kills = 0; p.ready = !!p.bot;
-      this.resetPlayer(p, placed.filter(o => this.mode !== 'teams' || o.team !== p.team));
+      this.resetPlayer(p, placed.filter(o => !isTeamMode(this.mode) || o.team !== p.team));
       placed.push(p);
     }
     this.resetPickups();
     this.gameOn = true;
-    this.broadcast({ type: 'start', level: this.level });
+    this.roster();
+    this.broadcast(this.startMessage());
     this.broadcastPickups();
     this.broadcast(this.boxList());
-    this.roster();
-    log(`[${this.code}] Match started on ${LEVEL_NAMES[this.level]} (${this.mode === 'teams' ? 'teams' : 'free-for-all'}): ${this.list.map(p => this.hub.who(p)).join(', ')}`);
+    log(`[${this.code}] Match started on ${LEVEL_NAMES[this.level]} (${MODE_NAMES[this.mode]}): ${this.list.map(p => this.hub.who(p)).join(', ')}`);
+  }
+
+  checkPlagueWin(now = Date.now()) {
+    if (!this.gameOn || this.mode !== 'plague') return false;
+    const healthy = this.list.filter(p => p.team === HEALTHY_TEAM), infected = this.list.filter(p => p.team === PLAGUE_TEAM);
+    let team;
+    if (!healthy.length) team = PLAGUE_TEAM;
+    else if (!infected.length || now >= this.plagueEndsAt) team = HEALTHY_TEAM;
+    else return false;
+    this.finish(team === PLAGUE_TEAM ? infected : healthy, { team, mode: this.mode }, teamName(this.mode, team));
+    return true;
   }
 
   finish(winners, result, label) {
     this.gameOn = false;
+    this.plagueEndsAt = 0;
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast(Object.assign({ type: 'win' }, result));
     for (const p of this.humans) this.hub.record(p, winners.includes(p) ? { wins: 1 } : { losses: 1 });
@@ -305,6 +361,7 @@ export class Room {
 
   endMatch(reason) {
     this.gameOn = false;
+    this.plagueEndsAt = 0;
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast({ type: 'end', reason });
     log(`[${this.code}] Match ended: ${reason}`);
@@ -312,6 +369,7 @@ export class Room {
 
   // --- per-tick: bots, pits, pickups, grenades, state broadcast ---
   tick() {
+    this.checkPlagueWin(); // the timer expires before another bot or player can infect anyone
     for (const p of this.list) if (p.bot) botTick(this, p);
     if (this.gameOn) {
       const now = Date.now(), dt = TICK / 1000;
@@ -332,7 +390,7 @@ export class Room {
     }
     if (this.list.length < 2) return;
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
-    this.broadcast({ type: 'state', players, nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
+    this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs, nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
   }
 
   stepNades(dt, now) {
@@ -359,10 +417,10 @@ export class Room {
   explodeNade(n) {
     const killer = this.players[n.by] || null;
     this.broadcast({ type: 'nadeBoom', x: n.x, y: n.y, z: n.z, id: n.id });
-    if (!this.gameOn) return;
+    if (!this.gameOn || (killer && this.isInfected(killer))) return;
     for (const o of this.list) {
       if (!this.players[o.id]) continue;
-      if (killer && this.mode === 'teams' && o.team === killer.team && o !== killer) continue; // no team damage except self
+      if (killer && isTeamMode(this.mode) && o.team === killer.team && o !== killer) continue; // no team damage except self
       const d = Math.hypot(o.x - n.x, o.y - n.y, (o.z + BODY_H / 2) - n.z);
       if (d > NADE.radius) continue;
       const dmg = Math.round(NADE.dmg * (1 - d / NADE.radius));
@@ -380,9 +438,11 @@ export class Room {
   tryWalkOver(p, pu, now) {
     if (pu.gun && !pu.crate) return; // map gun pads need the use key; random gun crates are walk-over
     if (!pu.active || Math.hypot(p.x - pu.x, p.y - pu.y) > 0.8 || p.z > 1) return;
+    if (this.isInfected(p) && pu.weapon !== 'health') return;
+    const maxHp = this.maxHp(p);
     if (pu.weapon === 'health') {
-      if (p.hp >= MAX_HP) return;
-      p.hp = Math.min(MAX_HP, p.hp + HEAL);
+      if (p.hp >= maxHp) return;
+      p.hp = Math.min(maxHp, p.hp + HEAL);
       pu.respawnAt = now + HEAL_RESPAWN;
     } else if (pu.nade || pu.weapon === 'nade') {
       if ((p.nades || 0) >= NADE.maxCarry) return;
@@ -437,10 +497,11 @@ Room.prototype.handlers = {
   },
 
   mode(p, msg) {
-    if (this.gameOn || !['ffa', 'teams'].includes(msg.mode) || msg.mode === this.mode) return;
+    if (this.gameOn || !Object.hasOwn(MODE_NAMES, msg.mode) || msg.mode === this.mode) return;
     this.mode = msg.mode;
-    this.list.forEach((pl, i) => { pl.team = this.mode === 'teams' ? i % 2 + 1 : 0; pl.ready = !!pl.bot; });
-    log(`[${this.code}] ${this.hub.who(p)} switched to ${this.mode === 'teams' ? 'teams' : 'free-for-all'}`);
+    this.plagueEndsAt = 0;
+    this.list.forEach((pl, i) => { pl.team = this.mode === 'plague' ? HEALTHY_TEAM : this.mode === 'teams' ? i % 2 + 1 : 0; pl.ready = !!pl.bot; });
+    log(`[${this.code}] ${this.hub.who(p)} switched to ${MODE_NAMES[this.mode]}`);
     this.roster();
   },
 
@@ -450,8 +511,30 @@ Room.prototype.handlers = {
     this.roster();
   },
 
+  plagueSetup(p, msg) {
+    if (this.gameOn || this.mode !== 'plague' || !['random', 'manual'].includes(msg.selection) || msg.selection === this.plagueSelection) return;
+    this.plagueSelection = msg.selection;
+    this.resetReady();
+    this.roster();
+  },
+
+  plagueRole(p, msg) {
+    if (this.gameOn || this.mode !== 'plague' || this.plagueSelection !== 'manual') return;
+    if (!Number.isInteger(msg.id) || ![PLAGUE_TEAM, HEALTHY_TEAM].includes(msg.team)) return;
+    const target = this.players[msg.id];
+    if (!target || target.plagueStartTeam === msg.team) return;
+    target.plagueStartTeam = msg.team;
+    this.resetReady();
+    this.roster();
+  },
+
   ready(p) {
     if (this.gameOn) return;
+    if (!this.plagueSetupValid()) {
+      this.send(p, { type: 'notice', text: 'Choose at least one infected and one healthy player before starting.' });
+      this.roster();
+      return;
+    }
     p.ready = true;
     log(`[${this.code}] ${this.hub.who(p)} is ready`);
     if (!this.maybeStart()) this.roster();
@@ -466,13 +549,13 @@ Room.prototype.handlers = {
   fillBots(p, msg) { this.fillBots(msg.level); this.maybeStart(); this.roster(); },
   clearBots() {
     this.clearBots();
-    if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
+    if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
   },
   removeBot(p, msg) {
     const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
     for (let i = 0; i < n; i++) if (!this.dropBot()) break;
-    if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
+    if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
   },
 
@@ -498,6 +581,7 @@ Room.prototype.handlers = {
   // use key: pick up the gun on pad `pad`, or loot box `box`. `drop` is the gun in your hand,
   // swapped out if both slots are full (from a pad it's left in a new box at your feet)
   use(p, msg) {
+    if (this.isInfected(p)) return;
     if (!this.gameOn) return;
     const near = o => Math.hypot(p.x - o.x, p.y - o.y) <= USE_RANGE && Math.abs(p.z - (o.z || 0)) < 1.2;
     let got = null, where = null;
@@ -534,7 +618,7 @@ Room.prototype.handlers = {
   },
 
   nade(p) {
-    if (!this.gameOn || !(p.nades > 0)) return;
+    if (!this.gameOn || this.isInfected(p) || !(p.nades > 0)) return;
     p.nades--;
     this.syncAmmo(p);
     const cos = Math.cos(p.a), sin = Math.sin(p.a), cp = Math.cos(p.p), sp = Math.sin(p.p);
@@ -550,6 +634,7 @@ Room.prototype.handlers = {
 
   // sent when the client finishes a reload; it can't have fired that gun for the whole reload
   reload(p, msg) {
+    if (this.isInfected(p)) return;
     const w = WEAPONS[msg.weapon], now = Date.now();
     if (!w || w.melee || p.mag[msg.weapon] === undefined) return;
     const spare = p.inv[msg.weapon] || 0;
@@ -559,22 +644,32 @@ Room.prototype.handlers = {
     p.inv[msg.weapon] -= n;
   },
 
+  dash(p, msg) {
+    const now = Date.now();
+    if (this.gameOn) this.checkPlagueWin(now);
+    const accepted = msg.seq === p.seq && [msg.dx, msg.dy].every(Number.isFinite) && this.dash(p, msg.dx, msg.dy, now);
+    this.send(p, { type: 'dash', seq: p.seq, accepted, cooldownMs: Math.max(0, p.nextDash - now) });
+  },
+
   input(p, msg) {
     if (msg.seq !== p.seq || ![msg.x, msg.y, msg.z, msg.a, msg.p].every(Number.isFinite)) return;
     // basic anti-cheat: no teleporting (bhop speed is capped client-side) and no walking into walls
-    if (Math.hypot(msg.x - p.x, msg.y - p.y) < 1 && !hitsWall(this.T, msg.x, msg.y, PLAYER_R)) { p.x = msg.x; p.y = msg.y; }
+    const maxStep = this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1; // match the infected movement cap
+    if (Math.hypot(msg.x - p.x, msg.y - p.y) < maxStep && !hitsWall(this.T, msg.x, msg.y, PLAYER_R)) { p.x = msg.x; p.y = msg.y; }
     const g = groundAt(this.T, p.x, p.y);
     p.z = Math.max(g - 0.4, Math.min(g + 2, msg.z));
     p.a = msg.a;
     p.p = Math.max(-1.2, Math.min(1.2, msg.p));
-    p.sc = !!msg.sc;
-    p.sl = !!msg.sl;
+    p.sc = !this.isInfected(p) && !!msg.sc;
+    p.sl = !this.isInfected(p) && !!msg.sl;
   },
 
   shoot(p, msg) {
     const w = WEAPONS[msg.weapon];
     if (!w || !this.gameOn) return;
     const now = Date.now();
+    if (this.checkPlagueWin(now)) return;
+    if (this.isInfected(p) ? msg.weapon !== 'claws' : msg.weapon === 'claws') { this.syncAmmo(p); return; }
     if (now < (p.nextFire[msg.weapon] || 0)) return;
     if (!w.melee) {
       // the client counts its own rounds the same way, so no reply unless we disagree
@@ -583,9 +678,9 @@ Room.prototype.handlers = {
       p.lastShot[msg.weapon] = now;
       if (!p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
     }
-    p.nextFire[msg.weapon] = now + w.cd * 0.85; // slack for network jitter
+    p.nextFire[msg.weapon] = now + w.cd * (msg.weapon === 'claws' ? 1 : 0.85); // guns keep their network slack
     const targets = this.enemies(p);
-    const res = w.melee ? doMelee(this.T, p, targets) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped);
+    const res = w.melee ? doMelee(this.T, p, targets, msg.weapon) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped);
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,
       rays: res.rays.map(r => ({ a: r.a, p: r.p, dist: r.dist, hit: !!r.hit })) });
     for (const h of res.hits) {

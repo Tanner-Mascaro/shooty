@@ -1,7 +1,7 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { TEAMS } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '/shared/config.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
@@ -135,6 +135,7 @@ export function initRoom() {
     send({ type: 'vote', level: b.dataset.level });
   }));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
+  document.querySelectorAll('#plagueSelection button').forEach(b => b.addEventListener('click', () => send({ type: 'plagueSetup', selection: b.dataset.selection })));
   document.querySelectorAll('#teamPick button').forEach(b => b.addEventListener('click', () => send({ type: 'team', team: +b.dataset.team })));
   // bot difficulty for the next + BOT, remembered in this browser
   let botLevel = 'medium';
@@ -191,21 +192,49 @@ export function showRoom() {
   $('roomCode').textContent = r.code;
   $('roomKind').textContent = r.private ? 'private' : 'public';
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('sel', b.dataset.mode === r.mode));
+  document.body.classList.toggle('plague', r.mode === 'plague');
+  $('modeHelp').textContent = r.mode === 'plague'
+    ? `Infected monsters have ${PLAGUE_MAX_HP} health, move ${PLAGUE_SPEED_MULTIPLIER} times as fast, and can double jump and dash. Use the shoot button to attack with claws; two hits infect a full-health survivor. Infect everyone, or stay healthy for ${PLAGUE_DURATION / 60000} minutes to win. No friendly fire.`
+    : r.mode === 'teams' ? `Red vs blue. First team to ${TEAM_WIN_SCORE} kills wins.` : `Every player for themselves. First to ${WIN_SCORE} kills wins.`;
+  const manual = r.mode === 'plague' && r.plagueSelection === 'manual';
+  $('plagueSetup').hidden = r.mode !== 'plague';
+  document.querySelectorAll('#plagueSelection button').forEach(b => {
+    const selected = b.dataset.selection === r.plagueSelection;
+    b.classList.toggle('sel', selected);
+    b.setAttribute('aria-pressed', String(selected));
+    b.disabled = r.gameOn;
+  });
+  $('plagueSetupHelp').textContent = manual
+    ? 'Set each player or bot to Infected or Healthy in the player list above. Choose at least one of each. Role changes reset ready status.'
+    : 'Exactly one player or bot is picked at random when each round starts.';
 
   const teams = r.mode === 'teams';
   const me = r.players.find(p => p.id === S.myId);
-  $('roster').replaceChildren(...[...r.players].sort((a, b) => a.team - b.team).map(p => {
+  $('roster').replaceChildren(...[...r.players].sort((a, b) => r.mode === 'plague' && !r.gameOn ? a.id - b.id : a.team - b.team).map(p => {
     const li = document.createElement('li');
     li.dataset.id = p.id; // voice.js lights up whoever is talking
-    if (teams) li.classList.add('team' + p.team);
+    if (isTeamMode(r.mode) && (teams || r.gameOn)) li.classList.add('team' + p.team);
+    if (manual && !r.gameOn) li.classList.add('team' + p.plagueStartTeam, 'plague-role-row');
     li.classList.toggle('ready', p.ready);
     li.classList.toggle('you', p.id === S.myId);
     const name = document.createElement('span');
     name.textContent = p.name + (p.id === S.myId ? ' (you)' : '');
     const tag = document.createElement('span');
     tag.className = 'tag';
-    tag.textContent = (teams ? TEAMS[p.team] + ' · ' : '') + (PLAYER_SKIN_NAMES[p.skin] || 'Demon') + ' · ' + (p.ready ? 'READY' : 'NOT READY');
+    const side = teams || (r.mode === 'plague' && r.gameOn) ? teamName(r.mode, p.team) + ' · ' : '';
+    const skin = r.mode === 'plague' && r.gameOn && p.team === PLAGUE_TEAM ? 'Monster' : PLAYER_SKIN_NAMES[p.skin] || 'Demon';
+    tag.textContent = side + skin + ' · ' + (p.ready ? 'READY' : 'NOT READY');
     li.append(name, tag);
+    if (manual && !r.gameOn) {
+      const role = document.createElement('select');
+      role.className = 'plague-role';
+      role.dataset.playerId = p.id;
+      role.setAttribute('aria-label', 'Starting role for ' + p.name);
+      role.append(new Option('Healthy', HEALTHY_TEAM), new Option('Infected', PLAGUE_TEAM));
+      role.value = p.plagueStartTeam;
+      role.addEventListener('change', () => send({ type: 'plagueRole', id: p.id, team: +role.value }));
+      li.append(role);
+    }
     if (voiceOn() && !p.bot && p.id !== S.myId) { // mute their voice, this session
       const mute = document.createElement('button');
       mute.className = 'mute';
@@ -239,12 +268,13 @@ export function showRoom() {
   // what's needed before the match can start
   const ready = r.players.filter(p => p.ready).length, n = r.players.length;
   const btn = $('readyBtn');
-  btn.disabled = !me || me.ready || r.gameOn || S.disconnected;
+  btn.disabled = !me || me.ready || r.gameOn || S.disconnected || r.plagueSetupValid === false;
   btn.textContent = me && me.ready ? 'Ready!' : "I'm Here";
   if (S.disconnected) return;
   $('waitMsg').textContent =
     r.gameOn ? 'Match in progress — joining...'
     : n < 2 ? 'Waiting for players — send friends the invite link, or fill with bots'
+    : r.plagueSetupValid === false ? 'Choose at least one infected and one healthy player in the list above.'
     : me && me.ready ? `Waiting for everyone (${ready}/${n}) · map votes decide the arena`
     : `Vote a map, then click "I'm Here" (${ready}/${n} ready)`;
 }

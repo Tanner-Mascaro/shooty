@@ -4,7 +4,18 @@
 body { background:#000; overflow:hidden; height:100vh; font-family:'Courier New',monospace; }
 canvas { display:block; position:absolute; top:0; left:0; }
 
-#hud { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; gap:30px; z-index:10; pointer-events:none; }
+#hud { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; align-items:center; z-index:10; pointer-events:none; }
+#plagueStatus { text-align:center; color:#ddd; font-size:12px; text-shadow:0 1px 4px #000; white-space:nowrap; }
+#plagueRole { color:#6af; }
+#plagueStatus.infected #plagueRole { color:#9e5; }
+#plagueClock { color:#fff; font-weight:bold; margin-left:8px; }
+#plagueObjective { margin-top:4px; }
+.plague.ingame #feed { margin-top:92px; }
+.plague .team1, .plague #scores .team1 { color:#9e5; }
+#modeHelp, #plagueSetupHelp { color:var(--muted); font-size:12px; line-height:1.5; }
+#plagueSelection { flex-wrap:wrap; }
+#plagueSelection button:disabled { cursor:default; opacity:.6; }
+#modes { flex-wrap:wrap; }
 .ph { color:#fff; font-size:13px; text-align:center; text-shadow:0 0 4px #000; }
 .hp-bar { width:140px; height:8px; background:#111; border:1px solid #444; margin-top:2px; }
 .hp-fill { height:100%; transition:width .15s; }
@@ -238,6 +249,10 @@ body.on-home #corner { z-index:210; }
 #roster .tag { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#666; display:flex; align-items:center; gap:6px; white-space:nowrap; }
 #roster .tag::before { content:''; width:6px; height:6px; border-radius:0; background:#444; }
 #roster li.ready .tag { color:#7d7; } #roster li.ready .tag::before { background:#5e5; box-shadow:none; }
+.plague #roster li.team1 { border-left-color:#9e5; }
+#roster li.plague-role-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 10px; }
+#roster .plague-role-row .tag { grid-column:1; white-space:normal; }
+.plague-role { grid-column:2; grid-row:1 / 3; max-width:130px; padding:7px; background:#141820; color:#eee; border:1px solid #465064; border-radius:6px; font:inherit; cursor:pointer; }
 
 /* status + ready */
 #result { color:#e8c060; font-family:Teko,sans-serif; font-weight:600; font-size:28px; letter-spacing:.06em; text-align:center; }

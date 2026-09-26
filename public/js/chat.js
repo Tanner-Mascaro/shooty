@@ -2,6 +2,7 @@
 // Messages card with the box always there; in a match it moves to the bottom left, the chat
 // key (Enter) opens the box, Enter sends and Esc closes, and messages fade after a while.
 import { S } from './state.js';
+import { isTeamMode } from '/shared/config.js';
 import { send } from './net.js';
 import { settings, keyName } from './settings.js';
 import { toast } from './ui.js';
@@ -60,7 +61,7 @@ export function addChat(msg) {
   const line = document.createElement('div');
   const who = document.createElement('span'), text = document.createElement('span');
   who.textContent = msg.name + ': ';
-  const teams = S.room && S.room.mode === 'teams';
+  const teams = S.room && isTeamMode(S.room.mode);
   who.className = msg.id === S.myId ? 'me' : !teams ? 'other' : msg.team === S.myTeam ? 'ally' : 'foe';
   text.textContent = msg.text;
   line.append(who, text);

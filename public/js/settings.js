@@ -14,7 +14,7 @@ const $ = id => document.getElementById(id);
 // action -> [label, default key]; order is the order in the panel
 export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
-  jump: ['Jump', 'Space'], slide: ['Slide', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
+  jump: ['Jump', 'Space'], slide: ['Slide / infected dash', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
   melee: ['Quick melee', 'KeyF'], nade: ['Throw grenade', 'KeyG'],
   slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
@@ -33,7 +33,8 @@ const FPS_CHOICES = [0, 30, 60, 90, 120, 144, 165, 240]; // 0 = as fast as the d
 function normalize(saved) {
   saved = saved && typeof saved === 'object' ? saved : {};
   const num = (v, lo, hi, d) => typeof v === 'number' && v >= lo && v <= hi ? v : d;
-  const mine = saved.keys && typeof saved.keys === 'object' ? saved.keys : {}, keys = {};
+  const mine = saved.keys && typeof saved.keys === 'object' ? { ...saved.keys } : {}, keys = {};
+  if (!('slide' in mine) && 'dash' in mine) mine.slide = mine.dash; // preserve the previous infected dash binding
   // keep bindings for actions that still exist; a new action whose default key you already
   // use for something else starts unbound
   for (const a in ACTIONS) keys[a] = a in mine ? (typeof mine[a] === 'string' ? mine[a] : null)
@@ -156,8 +157,12 @@ function render() {
 }
 
 // the hint line at the bottom of the screen, using your keys
-function showControlsHint() {
+export function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
+  if (S.clawsOnly) {
+    $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump, press again for double jump | ${k('slide')} dash | hold left click attack | ${k('fullscreen')} fullscreen`;
+    return;
+  }
   $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
     `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} nade | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }

@@ -7,6 +7,7 @@
 // only your teammates get it. The lower player id makes the offer, so two browsers never
 // both offer at once.
 import { S, teamOf } from './state.js';
+import { isTeamMode } from '/shared/config.js';
 import { send } from './net.js';
 import { settings, held } from './settings.js';
 import { toast } from './ui.js';
@@ -19,7 +20,7 @@ let micTrack = null, micAsked = false;
 export const voiceOn = () => settings.voice !== 'off';
 
 // may this player hear you right now? (teams match: teammates only)
-const hears = id => !(S.room && S.room.mode === 'teams' && S.room.gameOn && teamOf(id) !== S.myTeam);
+const hears = id => !(S.room && isTeamMode(S.room.mode) && S.room.gameOn && teamOf(id) !== S.myTeam);
 
 // --- connections ---
 function makePeer(id, offering) {

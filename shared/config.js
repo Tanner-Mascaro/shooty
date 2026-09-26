@@ -7,6 +7,21 @@ export const WIN_SCORE = 10;       // free-for-all: first player to this many ki
 export const TEAM_WIN_SCORE = 20;  // teams: first team to this many kills
 export const MAX_PLAYERS = 8;      // per room
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
+export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', plague: 'Plague' };
+export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
+export const PLAGUE_TEAM = 1;
+export const HEALTHY_TEAM = 2;
+export const PLAGUE_SKIN = 'demon';
+export const PLAGUE_SPEED_MULTIPLIER = 2;
+export const PLAGUE_MAX_HP = MAX_HP * 3;
+export const PLAGUE_JUMPS = 2;
+export const PLAGUE_DASH_SPEED = 15; // map units per second during the burst
+export const PLAGUE_DASH_DURATION = 200; // ms
+export const PLAGUE_DASH_COOLDOWN = 2000; // ms between dash starts
+export const MOVE_SPEED = 3, MOVE_SPEED_LIMIT = 10, MOVE_GRAVITY = 7.5, MOVE_JUMP_V = 2.55;
+export const PLAGUE_TEAMS = { [PLAGUE_TEAM]: 'PLAGUE', [HEALTHY_TEAM]: 'HEALTHY' };
+export const isTeamMode = mode => mode === 'teams' || mode === 'plague';
+export const teamName = (mode, team) => (mode === 'plague' ? PLAGUE_TEAMS : TEAMS)[team] || '';
 export const PLAYER_SKINS = ['demon', 'robot', 'witch', 'cowboy', 'nun', 'knight', 'bodybuilder', 'ghost', 'goose', 'construction', 'superhero', 'ninja', 'werewolf', 'zombie', 'astronaut', 'mummy', 'vampire', 'slime'];
 export const MAX_DEPTH = 40;     // max view / bullet distance
 export const PIT_DPS = 40;       // damage per second standing in lava / acid / bog
@@ -34,6 +49,7 @@ export const WEAPONS = {
   uzi:      { dmg: 9,   head: 1.8, cd: 55,   spread: 0.04,  scopedSpread: 0.022, airSpread: 0.09, auto: true, mag: 32, reload: 1400 },
   lmg:      { dmg: 15,  head: 1.8, cd: 95,   spread: 0.028, scopedSpread: 0.014, airSpread: 0.065, auto: true, mag: 75, reload: 3200 },
   blade:    { dmg: 55,  backstab: 150, cd: 450, range: 1.4, melee: true },
+  claws:   { dmg: MAX_HP / 2, cd: 450, range: 1.4, melee: true, auto: true },
 };
 // Every gun's ammo runs out; only the blade needs none. A gun you've emptied completely is gone.
 export const START_GUN = 'pistol';

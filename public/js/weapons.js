@@ -34,7 +34,7 @@ export function swapWeapon() {
 }
 
 export function throwNade() {
-  if (!S.started || !(S.nades > 0) || performance.now() < S.switchUntil) return;
+  if (!S.started || S.clawsOnly || !(S.nades > 0) || performance.now() < S.switchUntil) return;
   S.nades--;
   S.switchUntil = performance.now() + 400;
   send({ type: 'nade' });
@@ -42,6 +42,7 @@ export function throwNade() {
 }
 
 export function reload() {
+  if (S.clawsOnly) return;
   const w = S.weapon, def = WEAPONS[w];
   if (def.melee || S.reloading || !(S.mag[w] < def.mag) || !(spare(w) > 0)) return;
   S.reloading = { w, start: performance.now(), until: performance.now() + def.reload };
@@ -51,6 +52,7 @@ export function reload() {
 
 // called every frame: finish a reload, or start one when the mag runs dry
 export function updateReload() {
+  if (S.clawsOnly) { S.reloading = null; return; }
   const now = performance.now(), r = S.reloading;
   if (r && now >= r.until) {
     const n = Math.min(WEAPONS[r.w].mag - S.mag[r.w], spare(r.w));
@@ -64,13 +66,13 @@ export function updateReload() {
 }
 
 // the sniper scopes in; the rifle, SMG and pistol aim down their iron sights (S.scoped covers both)
-const aimable = () => (S.weapon === 'sniper' || ADS_ZOOM[S.weapon]) && !S.reloading;
+const aimable = () => !S.clawsOnly && (S.weapon === 'sniper' || ADS_ZOOM[S.weapon]) && !S.reloading;
 const canScope = () => aimable() && (S.weapon !== 'sniper' || performance.now() >= S.nextFire.sniper); // not while chambering
 const setScoped = on => { S.scoped = on; if (S.weapon === 'sniper') play('scope', on); };
 
 // right mouse button, pressed (down) or released; 'toggle' flips on press, 'hold' aims while held
 export function aim(down) {
-  S.aimHeld = down;
+  S.aimHeld = !S.clawsOnly && down;
   if (settings.ads === 'hold') return; // updateScope does it
   if (!down || !aimable()) return;
   if (!S.scoped && !canScope()) return;
@@ -88,6 +90,7 @@ function updateScope() {
 // --- picking things up ---
 // the nearest gun pad or loot box in reach, with what the use key would do there
 export function findUseTarget() {
+  if (S.clawsOnly) return null;
   const me = S.me;
   let best = null, bestD = USE_RANGE;
   const consider = (o, t) => {
@@ -111,20 +114,23 @@ export function gunToDrop() {
 
 export function use() {
   const t = S.useTarget;
-  if (!t) return;
+  if (S.clawsOnly || !t) return;
   send(t.pad !== undefined ? { type: 'use', pad: t.pad, drop: gunToDrop() } : { type: 'use', box: t.box, drop: gunToDrop() });
 }
 
 // quick = F key: stab without switching away from your gun
 export function melee(quick) {
+  if (!S.started || !S.me) return;
+  const weapon = S.clawsOnly ? 'claws' : 'blade';
   const now = performance.now();
-  if (now < S.nextFire.blade) return;
-  S.nextFire.blade = now + WEAPONS.blade.cd;
+  if (now < S.nextFire[weapon]) return;
+  S.nextFire[weapon] = now + WEAPONS[weapon].cd;
   S.swingT = now;
-  if (quick && S.weapon !== 'blade') { S.quickUntil = now + 320; S.switchUntil = Math.max(S.switchUntil, now + 320); }
+  if (!S.clawsOnly && quick && S.weapon !== 'blade') { S.quickUntil = now + 320; S.switchUntil = Math.max(S.switchUntil, now + 320); }
   S.scoped = false;
-  send({ type: 'shoot', weapon: 'blade' });
+  send({ type: 'shoot', weapon });
   play('swing');
+  if (S.clawsOnly) return;
   const lunge = S.onGround ? 1.6 : 0.8; // lunge forward, stacks with bhop
   S.vx += Math.cos(S.me.a) * lunge; S.vy += Math.sin(S.me.a) * lunge;
 }
@@ -146,8 +152,9 @@ const KICK = {
 };
 
 export function fire() {
+  if (!S.started || !S.me) return;
   const w = S.weapon;
-  if (w === 'blade') { melee(false); return; }
+  if (S.clawsOnly || w === 'blade') { melee(false); return; }
   const now = performance.now();
   if (now < S.switchUntil || now < S.nextFire[w] || S.reloading) return;
   S.nextFire[w] = now + WEAPONS[w].cd;
@@ -174,5 +181,5 @@ export function autoFire() {
   updateReload();
   updateScope();
   S.useTarget = S.started && S.me ? findUseTarget() : null;
-  if (S.mouseHeld && S.started && WEAPONS[S.weapon].auto) fire();
+  if (S.mouseHeld && S.started && (S.clawsOnly || WEAPONS[S.weapon].auto)) fire();
 }

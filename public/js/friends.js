@@ -5,6 +5,7 @@ import { send } from './net.js';
 import { goToRoom } from './room.js';
 import { openDm } from './chat.js';
 import { homeOpen } from './home.js';
+import { MODE_NAMES } from '/shared/config.js';
 
 const $ = id => document.getElementById(id);
 let invite = null; // the invite on screen
@@ -74,7 +75,7 @@ export function flushFriends() {
 // { from, username, room, mode, count }
 export function showInvite(msg) {
   invite = msg;
-  $('inviteText').textContent = `${msg.from} invited you to room ${msg.room} (${msg.mode === 'teams' ? 'teams' : 'free-for-all'}, ${msg.count} playing)`;
+  $('inviteText').textContent = `${msg.from} invited you to room ${msg.room} (${MODE_NAMES[msg.mode] || msg.mode}, ${msg.count} playing)`;
   $('invite').hidden = false;
   $('inviteHint').hidden = !S.started; // mid-match the mouse is captured
 }

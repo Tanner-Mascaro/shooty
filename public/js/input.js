@@ -7,6 +7,7 @@ import { fire, melee, switchSlot, cycleWeapon, swapWeapon, reload, aim, use, thr
 import { actionFor, captureKey, settingsOpen, openSettings, toggleFullscreen } from './settings.js';
 import { openChat } from './chat.js';
 import { askMic } from './voice.js';
+import { dash } from './physics.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea');
@@ -25,13 +26,14 @@ export function initInput() {
     if (act === 'settings') return openSettings();
     if (act === 'chat') { e.preventDefault(); return openChat(); }
     if (act === 'talk') askMic(); // first press asks for the mic
-    if (act === 'slide') S.slideArmed = true;
+    if (act === 'slide' && !S.clawsOnly) S.slideArmed = true;
     if (!S.started || !act) return;
     if (act.startsWith('slot')) switchSlot(+act.slice(4));
     if (act === 'swap') swapWeapon();
     if (act === 'use') use();
     if (act === 'reload') reload();
     if (act === 'melee') melee(true);
+    if (act === 'slide' && S.clawsOnly && locked()) dash();
     if (act === 'nade') throwNade();
   });
   window.addEventListener('keyup', e => { S.keys[e.code] = false; });

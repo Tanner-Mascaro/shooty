@@ -1,5 +1,5 @@
 // One frame: set up the camera, simulate effects, draw the world, then the HUD on top.
-import { TICK, EYE, SLIDE } from '/shared/config.js';
+import { TICK, EYE, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
 import { settings } from '../settings.js';
@@ -24,12 +24,13 @@ function interpolateOthers(now) {
 
 // teams mode tints bodies: red / blue (free-for-all keeps the level's own colors)
 const TEAM_TINT = { 1: [230, 50, 40], 2: [40, 110, 255] };
+const PLAGUE_TINT = [100, 225, 45];
 
 // Minecraft-style glowing outline: white in free-for-all, red / blue in teams. Teammates show
 // through walls; enemies do for a few seconds after you hit them (like a spectral arrow).
 const MARK_MS = 3000;
 function glowFor(o, now) {
-  const teams = S.room && S.room.mode === 'teams', ally = teams && o.now.team === S.myTeam;
+  const teams = S.room && isTeamMode(S.room.mode), ally = teams && o.now.team === S.myTeam;
   return { col: !teams ? [255, 255, 255] : ally ? [90, 170, 255] : [255, 70, 55], xray: ally || now - o.markT < MARK_MS };
 }
 
@@ -106,7 +107,9 @@ export function render(dt) {
   for (const o of Object.values(S.others))
     if (o.now) {
       const player = S.room && S.room.players.find(p => p.id === o.now.id);
-      drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null, player && player.skin, glowFor(o, now));
+      const team = player ? player.team : o.now.team;
+      const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM ? PLAGUE_TINT : teams ? TEAM_TINT[team] : null;
+      drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, tint, player && player.skin, glowFor(o, now));
     }
   drawParticles(S.embers);
   drawParticles(S.particles);
