@@ -3,7 +3,9 @@
 [hidden] { display:none !important; }
 html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-family:'Courier New',monospace; }
 /* game view only — lobby skin/map preview canvases must stay in normal flow */
-#c { display:block; position:absolute; top:0; left:0; }
+#c, #gl { display:block; position:absolute; top:0; left:0; width:100%; height:100%; }
+#gl { z-index:0; pointer-events:none; }
+#c { z-index:1; background:transparent; }
 
 #hud { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; align-items:center; z-index:10; pointer-events:none; }
 #plagueStatus { text-align:center; color:#ddd; font-size:12px; text-shadow:0 1px 4px #000; white-space:nowrap; }
@@ -143,7 +145,7 @@ body.plague #summaryBoard .team1 .name { color:#9e5; }
 #homeAlt .ghost { flex:1; }
 #homeSigned { flex-direction:row; align-items:baseline; justify-content:space-between; gap:12px; }
 body.on-home #wait { display:none !important; }
-body.on-home #c, body.on-home #hud, body.on-home #scores, body.on-home #feed,
+body.on-home #c, body.on-home #gl, body.on-home #hud, body.on-home #scores, body.on-home #feed,
 body.on-home #toasts, body.on-home #msg, body.on-home #controls, body.on-home #talking,
 body.on-home #fps, body.on-home #gameGear, body.on-home #gameLeave, body.on-home #summary { display:none !important; }
 body.on-home #corner { z-index:210; }

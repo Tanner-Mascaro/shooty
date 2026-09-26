@@ -1,6 +1,5 @@
-// Instant-replay clips: while you're in a match the canvas (and game audio) are buffered,
-// and the clip key saves the last few seconds as a .webm download.
-import { canvas } from './render/canvas.js';
+// Instant-replay clips: composite WebGL world + HUD onto a buffer, then capture that.
+import { canvas, glCanvas, view } from './render/canvas.js';
 import { clipAudioTrack } from './audio.js';
 import { toast } from './ui.js';
 import { S } from './state.js';
@@ -9,11 +8,34 @@ const CLIP_MS = 12000;
 const CHUNK_MS = 1000;
 
 let recorder = null, initChunk = null, chunks = [], mime = '';
+let composite = null, cctx = null, raf = 0;
 
 function pickMime() {
   for (const t of ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'])
     if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
   return '';
+}
+
+function ensureComposite() {
+  if (!composite) {
+    composite = document.createElement('canvas');
+    cctx = composite.getContext('2d');
+  }
+  if (composite.width !== view.W || composite.height !== view.H) {
+    composite.width = view.W;
+    composite.height = view.H;
+  }
+  return composite;
+}
+
+function paintComposite() {
+  if (!recorder || !S.started) return;
+  const c = ensureComposite();
+  cctx.fillStyle = '#000';
+  cctx.fillRect(0, 0, c.width, c.height);
+  cctx.drawImage(glCanvas, 0, 0, c.width, c.height);
+  cctx.drawImage(canvas, 0, 0);
+  raf = requestAnimationFrame(paintComposite);
 }
 
 export function syncClipBuffer() {
@@ -22,7 +44,8 @@ export function syncClipBuffer() {
   mime = pickMime();
   if (!mime) return;
   try {
-    const stream = canvas.captureStream(30);
+    const c = ensureComposite();
+    const stream = c.captureStream(30);
     const audio = clipAudioTrack();
     if (audio) stream.addTrack(audio);
     recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
@@ -37,15 +60,16 @@ export function syncClipBuffer() {
     };
     recorder.onerror = () => stopClipBuffer();
     recorder.start(CHUNK_MS);
+    raf = requestAnimationFrame(paintComposite);
   } catch {
     recorder = null;
   }
 }
 
 export function stopClipBuffer() {
+  if (raf) { cancelAnimationFrame(raf); raf = 0; }
   if (!recorder) return;
   try { if (recorder.state !== 'inactive') recorder.stop(); } catch {}
-  // only stop the canvas video track — the audio tap stays alive for the next match
   recorder.stream.getTracks().forEach(t => { if (t.kind === 'video') t.stop(); });
   recorder = null;
   initChunk = null;
