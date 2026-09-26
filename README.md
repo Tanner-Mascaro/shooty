@@ -7,14 +7,21 @@ npm install
 npm start          # http://localhost:3000
 npm run dev        # same, restarts the server when files change
 npm run bots       # dev + a bot joins as your opponent (solo testing)
-PORT=4000 npm start
+```
+
+To use a different port:
+
+```
+PORT=4000 npm start            # Mac / Linux
+$env:PORT=4000; npm start      # Windows (PowerShell)
+set PORT=4000&& npm start      # Windows (Command Prompt)
 ```
 
 For remote play run `ngrok http 3000` and share the URL.
 
 ## Solo testing with a bot
 
-`npm run bots` (or `BOTS=1 npm start`) adds a server-side bot as your opponent the moment you connect. It's always ready, so just pick a level and click "I'm Here". It leaves when you do.
+`npm run bots` (or `npm start -- --bots` without auto-restart) adds a server-side bot as your opponent the moment you connect. It's always ready, so just pick a level and click "I'm Here". It leaves when you do.
 
 - **Roams** between random spots it can walk to in a straight line, avoiding walls and pits
 - **Shoots** the rifle when it can see you within 25 units, after a short reaction delay and with some aim wobble
@@ -22,7 +29,7 @@ For remote play run `ngrok http 3000` and share the URL.
 
 Speed, sight range, reaction time, fire rate and aim error are constants at the top of `server/bot.js`.
 
-The game is 1v1, so there's one bot and it takes the second player slot: nobody else can join while `BOTS` is on.
+The game is 1v1, so there's one bot and it takes the second player slot: nobody else can join while bots are on.
 
 ## Layout
 

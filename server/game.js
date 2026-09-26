@@ -5,7 +5,9 @@ import { buildTerrain, groundAt, kindAt, findPickups } from '../shared/terrain.j
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
 
-const BOTS = !!process.env.BOTS; // BOTS=1: a bot joins as your opponent (local testing)
+// `node server.js --bots` (or BOTS=1): a bot joins as your opponent (local testing).
+// The flag works in every shell; env vars need different syntax on Windows.
+const BOTS = process.argv.includes('--bots') || !!process.env.BOTS;
 
 const TERRAINS = {};
 for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES);
