@@ -1,8 +1,9 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
-import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP } from '/shared/config.js';
+import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS } from '/shared/config.js';
 import { LEVEL_NAMES } from '/shared/levels.js';
-import { S, nameOf, isEnemy } from './state.js';
+import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
+import { MAX_SPEED } from './constants.js';
 import { initRoom, showRoom, scrollToMap } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
@@ -44,18 +45,15 @@ export function hideWait() {
   hideSummary(true);
 }
 
-export function applyLevelUI(name, theme) {
+export function applyLevelUI(name, _theme) {
   // leading = what the room is on / will play; sel/voted = what you picked (set in showRoom)
   document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('leading', b.dataset.level === name));
   scrollToMap(name); // the picked map slides to the middle of the carousel
-  const title = $('waitTitle');
-  title.textContent = theme.name;
-  title.style.color = theme.title;
-  title.style.textShadow = '';
-  for (const el of [wait, $('corner'), summary]) { // the corner buttons match the level too
-    el.style.setProperty('--accent', theme.title);
-    el.style.setProperty('--accent-rgb', theme.accent);
-    el.style.setProperty('--wash', theme.bg);
+  // keep lobby chrome fixed — no map-name title or accent wash per level
+  for (const el of [wait, $('corner'), summary]) {
+    el?.style.removeProperty('--accent');
+    el?.style.removeProperty('--accent-rgb');
+    el?.style.removeProperty('--wash');
   }
 }
 
@@ -161,7 +159,7 @@ function drawFeed() {
     if (k.killer !== null && k.killer !== undefined) row.append(nameSpan(k.killer));
     const w = document.createElement('span');
     w.className = 'weapon';
-    w.textContent = k.infected ? ' [INFECTED] ' : ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
+    w.textContent = k.infected ? ' [INFECTED] ' : k.weapon === 'respawn' ? ' [RESPAWN] ' : ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
     row.append(w, nameSpan(k.victim));
     return row;
   }));
@@ -247,6 +245,34 @@ export function updateHud() {
     }
   }
   drawScores();
+  updateSpeedHud();
+  updateAmmoHud();
   $('feed').hidden = !settings.showFeed;
   if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
+}
+
+function updateSpeedHud() {
+  const el = $('speedHud');
+  if (!el) return;
+  const n = Math.round(S.speed * 320 / MAX_SPEED);
+  el.textContent = n + ' u/s';
+  el.classList.toggle('fast', S.speed > MAX_SPEED + 0.1);
+}
+
+function updateAmmoHud() {
+  const el = $('ammoHud'), w = S.weapon;
+  if (!el) return;
+  if (w === 'blade' || w === 'claws' || !WEAPONS[w]) { el.hidden = true; return; }
+  el.hidden = false;
+  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w);
+  $('ammoWeapon').textContent = w;
+  const count = $('ammoCount');
+  count.innerHTML = '';
+  count.append(document.createTextNode(String(mag)));
+  const spareEl = document.createElement('span');
+  spareEl.className = 'spare';
+  spareEl.textContent = ' / ' + left;
+  count.append(spareEl);
+  count.classList.toggle('empty', mag === 0);
+  count.classList.toggle('low', mag > 0 && mag <= full / 4);
 }

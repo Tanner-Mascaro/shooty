@@ -140,10 +140,15 @@ function initSkinCarousel() {
 }
 
 function updateMapVoteLabel(level) {
-  const el = $('mapVote');
-  if (!el) return;
   const names = { witch: 'Witch Swamp', castle: 'Gothic Castle', hell: 'Hell', robot: 'Robot Factory', haunt: 'Haunted House', ice: 'Ice Fields', nuke: 'Nuketown' };
-  el.textContent = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
+  const text = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
+  const title = $('waitTitle');
+  if (title) {
+    title.textContent = text;
+    title.style.color = '';
+  }
+  const el = $('mapVote');
+  if (el) el.textContent = text;
 }
 
 // --- map carousel: scroll or swipe through the maps, arrows step one card; clicking a card picks it ---

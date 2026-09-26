@@ -1,0 +1,14 @@
+Scroll UI Container
+Artist: Chloe Wolfe / Cairo Creative Studios
+License: CC0
+Source: https://opengameart.org/content/scroll-ui-container
+
+Cozy Witchcraft — 32x32 Pixel Art Asset Pack (Free)
+Artist: Koalerina_arts
+License: itch.io free asset pack (pay-what-you-want)
+Source: https://koalerina-arts.itch.io/free-cozy-witchcraft-32x32-pixel-art-asset-pack
+Used as:
+  health-potion.png  ← Solar_potion.png
+  potion.png         ← Twinkling_Violet_Potion.png
+  cauldron.png       ← Witch_Cauldron.png
+  ammo.png           ← Witch_Candle.png

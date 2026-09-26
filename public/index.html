@@ -17,7 +17,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
 {
@@ -77,7 +77,7 @@
 <div id="wait">
   <header id="lobbyHead">
     <div id="brand">PISTOLS &amp; POTION</div>
-    <div id="waitTitle">WITCH SWAMP</div>
+    <div id="waitTitle">Click a map to vote</div>
     <p id="tagline">Choose your realm and coven form — then seal the match.</p>
   </header>
   <div id="lobby">
@@ -202,10 +202,10 @@
     </section>
   </div>
 </div>
-<div id="hud">
-  <div class="ph"><span style="color:#fa4;font-weight:bold">YOU</span> <span id="sk">0</span>
+<div id="hud" class="scroll">
+  <div class="ph"><span class="you-label">YOU</span> <span id="sk">0</span>
     <span id="hackBadge" hidden>HACKS</span>
-    <div class="hp-bar"><div class="hp-fill" id="myhp" style="width:100%;background:#fa4"></div></div>
+    <div class="hp-bar"><div class="hp-fill" id="myhp" style="width:100%"></div></div>
   </div>
   <div id="plagueStatus" hidden>
     <strong id="plagueRole"></strong> <span id="plagueClock"></span>
@@ -217,8 +217,10 @@
     <div id="hardpointObjective"></div>
   </div>
 </div>
-<div id="scores"></div>
-<div id="feed"></div>
+<div id="hudLeft">
+  <div id="scores"></div>
+  <div id="feed"></div>
+</div>
 <div id="toasts"></div>
 <div id="invite" hidden>
   <span id="inviteText"></span>
@@ -238,7 +240,14 @@
     <button type="button" id="summaryContinue">CONTINUE</button>
   </div>
 </div>
-<div id="controls"></div>
+<div id="controls" class="scroll">
+  <div id="controlsHint"></div>
+</div>
+<div id="speedHud" class="scroll">0 u/s</div>
+<div id="ammoHud" class="scroll" hidden>
+  <div id="ammoWeapon"></div>
+  <div id="ammoCount"></div>
+</div>
 <div id="version"></div>
 <div id="talking"></div>
 <div id="fps" hidden></div>

@@ -12,8 +12,8 @@ const entityRoot = new THREE.Group();
 entityRoot.name = 'entities';
 let attached = false;
 
-const TEAM_TINT = { 1: [230, 50, 40], 2: [40, 110, 255] };
-const PLAGUE_TINT = [100, 225, 45];
+const TEAM_TINT = { 1: [180, 50, 50], 2: [110, 70, 150] };
+const PLAGUE_TINT = [70, 140, 55];
 
 // pools
 const playerPool = [];
@@ -53,6 +53,21 @@ function spriteTexture(px, pal, w = 32, h = 48, keyExtra = '') {
   tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   spriteCache.set(key, tex);
+  return tex;
+}
+
+function imageTexture(url) {
+  if (spriteCache.has(url)) return spriteCache.get(url);
+  const tex = new THREE.TextureLoader().load(url, t => {
+    t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.NearestFilter;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true;
+  });
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  spriteCache.set(url, tex);
   return tex;
 }
 
@@ -155,32 +170,34 @@ export function drawPickupBillboards(now) {
   S.pickupSpots.forEach((p, i) => {
     if (!S.pickupActive[i]) return;
     const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
-    const z = p.weapon === 'ammo' ? walkHeight(S.T, p.x, p.y, 0) : 0.3 + 0.07 * Math.sin(now / 400 + i);
-    const tex = spriteTexture(sp.px, sp.pal, 32, 32, p.weapon);
+    const z = 0.3 + 0.07 * Math.sin(now / 400 + i);
+    const tex = sp.src
+      ? imageTexture(sp.src)
+      : spriteTexture(sp.px, sp.pal, 32, 32, p.weapon);
     const spr = acquire(pickupPool, makeSprite);
     setBillboard(spr, tex, p.x, p.y, z, sp.w, sp.h, false);
+    if (sp.src) { spr.material.opacity = 1; spr.material.alphaTest = 0.15; }
   });
 
   const box = boxSprite();
-  const boxTex = spriteTexture(box.px, box.pal, 32, 32, 'cauldron-classic');
-  const brewPx = (u, v) => (Math.hypot(u - 0.5, v - 0.5) < 0.48 ? 1 : 0);
-  const glowTex = spriteTexture(brewPx, [null, [50, 220, 70]], 16, 16, 'brewGlow-green');
+  const boxTex = imageTexture(box.src);
   for (const b of S.boxes) {
     const bob = 0.035 * Math.sin(now / 320 + b.id);
     const spr = acquire(boxPool, makeSprite);
     setBillboard(spr, boxTex, b.x, b.y, b.z + bob, box.w, box.h, false);
-    const glow = acquire(boxPool, makeSprite);
-    setBillboard(glow, glowTex, b.x, b.y, b.z + bob + box.h * 0.4, 0.48, 0.3, false, true);
-    glow.material.opacity = 0.5 + 0.2 * Math.sin(now / 180 + b.id);
-    glow.material.alphaTest = 0.05;
+    spr.material.opacity = 1;
+    spr.material.alphaTest = 0.15;
   }
 
   const nadeSp = pickupSprite('nade', GUN_COLOR.nade);
-  const nadeTex = spriteTexture(nadeSp.px, nadeSp.pal, 24, 32, 'nade');
+  const nadeTex = nadeSp.src
+    ? imageTexture(nadeSp.src)
+    : spriteTexture(nadeSp.px, nadeSp.pal, 24, 32, 'nade');
   for (const n of S.thrown) {
     const bob = 0.04 * Math.sin(now / 70 + n.id);
     const spr = acquire(nadePool, makeSprite);
     setBillboard(spr, nadeTex, n.x, n.y, n.z + bob, nadeSp.w * 1.15, nadeSp.h * 1.15, false);
+    if (nadeSp.src) { spr.material.opacity = 1; spr.material.alphaTest = 0.15; }
   }
 }
 
@@ -188,7 +205,7 @@ function glowFor(o) {
   const teams = S.room && isTeamMode(S.room.mode);
   const ally = teams && o.now.team === S.myTeam;
   // Visible glow only — never draws through walls.
-  return { col: !teams ? [255, 255, 255] : ally ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR };
+  return { col: !teams ? [220, 210, 190] : ally ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR };
 }
 
 function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline) {

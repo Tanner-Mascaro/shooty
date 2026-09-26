@@ -17,6 +17,7 @@ export const ACTIONS = {
   jump: ['Jump', 'Space'], slide: ['Slide / infected dash', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
   melee: ['Quick melee', 'KeyF'], nade: ['Throw potion', 'KeyG'],
   slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
+  respawn: ['Respawn if stuck', 'KeyK'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
   clip: ['Save clip (last 12s)', 'F9'],
@@ -176,11 +177,12 @@ function render() {
 // the hint line at the bottom of the screen, using your keys
 export function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
+  const el = $('controlsHint') || $('controls');
   if (S.clawsOnly) {
-    $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump, press again for double jump | ${k('slide')} dash | hold left click attack | ${k('fullscreen')} fullscreen`;
+    el.textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump, press again for double jump | ${k('slide')} dash | hold left click attack | ${k('fullscreen')} fullscreen`;
     return;
   }
-  $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
+  el.textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
     `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('clip')} clip | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 

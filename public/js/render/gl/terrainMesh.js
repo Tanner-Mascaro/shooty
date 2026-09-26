@@ -86,9 +86,21 @@ export function buildWorld(scene, T, theme, palette) {
     }
     return false;
   };
+  // tower treads/decks are drawn as boxes — keep the continuous floor flat under them
+  const underTowerTread = (i, j) => {
+    const x = (i + 0.5) / RES, y = (j + 0.5) / RES;
+    for (const p of T.props || []) {
+      if (p.type !== 'tower' || !p.treads) continue;
+      for (const t of p.treads) {
+        if (x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1) return true;
+      }
+    }
+    return false;
+  };
   const floorZ = (i, j) => {
     if (kAt(i, j) === 1) return 0;
     if (underHutCell(i, j)) return 0;
+    if (underTowerTread(i, j)) return 0;
     return Math.max(0, hAt(i, j));
   };
 
@@ -165,6 +177,18 @@ export function buildWorld(scene, T, theme, palette) {
       const h = hAt(ii, jj);
       if (h < 0.15) continue;
       pushObstacle(ii, jj, ii + 1, jj + 1, h, mAt(ii, jj));
+    }
+  }
+
+  // tower stairs / decks share the wall atlas so they match curtain stone
+  for (const p of T.props || []) {
+    if (p.type !== 'tower' || !p.treads) continue;
+    for (const t of p.treads) {
+      const ci = Math.min(TW - 1, Math.max(0, Math.floor(((t.x0 + t.x1) / 2) * RES)));
+      const cj = Math.min(TH - 1, Math.max(0, Math.floor(((t.y0 + t.y1) / 2) * RES)));
+      const tint = sampleColor(palette, ci, cj, TW, TH);
+      const lit = [Math.min(1, tint[0] * 1.15), Math.min(1, tint[1] * 1.15), Math.min(1, tint[2] * 1.15)];
+      addBox(wallPos, wallUV, wallCol, wallIdx, t.x0, t.y0, t.x1, t.y1, 0, Math.max(0.08, t.z), lit, 1);
     }
   }
 

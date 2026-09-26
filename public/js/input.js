@@ -9,6 +9,7 @@ import { openChat, chatOpen } from './chat.js';
 import { askMic } from './voice.js';
 import { dash } from './physics.js';
 import { saveClip } from './clip.js';
+import { send } from './net.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
@@ -41,6 +42,7 @@ export function initInput() {
     if (act === 'melee') melee(true);
     if (act === 'slide' && S.clawsOnly && locked()) dash();
     if (act === 'nade') throwNade();
+    if (act === 'respawn') send({ type: 'respawn' });
   });
   window.addEventListener('keyup', e => { S.keys[e.code] = false; });
   window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; }); // don't keep running after alt-tab

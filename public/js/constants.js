@@ -8,12 +8,12 @@ export const SENS = 0.0025; // mouse sensitivity (radians per pixel)
 // Quake-style movement, scaled so 320 qu/s = 3 map units/s
 export { MOVE_SPEED as MAX_SPEED, MOVE_GRAVITY as GRAVITY, MOVE_JUMP_V as JUMP_V, MOVE_SPEED_LIMIT as SPEED_LIMIT } from '/shared/config.js';
 export const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0, STEP = 0.3;
-export const ALLY_OUTLINE_COLOR = [90, 170, 255], ENEMY_OUTLINE_COLOR = [255, 70, 55];
+export const ALLY_OUTLINE_COLOR = [122, 80, 136], ENEMY_OUTLINE_COLOR = [168, 64, 64];
 
 export const GUN_COLOR = {
   pistol: [200, 200, 210], deagle: [255, 200, 80], revolver: [220, 160, 90],
   rifle: [255, 140, 40], burst: [255, 100, 160], carbine: [255, 170, 60],
   sniper: [255, 80, 60], crossbow: [140, 220, 100], beam: [255, 60, 220], shotgun: [255, 200, 60],
   smg: [80, 220, 255], uzi: [100, 255, 200], lmg: [180, 100, 255],
-  health: [255, 255, 255], ammo: [230, 210, 120], nade: [180, 80, 255],
+  health: [200, 140, 60], ammo: [140, 90, 180], nade: [140, 80, 180],
 };
