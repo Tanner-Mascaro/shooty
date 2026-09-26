@@ -38,6 +38,7 @@ The game is 1v1, so there's one bot and it takes the second player slot: nobody 
 | `server.js` | Entry point: HTTP + WebSocket wiring |
 | `server/game.js` | Lobby, match state, respawns, pickups, pits, message handlers |
 | `server/bot.js` | Solo-testing bot: roams, spots you, shoots (tuning constants at the top) |
+| `server/log.js` | Timestamped server log: joins, leaves, lobby, kills, wins |
 | `server/combat.js` | Hitscan, shotgun pellets, melee (authoritative) |
 | `server/static.js` | Serves `public/` and `shared/` |
 | `shared/config.js` | Weapons, ammo, HP, tick rate (used by server **and** browser) |

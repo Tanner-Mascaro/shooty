@@ -4,6 +4,7 @@ import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
+import { log } from './log.js';
 
 // `node server.js --bots` (or BOTS=1): a bot joins as your opponent (local testing).
 // The flag works in every shell; env vars need different syntax on Windows.
@@ -58,6 +59,10 @@ export class Game {
   }
 
   // --- players ---
+  // how a player appears in the server log
+  who(p) { return p.bot ? `Bot ${p.id}` : `Player ${p.id} (${p.ip})`; }
+  score() { return Object.values(this.players).map(p => (p.bot ? 'Bot ' : 'P') + p.id + ' ' + p.kills).join(', '); }
+
   opponent(p) { return Object.values(this.players).find(o => o.id !== p.id) || null; }
 
   resetPlayer(p, avoid) {
@@ -77,10 +82,13 @@ export class Game {
     if (killer) killer.kills++;
     this.resetPlayer(victim, killer || this.opponent(victim));
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id }, info, at));
+    const how = killer ? `killed ${this.who(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
+    log(`${this.who(killer || victim)} ${how} — ${this.score()}`);
     if (killer && killer.kills >= WIN_SCORE) {
       this.gameOn = false;
       Object.values(this.players).forEach(pl => pl.ready = !!pl.bot);
       this.broadcast({ type: 'win', winner: killer.id });
+      log(`${this.who(killer)} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
     }
   }
 
@@ -93,18 +101,18 @@ export class Game {
     this.gameOn = true;
     this.broadcast({ type: 'start', level: this.level });
     this.broadcastPickups();
-    console.log('Game started on ' + this.level + '!');
+    log(`Match started on ${LEVEL_NAMES[this.level]}: ${ps.map(p => this.who(p)).join(' vs ')}`);
   }
 
   // --- connections ---
-  connect(socket) {
-    if (this.clients.length >= 2) { socket.close(); return; }
+  connect(socket, ip) {
+    if (this.clients.length >= 2) { log(`Turned away ${ip}: game is full`); socket.close(); return; }
     const id = this.nextId++;
     const sp = this.spawnPos(this.clients.length > 0 ? this.players[this.clients[0].id] : null);
     const p = this.players[id] = { id, x: sp.x, y: sp.y, z: groundAt(this.T, sp.x, sp.y), a: Math.random() * Math.PI * 2, p: 0, sc: false,
-      hp: MAX_HP, kills: 0, ready: false, seq: 0, nextFire: {}, inv: {} };
+      hp: MAX_HP, kills: 0, ready: false, seq: 0, nextFire: {}, inv: {}, ip, joinedAt: Date.now() };
     this.clients.push({ id, socket });
-    console.log(`Player ${id} connected (${this.clients.length}/2)`);
+    log(`${this.who(p)} connected (${this.clients.length}/2 players)`);
     if (BOTS && this.clients.length === 1) this.addBot();
 
     this.send(id, { type: 'init', id, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: 0 });
@@ -130,17 +138,19 @@ export class Game {
     this.players[id] = { id, x: sp.x, y: sp.y, z: groundAt(this.T, sp.x, sp.y), a: 0, p: 0, sc: false,
       hp: MAX_HP, kills: 0, ready: true, seq: 0, nextFire: {}, inv: {}, bot: true, brain: newBrain() };
     this.clients.push({ id, socket: { send() {} } });
-    console.log(`Bot ${id} joined`);
+    log(`Bot ${id} joined`);
   }
 
   disconnect(id) {
-    if (!this.players[id]) return;
+    const p = this.players[id];
+    if (!p) return;
+    const mins = ((Date.now() - p.joinedAt) / 60000).toFixed(1);
+    log(`${this.who(p)} disconnected after ${mins} min${this.gameOn ? ', mid-match — ' + this.score() : ''}`);
     this.clients = this.clients.filter(c => c.id !== id);
     delete this.players[id];
     this.gameOn = false;
-    console.log(`Player ${id} disconnected`);
     if (this.clients.every(c => this.players[c.id].bot)) { // nobody left to play the bot
-      this.clients.forEach(c => delete this.players[c.id]);
+      this.clients.forEach(c => { log(`Bot ${c.id} left`); delete this.players[c.id]; });
       this.clients = [];
     }
     if (this.clients.length === 1) {
@@ -189,6 +199,7 @@ Game.prototype.handlers = {
   level(p, msg) {
     if (this.gameOn || !LEVELS[msg.level]) return;
     this.setLevel(msg.level);
+    log(`${this.who(p)} picked ${LEVEL_NAMES[this.level]}`);
     Object.values(this.players).forEach(pl => pl.ready = !!pl.bot); // everyone re-confirms on the new map
     this.broadcast({ type: 'level', level: this.level });
     this.waiting('Level: ' + LEVEL_NAMES[this.level] + " — click \"I'm Here\" to start!");
@@ -197,6 +208,7 @@ Game.prototype.handlers = {
   ready(p) {
     if (this.gameOn) return;
     p.ready = true;
+    log(`${this.who(p)} is ready`);
     if (this.clients.length === 2 && Object.values(this.players).every(pl => pl.ready)) this.startGame();
     else this.waiting('Level: ' + LEVEL_NAMES[this.level] + ' — waiting for other player...');
   },
