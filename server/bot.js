@@ -2,21 +2,22 @@
 // (the starting pistol, as it never picks up guns) at the nearest enemy it can see. It refills
 // from ammo crates it happens to walk over. How good it is depends on its level (LEVELS).
 // Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
-import { TICK, EYE, BODY_H, WEAPONS, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_GRAVITY } from '../shared/config.js';
+// Movement uses the same accelerate / air-strafe / hold-jump bhop model as players.
+import { TICK, EYE, BODY_H, WEAPONS, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
 import { groundAt, kindAt } from '../shared/terrain.js';
 
-// speed: map units / s (players run at 3); sight: how far it spots and shoots you;
-// reaction: ms after spotting you before the first shot; fireGap: ms between shots (the
-// pistol allows 200); aim: radians of random aim wobble; turn: radians / s it can turn
+// speed: walk wish-speed (map units / s); sprint: chase wish-speed; sight/reaction/aim as before
 export const BOT_LEVELS = {
-  easy:   { speed: 2.0, sight: 15, reaction: 800, fireGap: 600, aim: 0.13, turn: 3.5 },
-  medium: { speed: 2.4, sight: 25, reaction: 400, fireGap: 320, aim: 0.06, turn: 6 },
-  hard:   { speed: 2.8, sight: 32, reaction: 200, fireGap: 220, aim: 0.025, turn: 11 },
+  easy:   { speed: 2.4, sprint: 3.0, sight: 15, reaction: 800, fireGap: 600, aim: 0.13, turn: 3.5 },
+  medium: { speed: 2.8, sprint: 3.2, sight: 25, reaction: 400, fireGap: 320, aim: 0.06, turn: 6 },
+  hard:   { speed: 3.0, sprint: 3.6, sight: 32, reaction: 200, fireGap: 220, aim: 0.025, turn: 11 },
 };
 
 export const KNIFE_CHANCE = 0.25;
+
+const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0;
 
 // random human-looking names for bots (not "Bot 3")
 const FIRST = ['Ash', 'Blake', 'Casey', 'Drew', 'Eden', 'Finn', 'Gray', 'Harper', 'Indie', 'Jules',
@@ -63,8 +64,30 @@ const turnToward = (a, target, max) => {
   return a + Math.max(-max, Math.min(max, da));
 };
 
+function accelerate(p, wx, wy, wishSpeed, accel, dt) {
+  const add = wishSpeed - (p.vx * wx + p.vy * wy);
+  if (add <= 0) return;
+  const acc = Math.min(add, accel * wishSpeed * dt);
+  p.vx += wx * acc; p.vy += wy * acc;
+}
+
+function airAccelerate(p, wx, wy, wishSpeed, dt) {
+  const add = Math.min(wishSpeed, AIR_CAP) - (p.vx * wx + p.vy * wy);
+  if (add <= 0) return;
+  const acc = Math.min(add, AIR_ACCEL * wishSpeed * dt);
+  p.vx += wx * acc; p.vy += wy * acc;
+}
+
+function applyFriction(p, dt) {
+  const sp = Math.hypot(p.vx, p.vy);
+  if (sp < 0.01) { p.vx = p.vy = 0; return; }
+  const drop = Math.max(sp, STOP_SPEED) * FRICTION * dt;
+  const scale = Math.max(sp - drop, 0) / sp;
+  p.vx *= scale; p.vy *= scale;
+}
+
 export function newBrain() {
-  return { goal: null, seenAt: 0, nextShot: 0, stuck: 0 };
+  return { goal: null, seenAt: 0, nextShot: 0, stuck: 0, strafe: 1 };
 }
 
 function pickGoal(game, p) {
@@ -81,6 +104,7 @@ export function botTick(game, p) {
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
   const foe = game.enemies(p).filter(o => canSee(T, p, o, L.sight)).sort((x, y) => dist(x) - dist(y))[0];
   const infected = game.isInfected(p);
+  p.vx = p.vx || 0; p.vy = p.vy || 0;
 
   // Infected pursue reachable survivors; knife bots chase until a blocked path makes them wander.
   const chasing = foe && (infected ? clearPath(T, p, foe) : p.knife && now >= (b.wanderUntil || 0));
@@ -94,27 +118,73 @@ export function botTick(game, p) {
   if (!chasing && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10)) {
     b.goal = pickGoal(game, p); b.stuck = 0;
   }
+
   let heading = p.a;
-  const speed = infected ? MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER : L.speed * (chasing ? 1.2 : 1);
-  if (b.goal && !(chasing && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : 0.8))) {
+  const stopClose = chasing && foe && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : 0.8);
+  let wx = 0, wy = 0;
+  if (b.goal && !stopClose) {
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
-    const dashing = infected && game.gameOn && now < p.dashUntil;
-    const dx = dashing ? p.dashX : Math.cos(heading), dy = dashing ? p.dashY : Math.sin(heading);
-    const travel = Math.min((dashing ? PLAGUE_DASH_SPEED : speed) * dt, chasing ? Math.max(0, dist(foe) - (infected ? WEAPONS.claws.range * 0.65 : 0.8)) : Infinity);
-    const steps = Math.max(1, Math.ceil(travel / 0.1)); // dash movement must still stop at walls
-    for (let i = 0; i < steps; i++) {
-      const nx = p.x + dx * travel / steps, ny = p.y + dy * travel / steps;
-      if (!walkable(T, nx, ny, p.z)) { b.stuck++; p.dashUntil = 0; break; }
-      p.x = nx; p.y = ny;
-      if (p.onGround) p.z = groundAt(T, nx, ny);
+    // air-strafe: lean left/right while hopping so bhop actually gains speed
+    if (!p.onGround) {
+      if (Math.random() < 0.04) b.strafe = -b.strafe;
+      const side = heading + b.strafe * (Math.PI / 2);
+      wx = Math.cos(heading) * 0.7 + Math.cos(side) * 0.7;
+      wy = Math.sin(heading) * 0.7 + Math.sin(side) * 0.7;
+    } else {
+      wx = Math.cos(heading); wy = Math.sin(heading);
+    }
+    const wl = Math.hypot(wx, wy) || 1;
+    wx /= wl; wy /= wl;
+  }
+
+  const sprinting = chasing || p.knife || infected;
+  let wishSpeed = sprinting ? L.sprint : L.speed;
+  if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
+  else if (p.knife && chasing) wishSpeed = L.sprint * 1.12;
+
+  const dashing = infected && game.gameOn && now < p.dashUntil;
+  if (dashing) {
+    p.vx = p.dashX * PLAGUE_DASH_SPEED; p.vy = p.dashY * PLAGUE_DASH_SPEED;
+  } else {
+    // hold jump while moving = continuous bunny hop (same as players holding space)
+    tryJump(p, !!(wx || wy) || Math.hypot(p.vx, p.vy) > 0.4, infected ? PLAGUE_JUMPS : 1);
+    if (p.onGround) {
+      applyFriction(p, dt);
+      if (wx || wy) accelerate(p, wx, wy, wishSpeed, ACCEL, dt);
+    } else if (wx || wy) {
+      airAccelerate(p, wx, wy, wishSpeed, dt);
     }
   }
-  const jump = !!(infected && game.gameOn && foe && dist(foe) < 6 && foe.z > p.z + 0.15 && (p.onGround || p.vz <= 0));
-  tryJump(p, jump, infected ? PLAGUE_JUMPS : 1);
+
+  let speed = Math.hypot(p.vx, p.vy);
+  const cap = infected ? MOVE_SPEED_LIMIT * PLAGUE_SPEED_MULTIPLIER : MOVE_SPEED_LIMIT;
+  if (speed > cap) { p.vx *= cap / speed; p.vy *= cap / speed; speed = cap; }
+
+  if (speed > 0.01) {
+    const travel = speed * dt;
+    const steps = Math.max(1, Math.ceil(travel / 0.1));
+    for (let i = 0; i < steps; i++) {
+      const nx = p.x + p.vx * dt / steps, ny = p.y + p.vy * dt / steps;
+      if (!walkable(T, nx, ny, p.z)) {
+        // slide along the first axis that still clears
+        if (walkable(T, nx, p.y, p.z)) { p.x = nx; p.vy *= 0.2; }
+        else if (walkable(T, p.x, ny, p.z)) { p.y = ny; p.vx *= 0.2; }
+        else { p.vx *= -0.15; p.vy *= -0.15; b.stuck++; p.dashUntil = 0; break; }
+        b.stuck++;
+      } else {
+        p.x = nx; p.y = ny;
+        if (p.onGround) p.z = groundAt(T, nx, ny);
+        b.stuck = Math.max(0, b.stuck - 1);
+      }
+    }
+  }
+
   if (!p.onGround) {
     p.vz -= MOVE_GRAVITY * dt; p.z += p.vz * dt;
     const floor = groundAt(T, p.x, p.y);
     if (p.z <= floor) { p.z = floor; p.vz = 0; p.onGround = true; }
+  } else {
+    p.z = groundAt(T, p.x, p.y);
   }
 
   // turn toward the target and shoot once it has had time to react

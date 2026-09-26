@@ -106,6 +106,43 @@ const NADE_SPRITE = {
   emit: [3, 5],
 };
 
+// --- hut roof billboard (collision-free; walls are terrain) ---
+const HUT_ROOF = {
+  witch: {
+    w: 2.6, h: 1.35, emit: [],
+    pal: [null, [28, 55, 22], [48, 88, 36], [70, 50, 28], [90, 70, 40]],
+    px(u, v) {
+      const ridge = 0.12 + 0.55 * (1 - Math.abs(u - 0.5) * 2);
+      if (v > ridge) return 0;
+      if (v > ridge - 0.08) return 3; // eave
+      return ((u * 14 | 0) ^ (v * 10 | 0)) & 1 ? 1 : 2;
+    },
+  },
+  ice: {
+    w: 2.6, h: 1.2, emit: [3],
+    pal: [null, [170, 200, 230], [140, 175, 210], [220, 240, 255], [200, 220, 245]],
+    px(u, v) {
+      const ridge = 0.1 + 0.5 * (1 - Math.abs(u - 0.5) * 2);
+      if (v > ridge) return 0;
+      if (Math.abs(u - 0.5) < 0.04 && v < 0.35) return 3;
+      return v < 0.15 ? 3 : ((u * 12 | 0) + (v * 8 | 0)) & 1 ? 1 : 2;
+    },
+  },
+  hell: {
+    w: 2.6, h: 1.25, emit: [3],
+    pal: [null, [70, 32, 24], [48, 22, 18], [255, 90, 20], [110, 50, 35]],
+    px(u, v) {
+      const ridge = 0.1 + 0.52 * (1 - Math.abs(u - 0.5) * 2);
+      if (v > ridge) return 0;
+      if (v < 0.12 && Math.abs(u - 0.72) < 0.08) return 3; // lava vent glow
+      return ((u * 11 | 0) ^ (v * 9 | 0)) & 1 ? 1 : 2;
+    },
+  },
+};
+export function hutRoofSprite(style) {
+  return HUT_ROOF[style] || HUT_ROOF.witch;
+}
+
 // --- swamp tree canopies: a lumpy blob of leaves with moss hanging off the bottom ---
 const canopyCache = [];
 export function canopySprite(variant) {

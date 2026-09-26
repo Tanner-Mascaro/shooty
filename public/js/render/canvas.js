@@ -1,4 +1,5 @@
 // The screen canvas plus a low-res pixel buffer the 3D world is rendered into, then scaled up.
+// Sized lazily so the home/sign-in screen doesn't allocate big GPU buffers up front.
 export const canvas = document.getElementById('c');
 export const ctx = canvas.getContext('2d');
 export const off = document.createElement('canvas');
@@ -17,10 +18,15 @@ export function resize() {
   v.zbuf = new Float32Array(v.RW * v.RH);
   v.skyRow = new Uint32Array(v.RH);
 }
-resize();
-window.addEventListener('resize', resize);
+
+export function ensureCanvas() {
+  if (!view.W) resize();
+}
+
+window.addEventListener('resize', () => { if (view.W) resize(); });
 
 export function present(ox, oy) {
+  ensureCanvas();
   octx.putImageData(view.img, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, view.W, view.H);

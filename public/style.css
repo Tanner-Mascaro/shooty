@@ -101,11 +101,6 @@ body.on-home #corner { z-index:210; }
     linear-gradient(180deg, #16130f 0%, #0e0c0a 100%);
   transition:background-image .4s, --accent .4s;
 }
-#wait::before {
-  content:''; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.35;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
-  background-size:180px 180px; mix-blend-mode:overlay;
-}
 #wait > * { position:relative; z-index:1; }
 #wait button, #wait input { font-family:inherit; }
 #wait b { font-weight:700; }

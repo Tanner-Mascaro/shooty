@@ -13,6 +13,7 @@ import { render } from './render/index.js';
 import { homeOpen, onHomeLeave } from './home.js';
 import { warmLobby } from './room.js';
 import { flushFriends } from './friends.js';
+import { ensureCanvas } from './render/canvas.js';
 import { S } from './state.js';
 
 initLobby();
@@ -32,6 +33,7 @@ function ensureWorld() {
 
 function startLoop() {
   if (raf) return;
+  ensureCanvas();
   warmLobby();
   flushFriends();
   ensureWorld();

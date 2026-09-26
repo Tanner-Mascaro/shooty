@@ -204,7 +204,7 @@ export class Room {
     p.nades = 0;
     p.lastShot = {};
     p.sc = false; p.sl = false;
-    p.vz = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
+    p.vz = 0; p.vx = 0; p.vy = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
     p.dashUntil = 0; p.nextDash = 0; p.dashX = 0; p.dashY = 0;
     if (p.brain) p.brain = newBrain();
     p.seq++;    // client snaps to the new spawn; stale inputs from the old life are ignored

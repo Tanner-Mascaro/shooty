@@ -6,7 +6,7 @@ import { settings } from '../settings.js';
 import { BASE_FOV, SCOPE_FOV, ADS_ZOOM, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
-import { pickupSprite, canopySprite, boxSprite } from './sprites.js';
+import { pickupSprite, canopySprite, boxSprite, hutRoofSprite } from './sprites.js';
 import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
@@ -68,6 +68,8 @@ function decayEffects(dt) {
 
 export function render(dt) {
   if (!S.me || !S.T) return;
+  // lobby / menus: the wait UI covers the canvas — skip the full world so it stays snappy
+  if (!S.started) return;
   const now = performance.now();
   interpolateOthers(now);
   setupCamera();
@@ -93,10 +95,15 @@ export function render(dt) {
     const spin = 1 + 0.08 * Math.sin(now / 50 + n.id * 1.7);
     drawSprite(n.x, n.y, n.z + bob, nadeSp.w * 1.15 * spin, nadeSp.h * 1.15, nadeSp.px, nadeSp.pal, nadeSp.emit);
   }
-  for (const p of S.T.props) { // swamp tree canopies (the trunks are terrain)
-    if (p.type !== 'tree' || Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;
-    const sp = canopySprite((p.x * 7 + p.y * 3 | 0) % 4);
-    drawSprite(p.x, p.y, p.h - 1.0, p.r * 2, 1.7, sp.px, sp.pal, sp.emit);
+  for (const p of S.T.props) { // swamp tree canopies + hut roofs (walls are terrain)
+    if (Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;
+    if (p.type === 'tree') {
+      const sp = canopySprite((p.x * 7 + p.y * 3 | 0) % 4);
+      drawSprite(p.x, p.y, p.h - 1.0, p.r * 2, 1.7, sp.px, sp.pal, sp.emit);
+    } else if (p.type === 'hut') {
+      const sp = hutRoofSprite(p.style);
+      drawSprite(p.x, p.y, p.h + 0.15, sp.w, sp.h, sp.px, sp.pal, sp.emit);
+    }
   }
   for (const c of S.corpses) {
     if (c.mine) continue;

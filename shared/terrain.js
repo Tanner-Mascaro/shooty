@@ -78,31 +78,37 @@ export function buildTerrain(MAP, RES, style) {
       else if (style === 'witch') dome(x, y, 0.6, 0.65, MAT.LEAVES, 0.25);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
-    // outdoor huts / ruins / lodges — ~2×2 footprint so they read as buildings, not props
+    // outdoor huts / lodges — walls only so the interior is walkable; roof is a client sprite
     if (c === 'B' && (style === 'witch' || style === 'hell' || style === 'ice')) {
-      const wallH = style === 'witch' ? 1.65 : style === 'ice' ? 1.75 : 1.85;
+      const wallH = style === 'witch' ? 1.55 : style === 'ice' ? 1.65 : 1.75;
       const wallMat = style === 'witch' ? MAT.BARK : MAT.ROCK;
-      const roofMat = style === 'witch' ? MAT.LEAVES : MAT.ROCK;
-      const t = 0.22, W = 2.0, D = 2.0;
-      const x0 = cx - 0.5, y0 = cy - 0.5, x1 = x0 + W, y1 = y0 + D;
-      const doorL = x0 + W * 0.32, doorR = x0 + W * 0.68;
+      const t = 0.16, W = 2.2, D = 2.2;
+      const x0 = cx - 0.6, y0 = cy - 0.6, x1 = x0 + W, y1 = y0 + D;
+      const doorL = x0 + W * 0.28, doorR = x0 + W * 0.72; // wide doorway on +Y
       box(x0, y0, x0 + t, y1, wallH, wallMat);
       box(x1 - t, y0, x1, y1, wallH, wallMat);
       box(x0 + t, y0, x1 - t, y0 + t, wallH, wallMat);
       box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
       box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
-      raise(x0 - 0.08, y0 - 0.08, x1 + 0.08, y1 + 0.08, (px, py) => {
-        const u = Math.abs(px - (x0 + W / 2)) / (W / 2), v = Math.abs(py - (y0 + D / 2)) / (D / 2);
-        if (u > 1.02 || v > 1.02) return null;
-        const peak = wallH + 0.85 - u * 0.95 - v * 0.2;
-        return peak > wallH + 0.05 ? [peak, roofMat] : null;
-      });
-      if (style === 'witch') box(x1 - 0.45, y0 + 0.2, x1 - 0.2, y0 + 0.45, wallH + 1.05, MAT.ROCK);
-      else if (style === 'ice') {
-        box(x0 + 0.25, y0 + 0.25, x0 + 0.5, y0 + 0.5, wallH + 0.7, MAT.ROCK);
-        box(x0 + 0.32, y0 + 0.32, x0 + 0.43, y0 + 0.43, wallH + 1.15, MAT.ROCK);
-      } else box(x1 - 0.5, y1 - 0.5, x1 - 0.25, y1 - 0.25, wallH + 0.55, MAT.LAVA);
-      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH + 0.85, style });
+      // wipe anything that spilled into the room (volcano skirts, scatter) so you can walk in
+      const clearFloor = (xa, ya, xb, yb) => {
+        const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
+        const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const k = j * TW + i;
+          if (mat[k] === MAT.PIT) continue;
+          hgt[k] = 0; mat[k] = MAT.FLOOR;
+        }
+      };
+      clearFloor(x0 + t + 0.05, y0 + t + 0.05, x1 - t - 0.05, y1 - t - 0.05);
+      clearFloor(doorL, y1 - 0.05, doorR, y1 + 0.55); // porch / doorway approach
+      // rebuild the wall segments after the wipe (wipe can shave wall bottoms on the door edge)
+      box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
+      box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
+      if (style === 'witch') box(x1 - 0.4, y0 + 0.18, x1 - 0.18, y0 + 0.4, wallH + 0.9, MAT.ROCK);
+      else if (style === 'ice') box(x0 + 0.2, y0 + 0.2, x0 + 0.42, y0 + 0.42, wallH + 0.55, MAT.ROCK);
+      else box(x1 - 0.45, y1 - 0.45, x1 - 0.22, y1 - 0.22, wallH + 0.4, MAT.LAVA);
+      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style });
       continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
@@ -151,26 +157,31 @@ export function buildTerrain(MAP, RES, style) {
 
   for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
 
-  // scatter extra cover / ruins on open ground so maps feel denser without clogging lanes
-  for (let cy = 2; cy < MH - 2; cy++) for (let cx = 2; cx < MW - 2; cx++) {
-    if (at(cx, cy) !== '.') continue;
-    const n = hash2(cx * 3 + 11, cy * 5 + 7);
-    if (n > 0.965) { // sparse rubble piles
-      const x = cx + 0.5, y = cy + 0.5;
-      if (style === 'witch') dome(x, y, 0.55, 0.5, MAT.LEAVES, 0.2);
-      else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.25, cy + 0.25, cx + 0.75, cy + 0.75, 0.45, MAT.CRATE);
-      else dome(x, y, 0.45, 0.48, MAT.ROCK, 0.25);
-    } else if (n > 0.992 && (style === 'witch')) { // extra lonely trees
-      const x = cx + 0.5 + (hash2(cy, cx) - 0.5) * 0.2, y = cy + 0.5;
-      raise(x - 0.5, y - 0.5, x + 0.5, y + 0.5, (px, py) => Math.hypot(px - x, py - y) < 0.22 ? [2.2, MAT.BARK] : null);
-      props.push({ type: 'tree', x, y, h: 2.2, r: 0.85 + 0.3 * n });
-    } else if (n > 0.988 && (style === 'haunt' || style === 'castle') && at(cx + 1, cy) === '#' && at(cx, cy + 1) === '#') {
-      // corner buttress against walls
-      box(cx + 0.15, cy + 0.15, cx + 0.85, cy + 0.85, CEILING_H * 0.85, MAT.WALL);
-    }
+  // volcanoes can spill into hut footprints after walls are placed — keep rooms open
+  for (const hut of props) {
+    if (hut.type !== 'hut') continue;
+    const hw = (hut.w || 2.2) / 2, hd = (hut.d || 2.2) / 2, t = 0.16;
+    const clear = (xa, ya, xb, yb) => {
+      const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
+      const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES));
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const k = j * TW + i;
+        if (mat[k] === MAT.PIT) continue;
+        hgt[k] = 0; mat[k] = MAT.FLOOR;
+      }
+    };
+    clear(hut.x - hw + t + 0.05, hut.y - hd + t + 0.05, hut.x + hw - t - 0.05, hut.y + hd - t - 0.05);
+    clear(hut.x - hw * 0.44, hut.y + hd - 0.05, hut.x + hw * 0.44, hut.y + hd + 0.55);
+    // restore door-side wall stubs so the opening stays framed
+    const wallH = hut.h, wallMat = hut.style === 'witch' ? MAT.BARK : MAT.ROCK;
+    const x0 = hut.x - hw, y0 = hut.y - hd, x1 = hut.x + hw, y1 = hut.y + hd;
+    const doorL = hut.x - hw * 0.44, doorR = hut.x + hw * 0.44;
+    box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
+    box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
   }
 
   for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
+  // no procedural scatter of extra bushes/crates — map ASCII already places the cover we want
   return { hgt, kind, mat, props, TW, TH, RES };
 }
 
