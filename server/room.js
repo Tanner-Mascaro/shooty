@@ -182,17 +182,36 @@ export class Room {
     return add;
   }
 
-  // a random open spot, preferring ones far from everyone in `avoid`
+  // a random open spot on the main walkable area, preferring ones far from everyone in `avoid`
   spawnPos(avoid) {
     const M = this.map, spots = [];
+    const reach = Array.from({ length: MH }, () => Array(MW).fill(false));
+    const q = [];
+    if (M[1][1] !== '#') { reach[1][1] = true; q.push([1, 1]); }
+    while (q.length) {
+      const [cx, cy] = q.pop();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= MW || ny >= MH || reach[ny][nx] || M[ny][nx] === '#') continue;
+        reach[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
     for (let y = 1; y < MH - 1; y++)
       for (let x = 1; x < MW - 1; x++) {
-        if (M[y][x] !== '.') continue;
+        if (M[y][x] !== '.' || !reach[y][x]) continue;
         let nearPit = false;
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (M[y + dy][x + dx] === 'L') nearPit = true;
         // shapes spread past their squares (volcano slopes, cliffs): only spawn on clear flat ground
         if (!nearPit && !hitsWall(this.T, x + 0.5, y + 0.5, 0.5) && groundAt(this.T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
       }
+    if (!spots.length) { // fallback: any open flat cell
+      for (let y = 1; y < MH - 1; y++)
+        for (let x = 1; x < MW - 1; x++) {
+          if (M[y][x] === '#' || hitsWall(this.T, x + 0.5, y + 0.5, 0.5)) continue;
+          if (groundAt(this.T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
+        }
+    }
     if (!avoid.length) return spots[Math.floor(Math.random() * spots.length)];
     // pick one of the 10 spots furthest from the nearest enemy
     const gap = s => Math.min(...avoid.map(o => Math.hypot(s.x - o.x, s.y - o.y)));
@@ -333,7 +352,9 @@ export class Room {
     this.resetPlayer(victim);
     this.broadcast(this.boxList());
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin }, info, at));
-    const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
+    const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}`
+      : info.weapon === 'respawn' ? 'respawned'
+      : 'died in the pit';
     log(`[${this.code}] ${this.hub.name(killer || victim)} ${how} — ${this.score()}`);
     if (this.mode === 'plague') {
       if (infected) this.roster(); // deliver the new team before a possible victory message
@@ -714,6 +735,18 @@ Room.prototype.handlers = {
     if (this.gameOn) this.checkPlagueWin(now);
     const accepted = msg.seq === p.seq && [msg.dx, msg.dy].every(Number.isFinite) && this.dash(p, msg.dx, msg.dy, now);
     this.send(p, { type: 'dash', seq: p.seq, accepted, cooldownMs: Math.max(0, p.nextDash - now) });
+  },
+
+  // voluntary respawn when stuck (counts as a death; short cooldown)
+  respawn(p) {
+    if (!this.gameOn || p.bot) return;
+    const now = Date.now();
+    if (now < (p.nextRespawn || 0)) {
+      this.hub.notice(p, `Respawn ready in ${Math.ceil((p.nextRespawn - now) / 1000)}s`);
+      return;
+    }
+    p.nextRespawn = now + 8000;
+    this.killPlayer(p, null, { weapon: 'respawn' });
   },
 
   input(p, msg) {

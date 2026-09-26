@@ -17,6 +17,7 @@ export const ACTIONS = {
   jump: ['Jump', 'Space'], slide: ['Slide / infected dash', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
   melee: ['Quick melee', 'KeyF'], nade: ['Throw potion', 'KeyG'],
   slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
+  respawn: ['Respawn if stuck', 'KeyK'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
   clip: ['Save clip (last 12s)', 'F9'],

@@ -264,7 +264,7 @@ body:not(.ingame) #hud, body:not(.ingame) #hudLeft { display:none; }
 }
 #homeTag { text-align:center; color:#b8a890; font-size:14px; line-height:1.45; margin:0; font-style:italic; }
 #homePanel {
-  padding:20px 18px 18px; margin:8px 4px;
+  padding:20px 18px 18px; margin:12px 8px;
   display:flex; flex-direction:column; gap:18px;
   --roll-h:52px; --roll-side:30px;
 }
@@ -850,16 +850,22 @@ body.fs #controls { display:none; }
 }
 #resetBinds:hover { color:var(--accent); }
 @media (max-width:480px) { #binds { grid-template-columns:1fr; } #settings .spellbook { padding-left:28px; } }
-/* Dark display mode; the existing palette remains the Light option. */
+/* Dark display mode: night sky chrome, but keep parchment scrolls intact. */
 body.display-dark #home {
-  --ink:#e4e9f1; --muted:#98a2b1; --panel:#11151c; --line:#29313d;
+  --ink:#3a2410; --muted:#6a4828; --panel:#e8d7b0; --line:#8a7048;
   background-color:#080a0e;
-  background-image:radial-gradient(ellipse 80% 50% at 50% -10%, rgba(42,55,76,0.4), transparent 70%), linear-gradient(180deg, #0d1118 0%, #050609 100%);
+  background-image:
+    radial-gradient(ellipse 55% 40% at 78% 12%, rgba(160,140,200,0.14), transparent 55%),
+    radial-gradient(ellipse 70% 55% at 50% -5%, rgba(50,30,80,0.45), transparent 65%),
+    linear-gradient(180deg, #100e18 0%, #06050a 100%);
 }
 body.display-dark #wait {
-  --ink:#e4e9f1; --muted:#98a2b1; --panel:#11151c; --line:#29313d;
+  --ink:#3a2410; --muted:#6a4828; --panel:#e8d7b0; --line:#8a7048;
   background-color:#080a0e;
-  background-image:radial-gradient(ellipse 70% 45% at 50% -8%, color-mix(in srgb, var(--wash) 38%, transparent), transparent 68%), linear-gradient(180deg, #0d1118 0%, #07090d 100%);
+  background-image:
+    radial-gradient(ellipse 55% 40% at 78% 12%, rgba(160,140,200,0.12), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 50% -5%, color-mix(in srgb, var(--wash) 40%, transparent), transparent 65%),
+    linear-gradient(180deg, #100e18 0%, #06050a 100%);
 }
 body.display-dark #settings {
   --ink:#e4e9f1; --muted:#98a2b1; --panel:#11151c; --line:#29313d;
@@ -872,70 +878,71 @@ body.display-dark #summaryCard, body.display-dark .toast, body.display-dark #inv
 body.display-dark #summaryHeadline { color:#e4e9f1; }
 body.display-dark #summarySub, body.display-dark #summaryBoard th, body.display-dark #summaryBoard .deaths { color:#98a2b1; }
 body.display-dark #summaryBoard td { border-color:#222a35; }
-body.display-dark #home input,
-body.display-dark #homeAuthBtns button,
-body.display-dark #wait input:not([type=range]),
+body.display-dark #brand, body.display-dark #homeBrand { color:#e8dcc8; }
+body.display-dark #homeTag, body.display-dark #waitTitle, body.display-dark #tagline { color:#b8a890; }
+
+/* parchment panels stay scroll-framed (do not replace background / border-image) */
+body.display-dark #homePanel,
+body.display-dark #wait .card:not(.spellbook),
+body.display-dark #hud,
+body.display-dark #scores,
+body.display-dark #speedHud,
+body.display-dark #ammoHud {
+  color:#3a2410;
+  background:transparent;
+  border-color:transparent;
+  border-image-source:url(/img/scroll-frame.png);
+  border-image-slice:60 35 62 35 fill;
+  border-image-width:var(--roll-h) var(--roll-side);
+  border-image-repeat:stretch;
+  box-shadow:none;
+  filter:drop-shadow(0 10px 18px rgba(0,0,0,0.65));
+}
+body.display-dark #homePanel::before, body.display-dark #homePanel::after,
+body.display-dark #wait .card:not(.spellbook)::before, body.display-dark #wait .card:not(.spellbook)::after {
+  content:none;
+}
+
+body.display-dark #home .label, body.display-dark #wait .label { color:#5a4428; }
+body.display-dark #homeAlt .ghost, body.display-dark #home .link,
+body.display-dark #wait .ghost, body.display-dark #wait .link { color:#6a4028; }
+body.display-dark #homeAuth input, body.display-dark #homeName,
+body.display-dark #authForm input, body.display-dark #friendForm input,
+body.display-dark #nameInput {
+  color:#3a2410; border-color:#8a7048; background:transparent;
+}
+body.display-dark #homeAuth input::placeholder, body.display-dark #homeName::placeholder { color:#9a8060; }
+body.display-dark #homeAuthBtns button:not([type=submit]),
+body.display-dark #homeBotLevel button,
 body.display-dark .choice button:not(.sel),
 body.display-dark #botCtl button:not(.sel),
 body.display-dark .seg,
-body.display-dark .skin-arrow,
-body.display-dark #chooseSkin,
-body.display-dark #nameInput,
-body.display-dark .stat,
-body.display-dark #authForm button,
+body.display-dark #authForm button:not([type=submit]),
 body.display-dark #friendForm button,
-body.display-dark #settings select,
-body.display-dark #binds button,
+body.display-dark #friendList button,
+body.display-dark #roomKind, body.display-dark #roster li, body.display-dark .stat {
+  color:#3a2410; background-color:rgba(90,60,30,0.08); border-color:#8a7048;
+}
+body.display-dark .seg button.sel { color:#3a1010; }
+body.display-dark .maps button, body.display-dark .choice.skins button {
+  color:#2a1e12;
+  background:linear-gradient(165deg, #f3e6c4 0%, #e0cc9e 55%, #d4be8e 100%);
+  border:1.5px solid #5a3820;
+  box-shadow:inset 0 0 0 1px rgba(196,160,96,0.85), 0 2px 0 #2a1810;
+}
+body.display-dark .maps button b, body.display-dark .skins button .skin-name { color:#3a2414; }
+body.display-dark .maps button small, body.display-dark .maps button .votes { color:#6a5640; }
+body.display-dark .skins button .skin-art { background:rgba(90,60,30,0.08); border-color:rgba(90,60,30,0.22); }
+body.display-dark .skin-arrow, body.display-dark #chooseSkin {
+  color:#3a2414; background:rgba(90,60,30,0.1); border-color:#8a7048;
+}
+body.display-dark #roomCode { color:#3a2414; }
+body.display-dark #chatCard #chatLog, body.display-dark.chatting #chatLog { background:rgba(4,6,10,0.76); border-color:#29313d; }
+body.display-dark #corner .ghost { background:rgba(8,10,14,0.94); color:#e4e9f1; border-color:#29313d; }
+body.display-dark #invite #inviteDismiss { color:#c7cfda; background:#080a0e; border-color:#29313d; }
 body.display-dark #chatInput {
   color:#e4e9f1; background-color:#080a0e; border-color:#29313d;
 }
-body.display-dark #chatCard #chatLog, body.display-dark.chatting #chatLog { background:rgba(4,6,10,0.76); border-color:#29313d; }
-body.display-dark #corner .ghost { background:rgba(8,10,14,0.94); }
-body.display-dark #invite #inviteDismiss { color:#c7cfda; background:#080a0e; border-color:#29313d; }
-
-/* Dark palette for the parchment UI introduced by the lobby redesign. */
-body.display-dark #homePanel,
-body.display-dark #wait .card {
-  color:#e4e9f1; background:linear-gradient(165deg,#202630 0%,#171d26 55%,#11151c 100%);
-  border-color:#46505f; box-shadow:inset 0 0 40px rgba(0,0,0,.2),inset 0 0 0 1px rgba(190,205,225,.05),0 10px 28px rgba(0,0,0,.55);
-}
-body.display-dark #homePanel::before, body.display-dark #homePanel::after,
-body.display-dark #wait .card::before, body.display-dark #wait .card::after {
-  background:linear-gradient(180deg,#242b36,#46505d 45%,#303947); box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(220,230,245,.12);
-}
-body.display-dark #home .label, body.display-dark #homeAlt .ghost,
-body.display-dark #home .link, body.display-dark #wait .label,
-body.display-dark #wait .ghost, body.display-dark #wait .link,
-body.display-dark #roomCode, body.display-dark #setHead,
-body.display-dark #settings .label, body.display-dark #settings .setRow,
-body.display-dark #binds li, body.display-dark #resetBinds {
-  color:#c3cbd6;
-}
-body.display-dark #home .label, body.display-dark #wait .label,
-body.display-dark #settings .label { color:#c2a8d8; }
-body.display-dark #homeTag, body.display-dark #waitTitle, body.display-dark #tagline { color:#b5bdc9; }
-body.display-dark #homeAuth input, body.display-dark #homeName,
-body.display-dark #authForm input, body.display-dark #friendForm input,
-body.display-dark #nameInput, body.display-dark #chatInput {
-  color:#e4e9f1; border-color:#46505f;
-}
-body.display-dark #homeAuth input::placeholder, body.display-dark #homeName::placeholder { color:#8e9aab; }
-body.display-dark #roomKind, body.display-dark #roster li, body.display-dark .stat,
-body.display-dark #homeBotLevel button, body.display-dark .choice button:not(.sel),
-body.display-dark #botCtl button:not(.sel), body.display-dark .seg,
-body.display-dark #authForm button, body.display-dark #friendForm button,
-body.display-dark #friendList button, body.display-dark #settings .setRow .ghost {
-  color:#d5dce6; background-color:rgba(8,12,18,.62); border-color:#3b4553;
-}
-body.display-dark .seg button.sel { color:#f2d7e5; }
-body.display-dark .maps button, body.display-dark .choice.skins button {
-  color:#d5dce6; background:linear-gradient(165deg,#252d38 0%,#1a2029 60%,#131821 100%); border-color:#46505f;
-  box-shadow:inset 0 0 20px rgba(0,0,0,.18),3px 3px 0 rgba(0,0,0,.35);
-}
-body.display-dark .maps button b, body.display-dark .skins button .skin-name { color:#e4e9f1; text-shadow:none; }
-body.display-dark .maps button small, body.display-dark .maps button .votes { color:#aeb8c6; }
-body.display-dark .skins button .skin-art { background:rgba(0,0,0,.25); border-color:#46505f; }
-body.display-dark .skin-arrow, body.display-dark #chooseSkin { color:#d5dce6; background:#11151c; border-color:#46505f; }
 body.display-dark #settings .spellbook {
   color:#e4e9f1; background:
     linear-gradient(90deg,rgba(0,0,0,.38) 0 16px,transparent 16px),
@@ -951,7 +958,10 @@ body.display-dark #setHead .ghost, body.display-dark #settings .setRow .ghost,
 body.display-dark #binds button, body.display-dark #settings select {
   color:#e4e9f1; background:#111720; border-color:#46505f;
 }
+body.display-dark #settings .label, body.display-dark #settings .setRow { color:#c3cbd6; }
+body.display-dark #settings .label { color:#c2a8d8; }
 body.display-dark #settings .label small, body.display-dark .setRow small { color:#aab4c2; }
+body.display-dark #binds li { color:#c3cbd6; }
 body.display-dark #resetBinds { color:#c1a5d6; }
 body.display-dark #settings .spellbook input[type=range] { accent-color:#b58ad3; }
 body.display-dark #friendList li { border-bottom-color:rgba(190,205,225,.15); }

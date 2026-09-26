@@ -160,7 +160,7 @@ function drawFeed() {
     if (k.killer !== null && k.killer !== undefined) row.append(nameSpan(k.killer));
     const w = document.createElement('span');
     w.className = 'weapon';
-    w.textContent = k.infected ? ' [INFECTED] ' : ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
+    w.textContent = k.infected ? ' [INFECTED] ' : k.weapon === 'respawn' ? ' [RESPAWN] ' : ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
     row.append(w, nameSpan(k.victim));
     return row;
   }));
