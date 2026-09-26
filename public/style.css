@@ -195,6 +195,25 @@ canvas { display:block; position:absolute; top:0; left:0; }
   --accent:#f42; --accent-rgb:255,70,20; }
 #corner .ghost { background:rgba(12,12,16,0.8); }
 body.ingame #corner { display:none; }
+/* text chat + who's talking, bottom left */
+#chatCard { display:flex; flex-direction:column; gap:10px; }
+#chat { font:13px 'Chakra Petch',system-ui,sans-serif; display:flex; flex-direction:column; gap:6px; }
+#chatCard #chatLog { min-height:24px; }
+#chatCard #chatLog:empty::before { content:'No messages yet'; color:var(--dim); }
+body.ingame #chat { position:fixed; left:14px; bottom:40px; z-index:160; width:min(380px, calc(100vw - 28px)); gap:4px; }
+#chatLog { max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; color:#ddd; text-shadow:0 0 4px #000; scrollbar-width:none; }
+#chatLog > div { overflow-wrap:anywhere; transition:opacity .6s; }
+#chatLog > div.old { opacity:0; }
+body.ingame #chat { pointer-events:none; }
+body.chatting #chat { pointer-events:auto; }
+body.chatting #chatLog { background:rgba(0,0,0,0.45); border-radius:6px; padding:4px 6px; }
+#chat .other { color:#bcd; font-weight:700; }
+#chatInput { font:inherit; padding:7px 10px; color:#fff; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.15); border-radius:6px; }
+#chatInput:focus { outline:none; border-color:rgba(255,200,100,0.7); }
+#talking { position:fixed; left:14px; top:50%; transform:translateY(-50%); z-index:160; pointer-events:none; color:#8f8; font:bold 13px 'Chakra Petch',system-ui,sans-serif; text-shadow:0 0 4px #000; display:flex; flex-direction:column; gap:3px; }
+#roster li.talking { box-shadow:0 0 0 1px #5e5, 0 0 12px rgba(80,230,80,0.35); }
+#roster .mute { background:none; border:none; cursor:pointer; font-size:13px; padding:0 2px; opacity:.7; }
+#roster .mute:hover { opacity:1; }
 #version { position:fixed; bottom:10px; left:14px; z-index:150; color:#777; font:12px 'Chakra Petch',system-ui,sans-serif; letter-spacing:.08em; pointer-events:none; }
 body.ingame #version { display:none; }
 /* in a match: just the gear, top right beside the minimap (same size formula as drawMinimap) */

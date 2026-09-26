@@ -4,6 +4,7 @@ import { S, nameOf, teamOf } from './state.js';
 import { initRoom, showRoom } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
+import { refreshChat } from './chat.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait');
@@ -20,6 +21,7 @@ export function setWaitText(text) { $('waitMsg').textContent = text; }
 export function showWait(result) {
   wait.style.display = '';
   document.body.classList.remove('ingame');
+  refreshChat();
   $('result').textContent = result || '';
   showRoom();
   if (document.pointerLockElement) document.exitPointerLock();
@@ -27,6 +29,7 @@ export function showWait(result) {
 export function hideWait() {
   wait.style.display = 'none';
   document.body.classList.add('ingame');
+  refreshChat();
   $('result').textContent = '';
   $('msg').style.opacity = 0;
 }

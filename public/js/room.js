@@ -8,6 +8,7 @@ import { initAudio } from './audio.js';
 import { toast } from './ui.js';
 import { PLAYER_SKIN_NAMES, PLAYER_SPRITES } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
+import { muted, toggleMute, voiceOn } from './voice.js';
 
 const $ = id => document.getElementById(id);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -96,6 +97,7 @@ export function showRoom() {
   const me = r.players.find(p => p.id === S.myId);
   $('roster').replaceChildren(...[...r.players].sort((a, b) => a.team - b.team).map(p => {
     const li = document.createElement('li');
+    li.dataset.id = p.id; // voice.js lights up whoever is talking
     if (teams) li.classList.add('team' + p.team);
     li.classList.toggle('ready', p.ready);
     li.classList.toggle('you', p.id === S.myId);
@@ -105,6 +107,14 @@ export function showRoom() {
     tag.className = 'tag';
     tag.textContent = (teams ? TEAMS[p.team] + ' · ' : '') + (PLAYER_SKIN_NAMES[p.skin] || 'Demon') + ' · ' + (p.ready ? 'READY' : 'NOT READY');
     li.append(name, tag);
+    if (voiceOn() && !p.bot && p.id !== S.myId) { // mute their voice, this session
+      const mute = document.createElement('button');
+      mute.className = 'mute';
+      mute.title = muted.has(p.id) ? 'Unmute' : 'Mute';
+      mute.textContent = muted.has(p.id) ? '🔇' : '🔈';
+      mute.addEventListener('click', () => { toggleMute(p.id); showRoom(); });
+      name.append(' ', mute);
+    }
     return li;
   }));
   $('rosterHead').textContent = `PLAYERS ${r.players.length}/${r.max}`;

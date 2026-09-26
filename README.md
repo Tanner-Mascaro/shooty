@@ -36,6 +36,12 @@ Mags, reload times, ammo, crates, pad guns, slot count and slide tuning are in `
 
 The ⚙ button (top right, or P in a match) sets the frame rate limit, FPS counter, fullscreen, master and background volume, mouse sensitivity, scope mode (click to toggle or hold to aim) and every key binding. Settings are saved in the browser and on your profile, so signing in on another device brings them along.
 
+## Chat and voice
+
+- **Text chat:** everyone in the room. In the lobby it's a card; in a match press **Enter** to type, Enter to send, Esc to cancel, and messages fade after a few seconds. Up to 140 characters, 5 messages per 5 seconds; the server log records them.
+- **Voice chat:** push to talk on **V** by default (or open mic / off in settings). Audio goes straight between browsers (WebRTC); the server only passes the connection setup along. The browser asks for the mic the first time you talk. In a teams match only your teammates hear you. Names light up while someone talks, and the 🔈 next to a name in the lobby mutes them.
+- Voice needs https (fine on Render) or localhost; over plain http on another device the mic is blocked. It uses public STUN servers only, so on some strict networks (some school/office Wi-Fi, carrier networks) two players may not be able to connect; adding a TURN server to `ICE` in `public/js/voice.js` fixes that.
+
 ## Rooms, modes and friends
 
 - **Rooms:** every game is a room with a short code, and the address bar is its invite link (`/?room=ABCDE`). **Quick play** puts you in any public room with space; **New private room** makes one only people with the link (or an invite) can join. Up to 8 players; you can join a match in progress.
@@ -97,6 +103,7 @@ The version in `package.json` shows in the lobby's bottom-left corner and the se
 | `public/js/profile.js`, `account.js` | Your profile key + name in the browser; lobby name, stats, sign-in, leaderboard |
 | `public/js/net.js` | WebSocket (joins the `?room=` in the URL) + a handler per server message |
 | `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/reloading/switching, movement (bhop) |
+| `public/js/chat.js`, `voice.js` | Text chat box; WebRTC voice chat (connections, push to talk, who's talking, muting) |
 | `public/js/settings.js` | Settings panel: FPS limit, sound, sensitivity, scope mode, key bindings, fullscreen (saved in the browser and on the profile) |
 | `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds |
 | `public/js/audio.js` | Synthesized sound effects |

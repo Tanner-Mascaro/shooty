@@ -6,6 +6,8 @@
 import { S } from './state.js';
 import { send } from './net.js';
 import { applyVolume } from './audio.js';
+import { applyVolume as applyVoiceVolume, syncVoice, askMic } from './voice.js';
+import { refreshChat } from './chat.js';
 
 const $ = id => document.getElementById(id);
 
@@ -14,10 +16,12 @@ export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
   jump: ['Jump', 'Space'], slide: ['Slide', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
   melee: ['Quick melee', 'KeyF'], slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
+  chat: ['Text chat', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
 };
-// ads: right click scopes while held ('hold') or until clicked again ('toggle')
-const DEFAULTS = { fps: 0, showFps: false, volume: 1, ambient: 1, sens: 1, ads: 'toggle', keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])) };
+// ads: right click scopes while held ('hold') or until clicked again ('toggle');
+// voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
+const DEFAULTS = { fps: 0, showFps: false, volume: 1, ambient: 1, voice: 'ptt', voiceVol: 1, sens: 1, ads: 'toggle', keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])) };
 const FPS_CHOICES = [0, 30, 60, 90, 120, 144, 165, 240]; // 0 = as fast as the display refreshes
 
 // a full, valid settings object from whatever was saved (older versions, another device)
@@ -35,6 +39,8 @@ function normalize(saved) {
     volume: num(saved.volume, 0, 1, DEFAULTS.volume), ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient),
     sens: num(saved.sens, 0.2, 3, DEFAULTS.sens),
     ads: ['toggle', 'hold'].includes(saved.ads) ? saved.ads : DEFAULTS.ads,
+    voice: ['ptt', 'open', 'off'].includes(saved.voice) ? saved.voice : DEFAULTS.voice,
+    voiceVol: num(saved.voiceVol, 0, 1, DEFAULTS.voiceVol),
     keys,
   };
 }
@@ -48,7 +54,7 @@ let upload = null;
 function save() {
   try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
   showControlsHint();
-  applyVolume();
+  applyVolume(); applyVoiceVolume(); refreshChat();
   clearTimeout(upload); // sliders fire a lot: send the profile copy once they settle
   upload = setTimeout(() => send({ type: 'settings', settings }), 800);
 }
@@ -60,7 +66,7 @@ export function fromProfile(saved) {
   Object.assign(settings, normalize(saved));
   try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
   showControlsHint();
-  applyVolume();
+  applyVolume(); applyVoiceVolume(); syncVoice(); refreshChat();
   if (settingsOpen()) render();
 }
 
@@ -116,7 +122,8 @@ function render() {
   $('showFps').checked = settings.showFps;
   $('sens').value = settings.sens;
   $('ads').value = settings.ads;
-  for (const k of ['volume', 'ambient']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
+  $('voiceMode').value = settings.voice;
+  for (const k of ['volume', 'ambient', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
   $('sensVal').textContent = settings.sens.toFixed(2) + '×';
   $('fsBtn').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Go fullscreen';
   $('binds').replaceChildren(...Object.entries(ACTIONS).map(([a, [label]]) => {
@@ -134,13 +141,17 @@ function render() {
 function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
   $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} chat | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {
   $('fpsCap').replaceChildren(...FPS_CHOICES.map(n => new Option(n ? n + ' FPS' : 'Unlimited (display refresh)', n)));
   $('ads').addEventListener('change', e => { settings.ads = e.target.value; save(); });
-  for (const k of ['volume', 'ambient'])
+  $('voiceMode').addEventListener('change', e => {
+    settings.voice = e.target.value; save(); syncVoice();
+    if (settings.voice === 'open') askMic(); // this change is a click: the browser may ask now
+  });
+  for (const k of ['volume', 'ambient', 'voiceVol'])
     $(k).addEventListener('input', e => { settings[k] = +e.target.value; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; save(); });
   $('fpsCap').addEventListener('change', e => { settings.fps = +e.target.value; save(); });
   $('showFps').addEventListener('change', e => { settings.showFps = e.target.checked; save(); });
