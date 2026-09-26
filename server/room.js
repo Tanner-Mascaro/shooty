@@ -126,7 +126,8 @@ export class Room {
   // a loot box on the ground at (x, y); nothing if it would land in lava / acid / bog
   addBox(x, y, items) {
     if (!items.length || kindAt(this.T, x, y) === 2) return;
-    this.boxes.push({ id: ++this.boxId, x, y, z: groundAt(this.T, x, y), items, until: Date.now() + BOX_TIME });
+    // walkHeight, not groundAt: under a hut roof the heightmap is the roof, but loot sits on the floor
+    this.boxes.push({ id: ++this.boxId, x, y, z: walkHeight(this.T, x, y, 0), items, until: Date.now() + BOX_TIME });
   }
 
   // a dying player's guns go in a box at the body, with the ammo left in them
@@ -145,13 +146,14 @@ export class Room {
     if (p.mag[w] !== undefined) { this.addSpare(p, w, mag + spare); return { dropped: null }; }
     const guns = Object.keys(p.mag);
     if (guns.length < GUN_SLOTS) { p.mag[w] = mag; p.inv[w] = spare; return { dropped: null }; }
-    if (!guns.includes(drop)) return null;
-    const dropped = { w: drop, mag: p.mag[drop], spare: p.inv[drop] || 0 };
+    // if the client sent a stale/missing drop (race after emptying a gun), still swap something out
+    const victim = guns.includes(drop) ? drop : guns[0];
+    const dropped = { w: victim, mag: p.mag[victim], spare: p.inv[victim] || 0 };
     const mags = {}, invs = {};
     for (const g of guns) { // rebuild so the new gun keeps the old one's slot
-      const k = g === drop ? w : g;
-      mags[k] = g === drop ? mag : p.mag[g];
-      if (g === drop) invs[k] = spare; else if (p.inv[g] !== undefined) invs[k] = p.inv[g];
+      const k = g === victim ? w : g;
+      mags[k] = g === victim ? mag : p.mag[g];
+      if (g === victim) invs[k] = spare; else if (p.inv[g] !== undefined) invs[k] = p.inv[g];
     }
     p.mag = mags; p.inv = invs;
     return { dropped };
@@ -598,7 +600,10 @@ Room.prototype.handlers = {
   use(p, msg) {
     if (this.isInfected(p)) return;
     if (!this.gameOn) return;
-    const near = o => Math.hypot(p.x - o.x, p.y - o.y) <= USE_RANGE && Math.abs(p.z - (o.z || 0)) < 1.2;
+    const near = o => {
+      const oz = o.z || 0, floorZ = oz > p.z + 1.5 ? 0 : oz;
+      return Math.hypot(p.x - o.x, p.y - o.y) <= USE_RANGE && Math.abs(p.z - floorZ) < 1.2;
+    };
     let got = null, where = null;
     if (Number.isInteger(msg.pad)) {
       const pu = this.pickups[msg.pad];

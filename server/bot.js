@@ -218,8 +218,9 @@ export function botTick(game, p) {
     const aim = Math.atan2(foe.y - p.y, foe.x - p.x);
     const da = Math.abs(Math.atan2(Math.sin(aim - p.a), Math.cos(aim - p.a)));
     if (da > 0.4) return; // still turning onto the throw
+    if (d > 18) return; // don't lob across the whole map
     p.p = 0.28 + Math.min(0.5, d / 32); // lob farther targets higher
-    b.nextNade = now + 650 + Math.random() * 550;
+    b.nextNade = now + 2800 + Math.random() * 2200; // ~3–5s between throws
     game.handlers.nade.call(game, p);
     return;
   }

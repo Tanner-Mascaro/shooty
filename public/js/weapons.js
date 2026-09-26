@@ -95,7 +95,9 @@ export function findUseTarget() {
   let best = null, bestD = USE_RANGE;
   const consider = (o, t) => {
     const d = Math.hypot(me.x - o.x, me.y - o.y);
-    if (d <= bestD && Math.abs(me.z - (o.z || 0)) < 1.2) { best = t; bestD = d; }
+    // roof heightmaps can mark floor loot as ~3m up; treat that as ground-level for reach
+    const oz = o.z || 0, floorZ = oz > me.z + 1.5 ? 0 : oz;
+    if (d <= bestD && Math.abs(me.z - floorZ) < 1.2) { best = t; bestD = d; }
   };
   S.pickupSpots.forEach((p, i) => {
     if (!S.pickupActive[i] || p.crate || p.weapon === 'health' || p.weapon === 'ammo' || p.weapon === 'nade') return;

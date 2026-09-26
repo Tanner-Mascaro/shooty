@@ -131,7 +131,8 @@ export function buildTerrain(MAP, RES, style) {
       const W = x1 - x0, D = y1 - y0, wallH = 2.1, t = 0.18, wallMat = MAT.WALL;
       const midY = (minY + maxY) * 0.5;
       const doorDir = midY < MH / 2 ? 1 : -1; // door toward mid-map street
-      const doorL = x0 + W * 0.3, doorR = x0 + W * 0.7;
+      const doorHalf = Math.max(0.85, W * 0.22);
+      const doorL = x0 + W / 2 - doorHalf, doorR = x0 + W / 2 + doorHalf;
       const clearFloor = (xa, ya, xb, yb) => {
         const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
         const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES));
@@ -166,7 +167,7 @@ export function buildTerrain(MAP, RES, style) {
       box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, MAT.ROCK);
       // interior cover (kitchen island / couch) so fights inside aren't empty boxes
       if (W > 3.5 && D > 2.5) box(x0 + W * 0.38, y0 + D * 0.4, x0 + W * 0.62, y0 + D * 0.58, 0.55, MAT.CRATE);
-      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir });
+      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir, doorHalf });
       continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
@@ -280,10 +281,23 @@ export function buildTerrain(MAP, RES, style) {
   // open the room volume under each roof so walls stay solid but the inside is walkable
   for (const hut of props) {
     if (hut.type !== 'hut') continue;
-    const hw = (hut.w || 2.2) / 2 - 0.2, hd = (hut.d || 2.2) / 2 - 0.2;
+    const hw = (hut.w || 2.2) / 2 - 0.15, hd = (hut.d || 2.2) / 2 - 0.15;
     const i0 = Math.max(0, Math.floor((hut.x - hw) * RES)), i1 = Math.min(TW - 1, Math.ceil((hut.x + hw) * RES));
     const j0 = Math.max(0, Math.floor((hut.y - hd) * RES)), j1 = Math.min(TH - 1, Math.ceil((hut.y + hd) * RES));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const k = j * TW + i;
+      if (mat[k] === MAT.PIT) continue;
+      kind[k] = 0;
+    }
+    // punch a walkable doorway + porch through the door wall (roof height stays for looks)
+    const doorHalf = hut.doorHalf || Math.min(hw * 0.7, 1.2);
+    const doorDir = hut.doorDir || 1;
+    const fullHd = (hut.d || 2.2) / 2;
+    const ya = doorDir > 0 ? hut.y + fullHd - 0.4 : hut.y - fullHd - 0.85;
+    const yb = doorDir > 0 ? hut.y + fullHd + 0.85 : hut.y - fullHd + 0.4;
+    const di0 = Math.max(0, Math.floor((hut.x - doorHalf) * RES)), di1 = Math.min(TW - 1, Math.ceil((hut.x + doorHalf) * RES));
+    const dj0 = Math.max(0, Math.floor(Math.min(ya, yb) * RES)), dj1 = Math.min(TH - 1, Math.ceil(Math.max(ya, yb) * RES));
+    for (let j = dj0; j <= dj1; j++) for (let i = di0; i <= di1; i++) {
       const k = j * TW + i;
       if (mat[k] === MAT.PIT) continue;
       kind[k] = 0;
@@ -306,13 +320,21 @@ export function groundAt(T, x, y) {
   return g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v;
 }
 
-// floor you stand on: under a hut roof this is the ground, not the roof heightmap
+// floor you stand on: under a hut roof (or in its doorway) this is the ground, not the roof heightmap
 export function walkHeight(T, x, y, z = 0) {
   const g = groundAt(T, x, y);
   for (const p of T.props || []) {
     if (p.type !== 'hut') continue;
-    const hw = (p.w || 2.2) / 2 - 0.2, hd = (p.d || 2.2) / 2 - 0.2;
-    if (Math.abs(x - p.x) >= hw || Math.abs(y - p.y) >= hd) continue;
+    const hw = (p.w || 2.2) / 2 - 0.12, hd = (p.d || 2.2) / 2 - 0.12;
+    const fullHd = (p.d || 2.2) / 2;
+    const doorHalf = p.doorHalf || Math.min(hw * 0.7, 1.2);
+    const doorDir = p.doorDir || 1;
+    const inside = Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd;
+    const inDoor = Math.abs(x - p.x) < doorHalf && (
+      doorDir > 0 ? (y >= p.y + fullHd - 0.45 && y <= p.y + fullHd + 0.9)
+                  : (y <= p.y - fullHd + 0.45 && y >= p.y - fullHd - 0.9)
+    );
+    if (!inside && !inDoor) continue;
     if (z < g - 0.2) return 0;
   }
   return g;

@@ -6,7 +6,7 @@ import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
 import { toast } from './ui.js';
-import { PLAYER_SKIN_NAMES, PLAYER_SPRITES } from './render/sprites.js';
+import { PLAYER_SKIN_NAMES, PLAYER_SKINS, PLAYER_SPRITES } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
 import { LEVELS } from '/shared/levels.js';
 import { buildTerrain, MAT, noise } from '/shared/terrain.js';
@@ -15,7 +15,7 @@ import { muted, toggleMute, voiceOn } from './voice.js';
 
 const $ = id => document.getElementById(id);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const SKINS = Object.keys(PLAYER_SKIN_NAMES);
+const SKINS = PLAYER_SKINS.filter(s => PLAYER_SKIN_NAMES[s] && PLAYER_SPRITES[s]);
 const skinCanvas = {};
 let browsedSkin = 'demon';
 let skinCarouselBuilt = false;
@@ -51,9 +51,18 @@ function centeredSkin() {
   return skinCards().reduce((best, b) => Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid) < Math.abs(best.offsetLeft + best.offsetWidth / 2 - mid) ? b : best);
 }
 
-function scrollToSkin(skin) {
+function scrollToSkin(skin, instant = false) {
   const strip = $('skins'), b = skinCards().find(c => c.dataset.skin === skin);
-  if (b) strip.scrollTo({ left: b.offsetLeft + b.offsetWidth / 2 - strip.clientWidth / 2 });
+  if (!b) return;
+  if (instant) {
+    const prev = strip.style.scrollBehavior;
+    strip.style.scrollBehavior = 'auto';
+    strip.scrollLeft = b.offsetLeft + b.offsetWidth / 2 - strip.clientWidth / 2;
+    strip.style.scrollBehavior = prev;
+  } else {
+    strip.scrollTo({ left: b.offsetLeft + b.offsetWidth / 2 - strip.clientWidth / 2 });
+  }
+  skinCards().forEach(c => c.classList.toggle('centered', c === b));
 }
 
 function updateSkinButton() {
@@ -65,12 +74,7 @@ function updateSkinButton() {
   btn.classList.toggle('picked', chosen);
   const status = $('skinStatus');
   if (status) status.textContent = 'Playing as ' + (PLAYER_SKIN_NAMES[savedSkin()] || savedSkin());
-  skinCards().forEach(b => {
-    const mine = b.dataset.skin === savedSkin();
-    b.classList.toggle('sel', mine);
-    const tag = b.querySelector('small');
-    if (tag) tag.textContent = mine ? 'SELECTED' : '';
-  });
+  skinCards().forEach(b => b.classList.toggle('sel', b.dataset.skin === savedSkin()));
 }
 
 function pickSkin(skin) {
@@ -94,14 +98,14 @@ function initSkinCarousel() {
     b.dataset.skin = skin;
     const canvas = document.createElement('canvas');
     renderSkinPreview(canvas, skin);
-    const title = document.createElement('b');
-    title.textContent = (PLAYER_SKIN_NAMES[skin] || skin).toUpperCase();
-    const tag = document.createElement('small');
-    b.append(canvas, title, tag);
-    b.addEventListener('click', () => {
-      browsedSkin = skin;
-      pickSkin(skin);
-    });
+    const art = document.createElement('div');
+    art.className = 'skin-art';
+    art.append(canvas);
+    const title = document.createElement('span');
+    title.className = 'skin-name';
+    title.textContent = PLAYER_SKIN_NAMES[skin] || skin;
+    b.append(art, title);
+    b.addEventListener('click', () => pickSkin(skin));
     return b;
   }));
   const step = dir => {
@@ -131,8 +135,8 @@ function initSkinCarousel() {
     scrollTick = requestAnimationFrame(mark);
   }, { passive: true });
   browsedSkin = PLAYER_SKIN_NAMES[savedSkin()] ? savedSkin() : 'demon';
+  scrollToSkin(browsedSkin, true);
   updateSkinButton();
-  requestAnimationFrame(() => { scrollToSkin(browsedSkin); mark(); });
 }
 
 function updateMapVoteLabel(level) {
@@ -329,6 +333,12 @@ export function showRoom() {
 
   const teams = r.mode === 'teams';
   const me = r.players.find(p => p.id === S.myId);
+  // server is source of truth — revert a local pick the server rejected (e.g. unknown skin)
+  if (me && me.skin && PLAYER_SKIN_NAMES[me.skin] && me.skin !== savedSkin()) {
+    saveSkin(me.skin);
+    browsedSkin = me.skin;
+    if (skinCarouselBuilt) scrollToSkin(me.skin, true);
+  }
   $('roster').replaceChildren(...[...r.players].sort((a, b) => r.mode === 'plague' && !r.gameOn ? a.id - b.id : a.team - b.team).map(p => {
     const li = document.createElement('li');
     li.dataset.id = p.id; // voice.js lights up whoever is talking

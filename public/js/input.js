@@ -60,7 +60,8 @@ export function initInput() {
     if (!locked()) { S.mouseHeld = false; S.aimHeld = false; S.scoped = false; }
   });
   document.addEventListener('wheel', e => {
-    if (!S.started || !locked() || settingsOpen() || performance.now() < S.switchUntil) return;
+    // switchUntil only gates firing / nades — always allow scrolling to another gun
+    if (!S.started || !locked() || settingsOpen()) return;
     cycleWeapon(e.deltaY < 0 ? -1 : 1);
   });
 }
