@@ -177,6 +177,7 @@ function drawCrosshair() {
 // side face pushed toward the bottom of the screen (EX, EY), so it reads as solid, and gloved
 // hands on sleeved arms hold it.
 let EX = 0, EY = 1; // screen-down in the local frame, set each frame
+const SQUASH = [1.15, 0.6]; // the gun is drawn wide and short: across, along the barrel
 
 function quad(L, y0, y1, hw0, hw1, xo) {
   const k = y => 1 - 0.5 * Math.min(1, Math.max(0, -y / L)); // the far end is further away
@@ -278,18 +279,41 @@ const GRIP = {
   shotgun: { hand: [0.6, 0.5], support: [-0.4, -17] },
   sniper:  { hand: [0.6, 0.5], support: [-0.6, -16.5] },
 };
-const GLOVE = ['#151518', '#26262c', '#3a3a42'];
-const SLEEVE = ['#1c1e23', '#2b2e35'];
+// a gloved fist, pixel art like the rest of the game: back of the hand, knuckle ridge, finger
+// gaps, thumb on top and the cuff at the wrist. o outline, h highlight, g glove, k shadow, c cuff
+const FIST = [
+  '...oooo...',
+  '..ohhhho..',
+  '.ohhgggggo',
+  'ohgggggggo',
+  'okhkhkhkgo',
+  'oggggggggo',
+  'ogkgkgkgko',
+  'oggggggggo',
+  '.ogggggkgo',
+  '.okggggko.',
+  '..occcco..',
+  '..occcco..',
+];
+const GLOVE_PAL = { o: '#0c0c0e', h: '#6a6e62', g: '#44483f', k: '#2a2d27', c: '#1d1f24' };
 
-// a gloved hand gripping around the gun at (x, y): back of the hand with knuckle ridges
+// the fist at (x, y) in the gun's frame, turned by rot, w x h big (in screen units: the gun's
+// squash into the screen doesn't apply to hands)
 function glove(x, y, rot, w, h) {
-  ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
-  ctx.fillStyle = GLOVE[0]; ctx.beginPath(); ctx.roundRect(-w / 2 + EX * 1.3, -h / 2 + EY * 1.3, w, h, w * 0.4); ctx.fill();
-  ctx.fillStyle = GLOVE[1]; ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, w * 0.4); ctx.fill();
-  ctx.fillStyle = GLOVE[2];
-  for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.roundRect(-w / 2 + 0.4, -h / 2 + 0.4 + i * (h - 0.8) / 4, w * 0.38, (h - 0.8) / 4 - 0.45, 0.5); ctx.fill(); }
+  ctx.save(); ctx.translate(x, y); ctx.scale(1 / SQUASH[0], 1 / SQUASH[1]); ctx.rotate(rot);
+  const cw = w / FIST[0].length, ch = h / FIST.length;
+  FIST.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      const c = GLOVE_PAL[row[i]];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect(-w / 2 + i * cw, -h / 2 + j * ch, cw + 0.03, ch + 0.03); // tiny overlap hides seams
+    }
+  });
   ctx.restore();
 }
+
+const SLEEVE = ['#1c1e23', '#2b2e35'];
 
 // a sleeved forearm from the wrist (x0, y0) running off screen to (x1, y1), w0 -> w1 half widths
 function arm(x0, y0, x1, y1, w0, w1, accent) {
@@ -307,7 +331,8 @@ function arm(x0, y0, x1, y1, w0, w1, accent) {
 }
 
 // gun metal per level
-const METAL = { hell: ['#221a1c', '#35292b', '#4a3a3a'], robot: ['#262b33', '#3c434e', '#58616e'], witch: ['#1d2019', '#2e3328', '#454c3c'] };
+const METAL = { hell: ['#221a1c', '#35292b', '#4a3a3a'], robot: ['#262b33', '#3c434e', '#58616e'], witch: ['#1d2019', '#2e3328', '#454c3c'],
+  haunt: ['#211d16', '#342e24', '#4c4434'] };
 
 function drawViewmodel(now) {
   const { W, H } = view, u = Math.min(W, H * 1.6) / 100;
@@ -325,7 +350,7 @@ function drawViewmodel(now) {
   const rot = ang + S.recoil * 0.12 - dip * 0.5;
   // you look along the gun from behind it, so it's drawn wide and short (foreshortened) rather
   // than as a long side view: SX across, SY along the barrel
-  const SX = 1.15, SY = 0.6;
+  const [SX, SY] = SQUASH;
   // a screen direction, turned and stretched into the gun's frame
   const local = (sx, sy) => [(sx * Math.cos(rot) + sy * Math.sin(rot)) / SX, (-sx * Math.sin(rot) + sy * Math.cos(rot)) / SY];
   [EX, EY] = local(0, 1); // screen-down, for the side faces
@@ -346,10 +371,10 @@ function drawViewmodel(now) {
   }
   MODELS[w](L, now, colors);
   // a pistol's support hand cups under the trigger hand, so it goes first; a long gun's is out front
-  if (w === 'pistol') glove(sx, sy, 0.9, 5, 6.5);
-  if (w !== 'blade') glove(hx, hy, 0.15, 5.4, 7);
-  else { ctx.save(); const p = Math.min(1, (now - S.swingT) / 250), sw = p < 1 ? Math.sin(p * Math.PI) : 0; ctx.rotate(-sw * 1.4); ctx.translate(-sw * 10, -sw * 4); glove(hx, hy - 3, 0.1, 5.4, 7); ctx.restore(); }
-  if (g.support && w !== 'pistol') glove(sx, sy, -0.35, 5, 6.5);
+  if (w === 'pistol') glove(sx, sy, 0.9, 7, 8.5);
+  if (w !== 'blade') glove(hx, hy, 0.15, 7.5, 9);
+  else { ctx.save(); const p = Math.min(1, (now - S.swingT) / 250), sw = p < 1 ? Math.sin(p * Math.PI) : 0; ctx.rotate(-sw * 1.4); ctx.translate(-sw * 10, -sw * 4); glove(hx, hy - 3, 0.1, 7.5, 9); ctx.restore(); }
+  if (g.support && w !== 'pistol') glove(sx, sy, -0.35, 7, 8.5);
   ctx.restore();
   if (S.muzzle > 0 && !showBlade) {
     const tip = (L - kick - BACK[w]) * u * 0.6;

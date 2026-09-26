@@ -2,9 +2,10 @@
 // bottom half is the top rotated 180°, so both spawns are fair.
 //
 //   #  obstacle: on the edge, the boundary wall; inside, a volcano (hell; touching # merge
-//      into one), a server rack (robot; touching # join into one row) or a tree (swamp)
-//   +  low cover you can shoot over: boulder / crate / bush
-//   .  ground      L  pit (lava / acid / bog depending on the level)
+//      into one), a server rack (robot; touching # join into one row), a tree (swamp) or a
+//      full-height wall (haunt; touching # join up into rooms and hallways)
+//   +  low cover you can shoot over: boulder / crate / bush / old furniture
+//   .  ground      L  pit (lava / acid / bog / a hole into the void depending on the level)
 //   S  sniper pad  G  shotgun pad  M  SMG pad  H  health pad
 //
 // shared/terrain.js turns these into smooth shapes. Keep paths 2+ squares wide around
@@ -85,9 +86,36 @@ export const LEVELS = {
     "#...LL...............#.....H...........#",
     "#......................................#",
   ]),
+  // haunted house rooms and doorways on one side, the yellow maze of the Backrooms on the other
+  haunt: mirror([
+    "########################################",
+    "#.......#.........#.....#.......#.....S#",
+    "#...H...#....+....#.....#.......#......#",
+    "#.......#.........#.............#......#",
+    "#..+.........LL.......###.........###..#",
+    "#.......#....LL...#.....#..............#",
+    "#.......#.........#.....#.......#......#",
+    "####..#####..######.....#####...#..#####",
+    "#.........#.......#..........#.........#",
+    "#...M.....#...+...#...#......#....+....#",
+    "#.........#.......#...#..#.......#.....#",
+    "#..+..............#......#..LL...#.....#",
+    "#.........#.......#...#..#..LL.........#",
+    "#####..#######..###...#......###..######",
+    "#.........#.............#......#.......#",
+    "#..LL.....#....G..#.....#..............#",
+    "#..LL.....#.......#.........+......H...#",
+    "#.........#...+...###...#......#.......#",
+    "#.....+............#....####...#.......#",
+    "#.........#............................#",
+  ]),
 };
 
-export const LEVEL_NAMES = { hell: 'HELL', robot: 'ROBOT FACTORY', witch: 'WITCH SWAMP' };
+export const LEVEL_NAMES = { hell: 'HELL', robot: 'ROBOT FACTORY', witch: 'WITCH SWAMP', haunt: 'HAUNTED HOUSE' };
+
+// the haunted house level is two places: the house (top-left and bottom-right quarters) and the
+// Backrooms (the other two); walls, floors and ceilings change with it
+export const inBackrooms = (x, y) => (x < MW / 2) !== (y < MH / 2);
 
 export const MW = LEVELS.hell[0].length, MH = LEVELS.hell.length;
 for (const k in LEVELS)

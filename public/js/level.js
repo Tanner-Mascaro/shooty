@@ -1,6 +1,6 @@
 // Loads a level: terrain, precomputed floor colors, minimap image and pickup pads.
 import { RES } from '/shared/config.js';
-import { LEVELS, MW, MH } from '/shared/levels.js';
+import { LEVELS, MW, MH, inBackrooms } from '/shared/levels.js';
 import { buildTerrain, findPickups, MAT, noise } from '/shared/terrain.js';
 import { S } from './state.js';
 import { THEMES } from './themes.js';
@@ -97,6 +97,20 @@ const FLOORS = {
     r += 10 * glow; g += 60 * glow; b += 40 * glow;
     if (cx % 4 === 2 && cy % 4 === 2 && Math.hypot(fx - 0.5, fy - 0.5) < 0.12) { EM[k] = 1; return [60, 220, 255]; }
     return [r, g, b];
+  },
+  haunt(x, y, n, glow) {
+    // Backrooms: damp mustard carpet with darker stains; the house: worn floorboards.
+    // Both go dark toward a hole into the void.
+    let r, g, b;
+    if (inBackrooms(x, y)) {
+      const v = 0.8 + n * 0.3, stain = noise(x * 0.8, y * 0.8) > 0.68 ? 0.72 : 1;
+      r = 118 * v * stain; g = 102 * v * stain; b = 58 * v * stain;
+    } else {
+      const plank = Math.floor(y * 4), seam = (y * 4) % 1 < 0.08, tone = seam ? 0.45 : 0.75 + 0.4 * hash(plank, Math.floor(x * 0.7 + plank * 0.37));
+      r = 64 * tone; g = 42 * tone; b = 26 * tone;
+    }
+    const dark = 1 - 0.8 * glow;
+    return [r * dark, g * dark, b * dark];
   },
   witch(x, y, n, glow, ld, k, EM) {
     // mossy swamp ground with dark grass tufts and glowing mushrooms

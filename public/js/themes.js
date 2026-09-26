@@ -5,6 +5,7 @@
 //   blood/fire     hit particles and death burst
 //   sprite         enemy billboard in render/sprites.js
 //   drone          ambient hum oscillators [type, Hz]; droneVol scales how loud it is
+//   ceiling        a ceiling over the level (no sky); see drawTerrain
 
 export const THEMES = {
   hell: {
@@ -33,5 +34,14 @@ export const THEMES = {
     sprite: 'witch', pitDeath: 'Melted in the bog!', enemyPitDeath: 'Enemy melted!', pitOverlay: '90,255,60',
     accent: '120,255,90', bg: '#0c2a06', title: '#7e4', drone: [['sine', 65], ['triangle', 97.5], ['sine', 131]], droneCut: 300,
     minimap: [[22, 38, 18], [80, 100, 70], [120, 255, 60]],
+  },
+  haunt: {
+    id: 'haunt', name: 'HAUNTED HOUSE', fog: [14, 12, 6], fogK: 0.12, skyLo: [40, 36, 20], skyHi: [10, 9, 5],
+    orb: [0, 0, 0], orbGlow: [0, 0, 0], orbA: 0.7, orbE: -1, orbR: 0, ceiling: true,
+    wall: [150, 136, 72], wallTop: [60, 52, 30], band: [255, 230, 150],
+    ambient: [230, 220, 160], ambientVz: 0.04, blood: [110, 8, 8], fire: [230, 230, 255],
+    sprite: 'ghost', pitDeath: 'Noclipped out of reality!', enemyPitDeath: 'Enemy noclipped!', pitOverlay: '40,0,60',
+    accent: '255,215,90', bg: '#2a2208', title: '#fd5', drone: [['sawtooth', 60], ['sine', 120], ['sine', 180.5]], droneCut: 420, droneVol: 0.35,
+    minimap: [[70, 62, 34], [150, 136, 72], [30, 0, 40]],
   },
 };

@@ -5,7 +5,7 @@ import { S } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
-import { pickupSprite, canopySprite, boxSprite } from './sprites.js';
+import { pickupSprite, canopySprite, boxSprite, creatureSprite } from './sprites.js';
 import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
@@ -92,6 +92,13 @@ export function render(dt) {
       const player = S.room && S.room.players.find(p => p.id === o.now.id);
       drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null, player && player.skin);
     }
+  for (const o of Object.values(S.creatures)) { // haunted house monsters, with a growl now and then when close
+    const a = o.prev, b = o.cur, k = Math.min(1, (now - o.t) / TICK);
+    const x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k, z = a.z + (b.z - a.z) * k;
+    const sp = creatureSprite(b.hunting), sway = 0.03 * Math.sin(now / 300 + b.id);
+    drawSprite(x + sway, y, z, sp.w, sp.h, sp.px, sp.pal, sp.emit, now - o.hitT < 90);
+    if (now > o.growlT) { o.growlT = now + 3000 + Math.random() * 5000; if (Math.hypot(x - S.me.x, y - S.me.y) < 10) playAt('growl', x, y); }
+  }
   drawParticles(S.embers);
   drawParticles(S.particles);
   present(S.cam.ox, S.cam.oy);

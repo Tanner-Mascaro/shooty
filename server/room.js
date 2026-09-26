@@ -6,6 +6,7 @@ import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
+import { CREATURE, CREATURE_LEVELS, newCreature, creatureTick } from './creature.js';
 import { log } from './log.js';
 import { VERSION } from './version.js';
 
@@ -31,6 +32,7 @@ export class Room {
     this.mode = 'ffa';        // 'ffa' | 'teams'
     this.gameOn = false;
     this.boxes = [];          // loot boxes: { id, x, y, z, items: [{ w, mag, spare }], until }
+    this.creatures = [];      // haunted house monsters (creature.js), ids -1, -2, ... so they never clash with players
     this.boxId = 0;
     this.setLevel('hell');
   }
@@ -58,6 +60,7 @@ export class Room {
     this.level = name;
     this.map = LEVELS[name];
     this.T = TERRAINS[name];
+    this.creatures = [];
     this.resetPickups();
   }
   // the level's pads (gun pads roll a random gun every time they come back; health stays health)
@@ -222,7 +225,8 @@ export class Room {
     this.resetPlayer(victim);
     this.broadcast(this.boxList());
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id }, info, at));
-    const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
+    const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}`
+      : info.weapon === 'creature' ? 'was taken by a creature' : 'died in the pit';
     log(`[${this.code}] ${this.hub.name(killer || victim)} ${how} — ${this.score()}`);
     if (!killer) return;
     if (this.mode === 'teams') {
@@ -240,6 +244,9 @@ export class Room {
       placed.push(p);
     }
     this.resetPickups();
+    this.creatures = [];
+    if (CREATURE_LEVELS.includes(this.level)) // far from the players and from each other
+      for (let i = 0; i < CREATURE.count; i++) this.creatures.push(newCreature(-1 - i, this.spawnPos([...placed, ...this.creatures])));
     this.gameOn = true;
     this.broadcast({ type: 'start', level: this.level });
     this.broadcastPickups();
@@ -250,6 +257,7 @@ export class Room {
 
   finish(winners, result, label) {
     this.gameOn = false;
+    this.creatures = [];
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast(Object.assign({ type: 'win' }, result));
     for (const p of this.humans) this.hub.record(p, winners.includes(p) ? { wins: 1 } : { losses: 1 });
@@ -260,16 +268,39 @@ export class Room {
 
   endMatch(reason) {
     this.gameOn = false;
+    this.creatures = [];
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast({ type: 'end', reason });
     log(`[${this.code}] Match ended: ${reason}`);
   }
 
-  // --- per-tick: bots, pits, pickups, state broadcast ---
+  // someone shot or stabbed a creature: enough damage drives it off for a while
+  hurtCreature(c, p, h, r, w, weapon) {
+    c.hp -= h.dmg;
+    this.broadcast({ type: 'hit', who: c.id, by: p.id, dmg: h.dmg, head: h.head, weapon,
+      x: p.x + Math.cos(r.a) * r.dist, y: p.y + Math.sin(r.a) * r.dist, z: w.melee ? c.z + c.h / 2 : p.z + EYE + r.p * r.dist });
+    if (!c.target) c.target = p; // it turns on whoever hurt it
+    if (c.hp > 0) return;
+    c.awayUntil = Date.now() + CREATURE.away;
+    c.target = null;
+    this.broadcast({ type: 'creature', event: 'banish', id: c.id, x: c.x, y: c.y, z: c.z });
+    log(`[${this.code}] ${this.hub.who(p)} drove off a creature`);
+  }
+
+  // a creature's claws land on p
+  creatureHit(p, c) {
+    p.hp -= CREATURE.damage;
+    this.broadcast({ type: 'hit', who: p.id, by: c.id, dmg: CREATURE.damage, head: false, weapon: 'creature', x: p.x, y: p.y, z: p.z + BODY_H / 2 });
+    if (p.hp <= 0) { c.target = null; c.goal = null; this.killPlayer(p, null, { weapon: 'creature', a: c.a }); } // done with them
+  }
+
+  // --- per-tick: bots, creatures, pits, pickups, state broadcast ---
   tick() {
     for (const p of this.list) if (p.bot) botTick(this, p);
     if (this.gameOn) {
       const now = Date.now();
+      for (const c of this.creatures) { creatureTick(this, c, now); if (!this.gameOn) break; }
+      if (!this.gameOn) return; // a creature's kill ended the match
       for (const p of this.list) {
         if (kindAt(this.T, p.x, p.y) === 2 && p.z < -0.15) {
           p.hp -= PIT_DPS * TICK / 1000;
@@ -286,7 +317,8 @@ export class Room {
     }
     if (this.list.length < 2) return;
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
-    this.broadcast({ type: 'state', players });
+    const creatures = this.creatures.filter(c => !c.awayUntil).map(c => ({ id: c.id, x: c.x, y: c.y, z: c.z, a: c.a, hunting: !!c.target }));
+    this.broadcast({ type: 'state', players, creatures });
   }
 
   // health and ammo crates are taken by walking over them, only when you need them (guns need
@@ -449,12 +481,13 @@ Room.prototype.handlers = {
       if (!p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
     }
     p.nextFire[msg.weapon] = now + w.cd * 0.85; // slack for network jitter
-    const targets = this.enemies(p);
+    const targets = this.enemies(p).concat(this.creatures.filter(c => !c.awayUntil)); // creatures can be shot by anyone
     const res = w.melee ? doMelee(this.T, p, targets) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped);
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,
       rays: res.rays.map(r => ({ a: r.a, p: r.p, dist: r.dist, hit: !!r.hit })) });
     for (const h of res.hits) {
       const o = h.target, r = h.ray;
+      if (o.creature) { this.hurtCreature(o, p, h, r, w, msg.weapon); continue; }
       if (!this.players[o.id]) continue;
       o.hp -= h.dmg;
       this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg: h.dmg, head: h.head, weapon: msg.weapon,

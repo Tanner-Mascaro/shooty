@@ -13,7 +13,7 @@ function castShot(T, shooter, a, pch, targets) {
     const rx = shooter.x + cos * d, ry = shooter.y + sin * d, rz = eye + pch * d;
     if (rz < groundAt(T, rx, ry)) { r.dist = d; return r; }
     for (const o of targets) {
-      const h = o.sl ? BODY_H * SLIDE.crouch : BODY_H; // sliding players are lower
+      const h = o.h || (o.sl ? BODY_H * SLIDE.crouch : BODY_H); // creatures are taller, sliding players lower
       if (Math.hypot(rx - o.x, ry - o.y) < 0.32 && rz >= o.z && rz <= o.z + h + 0.05) {
         r.dist = d; r.hit = o;
         r.head = rz >= o.z + h - 0.2;

@@ -216,3 +216,29 @@ export function boxSprite(accent) {
   return boxCache[accent] ??= { w: 0.6, h: 0.5, px: boxPx, emit: [4],
     pal: [null, [104, 76, 48], [44, 30, 20], [140, 104, 68], accent.split(',').map(Number), [88, 64, 40]] };
 }
+
+// --- haunted house creature: a tall, gaunt shadow with long arms, hollow glowing eyes and a
+// grin too wide for its face. The eyes and grin glow through the dark; `hunting` makes them red.
+function creaturePx(u, v) {
+  const du = Math.abs(u - 0.5);
+  if (v < 0.27) { // head
+    const hx = 0.17 - Math.max(0, 0.08 - v) * 0.8, dy = (v - 0.15) / 0.13;
+    if (du > hx * Math.sqrt(Math.max(0, 1 - dy * dy)) + 0.01) return 0;
+    if (Math.abs(du - 0.07) < 0.03 && Math.abs(v - 0.13) < 0.028) return 3;            // eyes
+    if (v > 0.19 && v < 0.235 && du < 0.13 - (v - 0.19) * 1.2) return (u * 40 | 0) % 2 ? 4 : 2; // grin with teeth
+    return 1;
+  }
+  if (v < 0.31) return du < 0.05 ? 1 : 0;                                              // neck
+  const shoulders = 0.2 - Math.max(0, v - 0.36) * 0.12;
+  if (v < 0.72 && du < shoulders) return du > shoulders - 0.03 ? 2 : 1;                 // body
+  const armX = 0.24 + (v - 0.31) * 0.08, wisp = Math.sin(v * 40 + u * 7) * 0.01;
+  if (v < 0.94 && Math.abs(du - armX) < 0.025 + wisp) return 1;                         // long arms
+  if (v >= 0.94 && v < 0.99 && Math.abs(du - armX) < 0.05 && ((u * 60) | 0) % 2) return 2; // claws
+  if (v >= 0.72 && Math.abs(du - 0.08) < 0.035 + (1 - v) * 0.05) return 1;              // legs
+  return 0;
+}
+const CREATURE_SPRITES = {};
+export function creatureSprite(hunting) {
+  return CREATURE_SPRITES[hunting] ??= { w: 0.8, h: 1.15, px: creaturePx, emit: [3, 4],
+    pal: [null, [10, 8, 12], [34, 30, 40], hunting ? [255, 60, 40] : [255, 250, 225], hunting ? [255, 200, 190] : [240, 235, 215]] };
+}
