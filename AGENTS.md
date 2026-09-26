@@ -24,7 +24,9 @@ Port override examples:
 - `shared/config.js` — shared balance values used by both server and browser
 - `shared/levels.js` and `shared/terrain.js` — map data and collision helpers
 - `public/js/*.js` — client-side game logic, networking, render loop, and input
-- `public/js/render/*.js` — 3D world rendering and HUD
+- `public/js/render/*.js` — WebGL world (Three.js), HUD overlay, viewmodel
+- `public/js/render/gl/*.js` — Three.js scene, terrain meshes, entities, camera
+- `public/vendor/three.module.js` — vendored Three.js (no bundler; import map in `index.html`)
 
 ## Working conventions
 
@@ -37,7 +39,7 @@ Port override examples:
 
 - If a gameplay change feels wrong, start in `shared/config.js`.
 - If a connection or state issue appears, inspect `server.js`, `server/game.js`, and `public/js/net.js`.
-- If a visual or sound change is needed, check the relevant files under `public/js/` and `public/js/render/`.
+- If a visual or sound change is needed, check `public/js/themes.js`, `public/js/render/gl/`, and HUD under `public/js/render/`.
 
 ## Notes for AI agents
 

@@ -82,7 +82,7 @@ Speed, sight range, reaction time, fire rate and aim error per difficulty are in
 
 ## Haunted house
 
-The fourth map is half an old house and half the Backrooms, under a real ceiling (drawn by `drawCeiling` in `public/js/render/world.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`).
+The fourth map is half an old house and half the Backrooms, under a ceiling (`theme.ceiling` in `public/js/themes.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`). The world is drawn with Three.js from the shared heightmap.
 
 ## Seeing players
 
@@ -130,17 +130,18 @@ The version in `package.json` shows in the lobby's bottom-left corner and the se
 | `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/reloading/switching, movement (bhop) |
 | `public/js/chat.js`, `voice.js` | Text chat box; WebRTC voice chat (connections, push to talk, who's talking, muting) |
 | `public/js/settings.js` | Settings panel: FPS limit, sound, sensitivity, scope mode, key bindings, fullscreen (saved in the browser and on the profile) |
-| `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds |
+| `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds/WebGL materials |
 | `public/js/audio.js` | Synthesized sound effects |
 | `public/js/particles.js` | Blood, sparks, embers |
 | `public/js/ui.js` | Lobby show/hide, toasts, HP bar, scoreboard, kill feed |
-| `public/js/render/` | `world.js` 3D view, `hud.js` overlay, name tags + gun models, `sprites.js` player/pickup shapes |
+| `public/js/render/` | WebGL world (`gl/`), HUD overlay, gun viewmodel, sprites |
+| `public/vendor/three.module.js` | Three.js ESM (import map in `index.html`) |
 
 ## Common changes
 
 - **Balance a weapon:** `shared/config.js`
-- **New level:** map in `shared/levels.js` + theme in `public/js/themes.js` + floor in `FLOORS` (`public/js/level.js`) + sprite in `render/sprites.js` + button in `index.html`; its obstacle shapes are picked by level name in `buildTerrain` (`shared/terrain.js`)
-- **Obstacle looks:** shapes and heights in `buildTerrain` (`shared/terrain.js`), colors in `SHAPE_COLORS` (`public/js/level.js`), rack/crate faces in `drawTerrain` (`public/js/render/world.js`), tree canopies in `canopySprite` (`render/sprites.js`)
+- **New level:** map in `shared/levels.js` + theme in `public/js/themes.js` (include `mat` for WebGL) + floor preview colors in `FLOORS` (`public/js/level.js`) + sprite in `render/sprites.js` + button in `index.html`; obstacle shapes come from level name in `buildTerrain` (`shared/terrain.js`)
+- **Obstacle looks:** shapes and heights in `buildTerrain` (`shared/terrain.js`); WebGL meshes/textures in `public/js/render/gl/terrainMesh.js` and `textures.js`
 - **New sound:** add to `SFX` in `public/js/audio.js`, call `play('name')`
 - **New server message:** add a handler in `Room.prototype.handlers` (match) or `Hub.prototype.handlers` (everything else) on the server, or `handlers` in `public/js/net.js` on the client
 

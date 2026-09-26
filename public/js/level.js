@@ -7,8 +7,9 @@ import { THEMES } from './themes.js';
 import { pk } from './render/canvas.js';
 import { updateDrone } from './audio.js';
 import { applyLevelUI } from './ui.js';
+import { invalidateWorld } from './render/gl/scene.js';
 
-// per heightmap sample: base color and emissive flag (1 = glowing detail, 2 = pit, 3 = lava on a volcano)
+// per heightmap sample: base color and emissive flag (kept for minimap / lobby previews)
 export const colors = { CR: null, CG: null, CB: null, EM: null };
 export const mini = document.createElement('canvas');
 
@@ -20,6 +21,7 @@ export function setLevel(name) {
   S.pickupSpots = findPickups(S.MAP);
   S.pickupActive = S.pickupSpots.map(() => true);
   S.embers = []; S.particles = []; S.corpses = []; S.tracers = [];
+  invalidateWorld();
   applyLevelUI(name, S.theme);
   updateDrone();
 }

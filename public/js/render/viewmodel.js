@@ -9,12 +9,17 @@ import { ctx, view, pk } from './canvas.js';
 const buf = document.createElement('canvas'), bctx = buf.getContext('2d');
 let img = null, pix = null, zb = null;
 function fitBuffer() {
-  if (img && img.width === view.RW && img.height === view.RH) return;
-  buf.width = view.RW; buf.height = view.RH;
-  img = bctx.createImageData(view.RW, view.RH);
+  const RW = Math.min(480, Math.round(view.W / 2));
+  const RH = Math.max(1, Math.round(RW * view.H / view.W));
+  if (img && img.width === RW && img.height === RH) return;
+  buf.width = RW; buf.height = RH;
+  img = bctx.createImageData(RW, RH);
   pix = new Uint32Array(img.data.buffer);
-  zb = new Float32Array(view.RW * view.RH);
+  zb = new Float32Array(RW * RH);
+  fitBuffer._RW = RW; fitBuffer._RH = RH;
 }
+const vmW = () => fitBuffer._RW || buf.width;
+const vmH = () => fitBuffer._RH || buf.height;
 
 const VM_FOV = 1.2, NEAR = 0.03; // the gun has its own field of view, so scoping doesn't warp it
 
@@ -290,7 +295,7 @@ function xf(p, t) {
 }
 
 function tri(a, b, c, col, bb) {
-  const W = view.RW, H = view.RH;
+  const W = vmW(), H = vmH();
   const area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
   if (Math.abs(area) < 1e-9) return;
   const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], c[0]))), x1 = Math.min(W - 1, Math.ceil(Math.max(a[0], b[0], c[0])));
@@ -324,7 +329,7 @@ function face(pts, col, F, bb) {
     }
   }
   if (out.length < 3) return;
-  const cx = view.RW / 2, cy = view.RH / 2;
+  const cx = vmW() / 2, cy = vmH() / 2;
   const s = out.map(([x, y, z]) => [cx + x / z * F, cy - y / z * F, 1 / z]);
   for (let i = 1; i < s.length - 1; i++) tri(s[0], s[i], s[i + 1], col, bb);
 }
@@ -355,7 +360,7 @@ function drawModel(parts, t, F, pal, offs) {
 
 // a dark pixel outline around the silhouette, so the gun reads against any background
 function outline(bb) {
-  const W = view.RW, H = view.RH, ol = pk(8, 8, 10);
+  const W = vmW(), H = vmH(), ol = pk(8, 8, 10);
   for (let y = Math.max(0, bb[2] - 1); y <= Math.min(H - 1, bb[3] + 1); y++)
     for (let x = Math.max(0, bb[0] - 1); x <= Math.min(W - 1, bb[1] + 1); x++) {
       const i = y * W + x;
@@ -391,7 +396,7 @@ export function drawViewmodel(now) {
     z: hip[2] + ((ADS_Z[w] || hip[2]) - hip[2]) * a - kick * 0.04 + swing.z,
     cr: Math.cos(roll), sr: Math.sin(roll), cp: Math.cos(pitch), sp: Math.sin(pitch), cy: Math.cos(yaw), sy: Math.sin(yaw),
   };
-  const F = (view.RW / 2) / Math.tan(VM_FOV / 2);
+  const F = (vmW() / 2) / Math.tan(VM_FOV / 2);
 
   // accents glow in the gun's own color (same as its pickup), so you can tell what you're holding
   const m = METAL[S.theme.id] || METAL.hell, accent = GUN_COLOR[w] || S.theme.accent.split(',').map(Number), pulse = 0.8 + 0.2 * Math.sin(now / 250);
@@ -417,8 +422,8 @@ export function drawViewmodel(now) {
   if (swing.trail > 0.05) drawSlashTrail(swing, w === 'claws');
 
   if (S.muzzle > 0 && !melee) {
-    const [x, y, z] = xf(MUZZLE[w], t), sc = view.W / view.RW;
-    const px = (view.RW / 2 + x / z * F) * sc, py = (view.RH / 2 - y / z * F) * sc, u = Math.min(view.W, view.H * 1.6) / 100;
+    const [x, y, z] = xf(MUZZLE[w], t), sc = view.W / vmW();
+    const px = (vmW() / 2 + x / z * F) * sc, py = (vmH() / 2 - y / z * F) * sc, u = Math.min(view.W, view.H * 1.6) / 100;
     const rad = (w === 'sniper' || w === 'shotgun' || w === 'beam' ? 11 : 6) * u * S.muzzle / 6, g = ctx.createRadialGradient(px, py, 0, px, py, rad);
     g.addColorStop(0, 'rgba(255,230,160,0.95)'); g.addColorStop(0.35, 'rgba(255,170,60,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
