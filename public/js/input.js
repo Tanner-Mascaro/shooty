@@ -4,7 +4,7 @@ import { S } from './state.js';
 import { canvas } from './render/canvas.js';
 import { initAudio } from './audio.js';
 import { fire, melee, switchSlot, cycleWeapon, swapWeapon, reload, aim, use } from './weapons.js';
-import { actionFor, captureKey, settingsOpen, toggleFullscreen } from './settings.js';
+import { actionFor, captureKey, settingsOpen, openSettings, toggleFullscreen } from './settings.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea');
@@ -20,6 +20,8 @@ export function initInput() {
     if (e.code === 'Space' || (act && S.started)) e.preventDefault();
     if (e.repeat) return;
     if (act === 'fullscreen') return toggleFullscreen();
+    if (act === 'settings') return openSettings();
+    if (act === 'slide') S.slideArmed = true;
     if (!S.started || !act) return;
     if (act.startsWith('slot')) switchSlot(+act.slice(4));
     if (act === 'swap') swapWeapon();

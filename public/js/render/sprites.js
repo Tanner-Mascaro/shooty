@@ -74,6 +74,7 @@ function gunPx(w) {
 
 // world size + shape for a floating pickup
 export function pickupSprite(weapon, color) {
+  if (weapon === 'ammo') return AMMO_CRATE;
   if (weapon === 'health') return { w: 0.4, h: 0.4, px: healthPx, pal: [null, [235, 235, 235], null, [230, 30, 30]], emit: [1, 3] };
   return { w: 0.7, h: 0.35, px: gunPx(weapon), pal: [null, [70, 70, 78], [30, 30, 34], color], emit: [3] };
 }
@@ -97,6 +98,16 @@ export function canopySprite(variant) {
     },
   });
 }
+
+// --- small ammo crate: olive box with a brass band and a bullet stencil ---
+const AMMO_CRATE = { w: 0.42, h: 0.3, emit: [3], pal: [null, [74, 82, 44], [34, 38, 20], [230, 200, 90], [104, 114, 62]],
+  px(u, v) {
+    if (u < 0.06 || u > 0.94 || v < 0.08 || v > 0.94) return 2;
+    if (v < 0.24) return 4;                                                 // lid
+    if (v > 0.44 && v < 0.54) return 3;                                     // brass band
+    if (v > 0.6 && v < 0.86 && [0.3, 0.5, 0.7].some(c => Math.abs(u - c) < 0.04)) return 3; // rounds
+    return 1;
+  } };
 
 // --- loot box: a crate seen a little from above, banded in the level's accent color ---
 function boxPx(u, v) {

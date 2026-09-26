@@ -73,7 +73,7 @@ const handlers = {
     setLevel(msg.level);
     S.started = true;
     S.myKills = 0;
-    S.weapon = 'rifle'; S.lastWeapon = 'blade'; S.scoped = false; S.reloading = null;
+    S.weapon = gunSlots()[0] || 'blade'; S.lastWeapon = 'blade'; S.scoped = false; S.reloading = null;
     S.feed = [];
     hideWait();
   },
@@ -85,10 +85,10 @@ const handlers = {
     if (!owned(S.weapon)) { S.weapon = gunSlots()[0] || 'blade'; S.scoped = false; S.reloading = null; }
   },
 
-  // pad states, and which gun each gun pad is showing this time
+  // every pad and ammo crate this match (gun pads re-roll their gun), and which are up
   pickups(msg) {
+    S.pickupSpots = msg.spots;
     S.pickupActive = msg.active;
-    msg.weapons.forEach((w, i) => { if (S.pickupSpots[i]) S.pickupSpots[i].weapon = w; });
   },
   boxes(msg) { S.boxes = msg.boxes; },
 
@@ -111,7 +111,7 @@ const handlers = {
         if (p.seq !== S.mySeq) {
           S.mySeq = p.seq;
           Object.assign(S.me, { x: p.x, y: p.y, z: p.z, a: p.a });
-          S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false;
+          S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false; S.sliding = false; S.slideDip = 0;
         }
         continue;
       }

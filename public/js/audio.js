@@ -91,6 +91,7 @@ function tone(out, o) {
 
 // --- sounds: (volume, stereo pan) ---
 const SFX = {
+  pistol(v, p) { const o = bus(v * 0.85, p, 0.15); noise(o, { filter:'bandpass', freq:2200, q:0.9, dur:0.08, vol:0.9 }); noise(o, { freq:700, dur:0.12, vol:0.6 }); tone(o, { type:'square', freq:240, to:80, dur:0.05, vol:0.2 }); },
   rifle(v, p) { const o = bus(v, p, 0.15); noise(o, { filter:'bandpass', freq:1800, q:0.8, dur:0.12, vol:0.9 }); noise(o, { freq:500, dur:0.18, vol:0.8 }); tone(o, { type:'square', freq:160, to:50, dur:0.08, vol:0.25 }); },
   smg(v, p) { const o = bus(v * 0.8, p, 0.1); noise(o, { filter:'bandpass', freq:2600, q:0.9, dur:0.07, vol:0.8 }); noise(o, { freq:800, dur:0.1, vol:0.6 }); tone(o, { type:'square', freq:220, to:90, dur:0.05, vol:0.18 }); },
   shotgun(v, p) { const o = bus(v, p, 0.4); noise(o, { freq:1400, to:300, dur:0.4, vol:1.3 }); tone(o, { freq:95, to:32, dur:0.45, vol:1.1 }); noise(o, { filter:'bandpass', freq:700, q:1, dur:0.2, vol:0.7 }); },
@@ -116,6 +117,7 @@ const SFX = {
   slash(v, p) { const o = bus(v, p, 0.2); noise(o, { filter:'highpass', freq:3000, dur:0.1, vol:0.8 }); tone(o, { freq:150, to:60, dur:0.14, vol:0.6 }); noise(o, { freq:600, dur:0.15, vol:0.7 }); },
   backstab() { const o = bus(1, 0, 0.4); noise(o, { filter:'highpass', freq:2500, dur:0.15, vol:1 }); tone(o, { type:'sawtooth', freq:110, to:35, dur:0.6, vol:0.4 }); },
   whiz(v, p) { const o = bus(v, p); noise(o, { filter:'bandpass', freq:5000, to:1500, q:2, dur:0.12, vol:1 }); },
+  slide() { const o = bus(0.6, 0); noise(o, { filter:'bandpass', freq:900, to:350, q:0.8, dur:0.6, vol:0.7, attack:0.03 }); noise(o, { filter:'highpass', freq:3000, dur:0.3, vol:0.25 }); },
   jump(v, p) { const o = bus(v * 0.5, p); noise(o, { freq:900, dur:0.12, vol:0.4, attack:0.02 }); },
   land(v, p) { const o = bus(v, p); noise(o, { freq:350, dur:0.12, vol:0.6 }); tone(o, { freq:90, to:45, dur:0.1, vol:0.3 }); },
   step(v, p) { const o = bus(v * 0.35, p); noise(o, { freq:500 + Math.random() * 300, dur:0.07, vol:0.6 }); },

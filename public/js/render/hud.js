@@ -51,7 +51,8 @@ export function drawPickupGlows() {
     const q = project(p.x, p.y, 0.05);
     if (q.f < 0.3 || occluded(q)) return;
     const on = S.pickupActive[i];
-    glow(q.x, q.y, (on ? 260 : 120) / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
+    const r = p.weapon === 'ammo' ? 0.5 : 1; // crates get a small glow, only while there
+    if (on || r === 1) glow(q.x, q.y, (on ? 260 : 120) * r / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
   for (const b of S.boxes) { // loot boxes glow in the level's color
     const q = project(b.x, b.y, b.z + 0.05);
@@ -181,9 +182,16 @@ function seg(L, y0, y1, hw0, hw1, xo, fill) {
   ctx.closePath(); ctx.fill();
 }
 
-const GUN_LEN = { rifle: 34, sniper: 42, shotgun: 30, smg: 27, blade: 30 };
+const GUN_LEN = { pistol: 22, rifle: 34, sniper: 42, shotgun: 30, smg: 27, blade: 30 };
 
 const MODELS = {
+  pistol(L, now, c) {
+    const slide = Math.max(0, 1 - (now - S.fireT) / 90) * 3; // slide kicks back on each shot
+    seg(L, 3, -7, 2.4, 2.2, 0, c.dark);                   // grip
+    seg(L, -5 + slide, -L + slide, 3.2, 2.8, 0, c.mid);   // slide
+    seg(L, -L + slide, -L - 1 + slide, 1, 0.9, 0, '#111'); // muzzle
+    seg(L, -8 + slide, -18 + slide, 0.5, 0.45, 1.3, c.glow);
+  },
   blade(L, now, c) {
     const p = Math.min(1, (now - S.swingT) / 250), sw = p < 1 ? Math.sin(p * Math.PI) : 0;
     ctx.rotate(-sw * 1.4); ctx.translate(-sw * 10, -sw * 4);
@@ -346,7 +354,7 @@ export function drawMinimap(now) {
   ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';
   const slots = GUN_SLOTS + 1; // two guns, then the blade
   for (let i = 1; i <= slots; i++) {
-    const w = slotWeapon(i), ammo = w && w !== 'blade' ? ' ' + S.mag[w] + (w === 'rifle' ? '' : '/' + spare(w)) : '';
+    const w = slotWeapon(i), ammo = w && w !== 'blade' ? ' ' + S.mag[w] + '/' + spare(w) : '';
     ctx.fillStyle = w && w === S.weapon ? '#fc6' : w ? '#aaa' : '#444';
     ctx.fillText((w && w === S.weapon ? '> ' : '') + key('slot' + i) + ' ' + (w ? w.toUpperCase() : 'EMPTY') + ammo, mx + size, my + size + 22 * i);
   }
@@ -361,7 +369,7 @@ export function drawMinimap(now) {
 export function drawAmmo(now) {
   const { W, H } = view, w = S.weapon;
   if (w === 'blade') return;
-  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w), tail = ' / ' + (left === Infinity ? '∞' : left);
+  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w), tail = ' / ' + left;
   ctx.textAlign = 'right'; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
   ctx.font = 'bold 20px Courier New'; ctx.fillStyle = '#aaa';
   ctx.fillText(tail, W - 20, H - 24);
@@ -379,6 +387,8 @@ export function drawAmmo(now) {
     ctx.font = 'bold 12px Courier New'; ctx.fillStyle = '#ddd'; ctx.fillText('RELOADING', W / 2, y - 6);
   } else if (mag <= full / 4 && left > 0) {
     ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#fc6'; ctx.fillText(key('reload') + ' RELOAD', W / 2, y);
+  } else if (mag <= full / 4) {
+    ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#f55'; ctx.fillText(mag ? 'LOW AMMO' : 'NO AMMO — find an ammo crate', W / 2, y);
   }
   ctx.textAlign = 'left';
 }

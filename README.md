@@ -21,16 +21,20 @@ For remote play run `ngrok http 3000` and share the URL.
 
 ## Weapons and loot
 
-- **Two guns plus the blade.** Everyone spawns with the rifle (unlimited spare ammo). Keys 1 and 2 pick your guns, 3 the blade, Q swaps back to the last one.
-- **Gun pads** roll a random sniper, shotgun or SMG each time they respawn. Walk up and press **E** to take it. With both slots full, the gun in your hand is swapped out and left in a box at your feet. Health pads are still taken by walking over them.
+- **Two guns plus the blade.** Everyone spawns with a pistol. Keys 1 and 2 pick your guns, 3 the blade, Q swaps back to the last one.
+- **Nothing is unlimited.** Every gun's ammo runs out, spares are capped at three mags, and a gun you've emptied completely is gone. Only the blade needs no ammo.
+- **Ammo crates:** ten small crates at random spots each match. Walk over one for a mag for each gun you carry (skipped if you're full). They come back after 12s.
+- **Gun pads** roll a random rifle, sniper, shotgun or SMG each time they respawn. Walk up and press **E** to take it. With both slots full, the gun in your hand is swapped out and left in a box at your feet. Health pads are still taken by walking over them.
 - **Loot boxes:** when someone dies, their picked-up guns go in a box at the body with the ammo left in them. Press **E** to loot: ammo for guns you carry comes out first, then one gun per press. Boxes vanish after 30s.
 - **Reloading:** R, or automatically when the mag is empty. The server counts rounds too.
 
-Mags, reload times, pad guns and slot count are in `shared/config.js`.
+- **Sliding:** Shift while running drops you low with a burst of speed and little friction; jump out of it to keep the speed, or hold it as you land from a bhop. Sliding players are shorter targets.
+
+Mags, reload times, ammo, crates, pad guns, slot count and slide tuning are in `shared/config.js`.
 
 ## Settings
 
-The ⚙ button (top right) sets the frame rate limit, FPS counter, fullscreen, master and background volume, mouse sensitivity, scope mode (click to toggle or hold to aim) and every key binding. Settings are saved in the browser and on your profile, so signing in on another device brings them along.
+The ⚙ button (top right, or P in a match) sets the frame rate limit, FPS counter, fullscreen, master and background volume, mouse sensitivity, scope mode (click to toggle or hold to aim) and every key binding. Settings are saved in the browser and on your profile, so signing in on another device brings them along.
 
 ## Rooms, modes and friends
 

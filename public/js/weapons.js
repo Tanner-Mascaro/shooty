@@ -46,7 +46,7 @@ export function updateReload() {
   if (r && now >= r.until) {
     const n = Math.min(WEAPONS[r.w].mag - S.mag[r.w], spare(r.w));
     S.mag[r.w] += n;
-    if (r.w !== 'rifle') S.inv[r.w] -= n;
+    S.inv[r.w] -= n;
     S.reloading = null;
     send({ type: 'reload', weapon: r.w });
     play('magIn');
@@ -83,7 +83,7 @@ export function findUseTarget() {
     const d = Math.hypot(me.x - o.x, me.y - o.y);
     if (d <= bestD && Math.abs(me.z - (o.z || 0)) < 1.2) { best = t; bestD = d; }
   };
-  S.pickupSpots.forEach((p, i) => { if (S.pickupActive[i] && p.weapon !== 'health') consider(p, { pad: i, items: [p.weapon] }); });
+  S.pickupSpots.forEach((p, i) => { if (S.pickupActive[i] && p.weapon !== 'health' && p.weapon !== 'ammo') consider(p, { pad: i, items: [p.weapon] }); });
   for (const b of S.boxes) consider(b, { box: b.id, items: b.items });
   return best;
 }
@@ -117,6 +117,7 @@ export function melee(quick) {
 
 // per-weapon feel when you fire
 const KICK = {
+  pistol:  { recoil: 0.5,  punch: 0.04,  shake: 2.5 },
   rifle:   { recoil: 0.35, punch: 0.03,  shake: 2 },
   smg:     { recoil: 0.25, punch: 0.015, shake: 1.5 },
   shotgun: { recoil: 1,    punch: 0.12,  shake: 9,  fovKick: 0.05 },
@@ -131,7 +132,7 @@ export function fire() {
   S.nextFire[w] = now + WEAPONS[w].cd;
   if (!(S.mag[w] > 0)) { play('dry'); reload(); return; }
   S.mag[w]--;
-  if (w !== 'rifle' && !S.mag[w] && !spare(w)) { // last round: the empty gun is gone
+  if (!S.mag[w] && !spare(w)) { // last round: the empty gun is gone
     delete S.mag[w]; delete S.inv[w];
     setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
   }

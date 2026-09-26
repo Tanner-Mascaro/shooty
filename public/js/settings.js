@@ -12,9 +12,9 @@ const $ = id => document.getElementById(id);
 // action -> [label, default key]; order is the order in the panel
 export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
-  jump: ['Jump', 'Space'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
+  jump: ['Jump', 'Space'], slide: ['Slide', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
   melee: ['Quick melee', 'KeyF'], slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
-  fullscreen: ['Fullscreen', 'KeyO'],
+  fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
 };
 // ads: right click scopes while held ('hold') or until clicked again ('toggle')
 const DEFAULTS = { fps: 0, showFps: false, volume: 1, ambient: 1, sens: 1, ads: 'toggle', keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])) };
@@ -107,7 +107,7 @@ export function captureKey(e) {
     }
     binding = null;
     render();
-  } else if (e.code === 'Escape') closeSettings();
+  } else if (e.code === 'Escape' || e.code === settings.keys.settings) closeSettings();
   return true;
 }
 
@@ -133,8 +133,8 @@ function render() {
 // the hint line at the bottom of the screen, using your keys
 function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
-  $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('fullscreen')} fullscreen`;
+  $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {

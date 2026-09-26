@@ -1,5 +1,5 @@
 // One frame: set up the camera, simulate effects, draw the world, then the HUD on top.
-import { TICK, EYE } from '/shared/config.js';
+import { TICK, EYE, SLIDE } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
@@ -44,7 +44,7 @@ function setupCamera() {
   const tanH = Math.tan(S.fov / 2) * (1 + S.fovKick), focal = (view.RW / 2) / tanH;
   const ox = S.shake ? (Math.random() - 0.5) * S.shake : 0, oy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
   const a = S.me.a;
-  S.cam = { eye: S.me.z + EYE, horizon: view.RH / 2 + (S.pitch + S.punch) * focal, focal, tanH, sc: view.W / view.RW, ox, oy,
+  S.cam = { eye: S.me.z + EYE - SLIDE.drop * S.slideDip, horizon: view.RH / 2 + (S.pitch + S.punch) * focal, focal, tanH, sc: view.W / view.RW, ox, oy,
     fwdx: Math.cos(a), fwdy: Math.sin(a), rtx: -Math.sin(a), rty: Math.cos(a) };
 }
 
@@ -71,7 +71,8 @@ export function render(dt) {
   S.pickupSpots.forEach((p, i) => {
     if (!S.pickupActive[i]) return;
     const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
-    drawSprite(p.x, p.y, 0.3 + 0.07 * Math.sin(now / 400 + i), sp.w, sp.h, sp.px, sp.pal, sp.emit);
+    const z = p.weapon === 'ammo' ? groundAt(S.T, p.x, p.y) : 0.3 + 0.07 * Math.sin(now / 400 + i); // crates sit on the ground
+    drawSprite(p.x, p.y, z, sp.w, sp.h, sp.px, sp.pal, sp.emit);
   });
   const box = boxSprite(S.theme.accent);
   for (const b of S.boxes) drawSprite(b.x, b.y, b.z, box.w, box.h, box.px, box.pal, box.emit);
@@ -87,7 +88,7 @@ export function render(dt) {
   }
   const teams = S.room && S.room.mode === 'teams';
   for (const o of Object.values(S.others))
-    if (o.now) drawPlayer(o.now.x, o.now.y, o.now.z, 1, 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null);
+    if (o.now) drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null);
   drawParticles(S.embers);
   drawParticles(S.particles);
   present(S.cam.ox, S.cam.oy);
