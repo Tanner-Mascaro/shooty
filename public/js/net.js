@@ -72,21 +72,30 @@ const handlers = {
     setLevel(msg.level);
     S.started = true;
     S.myKills = 0;
-    S.weapon = 'rifle'; S.scoped = false;
+    S.weapon = 'rifle'; S.lastWeapon = 'blade'; S.scoped = false; S.reloading = null;
     S.feed = [];
     hideWait();
   },
 
+  // full ammo state: on respawn, or when the server disagreed with our count
   inv(msg) {
-    S.inv = msg.inv;
-    if (!owned(S.weapon)) { S.weapon = 'rifle'; S.scoped = false; }
+    S.mag = msg.mag; S.inv = msg.inv;
+    if (S.reloading && !owned(S.reloading.w)) S.reloading = null;
+    if (!owned(S.weapon)) { S.weapon = 'rifle'; S.scoped = false; S.reloading = null; }
+  },
+
+  // you picked up a gun (fresh) or more ammo for one you have
+  ammo(msg) {
+    if (msg.fresh) { S.mag[msg.weapon] = msg.mag; S.inv[msg.weapon] = msg.add; }
+    else S.inv[msg.weapon] = (S.inv[msg.weapon] || 0) + msg.add;
   },
 
   pickups(msg) { S.pickupActive = msg.active; },
+  drops(msg) { S.drops = msg.drops; },
 
   pickup(msg) {
-    const sp = S.pickupSpots[msg.idx];
-    burst(sp.x, sp.y, 0.3, 20, 'spark');
+    const sp = msg;
+    burst(sp.x, sp.y, sp.z + 0.3, 20, 'spark');
     const heal = msg.weapon === 'health';
     if (msg.id !== S.myId) { playAt(heal ? 'heal' : 'pickup', sp.x, sp.y); return; }
     play(heal ? 'heal' : 'pickup');

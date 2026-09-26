@@ -1,6 +1,6 @@
 // Server-side bot for local testing (--bots). It wanders between random reachable spots and
 // shoots the rifle at the nearest enemy it can see.
-import { TICK, EYE, BODY_H } from '../shared/config.js';
+import { TICK, EYE, BODY_H, WEAPONS } from '../shared/config.js';
 import { MW, MH } from '../shared/levels.js';
 import { groundAt, kindAt } from '../shared/terrain.js';
 
@@ -86,6 +86,10 @@ export function botTick(game, p) {
   p.a = turnToward(p.a, Math.atan2(foe.y - p.y, foe.x - p.x), TURN * dt);
   p.p = (foe.z + BODY_H * 0.55 - (p.z + EYE)) / (d || 1); // bullet pitch is a slope
   if (!game.gameOn || now - b.seenAt < REACTION || now < b.nextShot) return;
+  if (!(p.mag.rifle > 0)) { // out: reload, a little after the last shot like a player would
+    if (now - (p.lastShot.rifle || 0) >= WEAPONS.rifle.reload) game.handlers.reload.call(game, p, { weapon: 'rifle' });
+    return;
+  }
   b.nextShot = now + FIRE_GAP * (0.8 + Math.random() * 0.4);
   const a = p.a, pch = p.p;
   p.a += (Math.random() * 2 - 1) * AIM_ERROR;

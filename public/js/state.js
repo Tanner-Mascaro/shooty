@@ -12,7 +12,9 @@ export const S = {
   vx: 0, vy: 0, vz: 0, onGround: true, speed: 0, bobPhase: 0, stepAcc: 0,
 
   // weapons + input
-  inv: {}, weapon: 'rifle', scoped: false, switchUntil: 0, mouseHeld: false,
+  // mag: rounds loaded per gun you own; inv: spare rounds per picked-up gun (the rifle's are unlimited)
+  mag: { rifle: 30 }, inv: {}, weapon: 'rifle', lastWeapon: 'blade', scoped: false, switchUntil: 0, mouseHeld: false,
+  reloading: null, // { w, start, until } while a reload runs
   nextFire: { rifle: 0, sniper: 0, shotgun: 0, smg: 0, blade: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
 
@@ -23,6 +25,7 @@ export const S = {
 
   // current level (see level.js)
   level: null, MAP: null, T: null, theme: null, pickupSpots: [], pickupActive: [],
+  drops: [], // guns dead players dropped: { id, weapon, x, y, z }
 
   // screen effects
   hitFlash: 0, healFlash: 0, killFlash: 0, muzzle: 0, recoil: 0, hitMarker: 0, hitHead: false,
@@ -34,7 +37,8 @@ export const S = {
   cam: null, // camera for the current frame, set by render/index.js
 };
 
-export const owned = w => w === 'rifle' || w === 'blade' || S.inv[w] > 0;
+export const owned = w => w === 'blade' || S.mag[w] !== undefined;
+export const spare = w => w === 'rifle' ? Infinity : S.inv[w] || 0;
 
 // roster lookups
 export const playerInfo = id => (S.room && S.room.players.find(p => p.id === id)) || null;

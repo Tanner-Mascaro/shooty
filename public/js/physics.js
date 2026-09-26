@@ -6,6 +6,7 @@ import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVI
 import { send } from './net.js';
 import { play, setWind, setSizzle } from './audio.js';
 import { burst } from './particles.js';
+import { settings, held } from './settings.js';
 
 const PLAYER_R = 0.22;
 
@@ -163,25 +164,25 @@ function applyFriction(dt) {
 
 export function updatePlayer(dt) {
   if (!S.started || !S.me) { setWind(0); setSizzle(0); return; }
-  const me = S.me, keys = S.keys;
+  const me = S.me;
 
-  const sens = SENS * (S.scoped ? 0.3 : 1);
+  const sens = SENS * settings.sens * (S.scoped ? 0.3 : 1);
   me.a += S.mouseDX * sens;
   S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens));
   S.mouseDX = S.mouseDY = 0;
 
   const cos = Math.cos(me.a), sin = Math.sin(me.a);
   let fx = 0, sx = 0;
-  if (keys['w']) fx++;
-  if (keys['s']) fx--;
-  if (keys['d']) sx++;
-  if (keys['a']) sx--;
+  if (held('forward')) fx++;
+  if (held('back')) fx--;
+  if (held('right')) sx++;
+  if (held('left')) sx--;
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
   const wishSpeed = wl > 0 ? MAX_SPEED * (S.scoped ? 0.55 : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
-  if (S.onGround && keys[' ']) { S.vz = JUMP_V; S.onGround = false; play('jump'); }
+  if (S.onGround && held('jump')) { S.vz = JUMP_V; S.onGround = false; play('jump'); }
   if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
 

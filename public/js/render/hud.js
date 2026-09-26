@@ -1,13 +1,16 @@
 // Everything drawn at full resolution on top of the 3D view: tracers, glows, the gun,
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
-import { WEAPONS, AMMO, WEAPON_ORDER, EYE, BODY_H } from '/shared/config.js';
-import { S, owned, isEnemy, nameOf } from '../state.js';
+import { WEAPONS, WEAPON_ORDER, EYE, BODY_H } from '/shared/config.js';
+import { S, owned, spare, isEnemy, nameOf } from '../state.js';
 import { BASE_FOV, MAX_SPEED, GUN_COLOR } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
 import { inPit } from '../physics.js';
+import { settings, keyName } from '../settings.js';
+
+const key = a => keyName(settings.keys[a]);
 
 export function glow(x, y, r, color) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -49,6 +52,11 @@ export function drawPickupGlows() {
     const on = S.pickupActive[i];
     glow(q.x, q.y, (on ? 260 : 120) / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
+  for (const d of S.drops) { // dropped guns get a smaller glow
+    const q = project(d.x, d.y, d.z + 0.05);
+    if (q.f < 0.3 || occluded(q)) continue;
+    glow(q.x, q.y, 150 / q.f, 'rgba(' + GUN_COLOR[d.weapon].join(',') + ',0.35)');
+  }
 }
 
 // other players' muzzle flashes and scope glints (only if not behind a wall)
@@ -189,13 +197,14 @@ function drawViewmodel(now) {
   const tx = W / 2 + 4 * u, ty = H / 2 + 10 * u;             // aim point, just below-right of the crosshair
   const ang = Math.atan2(tx - ax, ay - ty);                  // rotation that points local -y at the aim point
   const L = GUN_LEN[w], kick = S.recoil * (w === 'sniper' || w === 'shotgun' ? 6 : 3);
+  const r = !showBlade && S.reloading, dip = r ? Math.sin(Math.min(1, (now - r.start) / (r.until - r.start)) * Math.PI) : 0; // gun drops out of view and back
   const m = METAL[S.theme.id];
   const colors = { dark: m[0], mid: m[1], light: m[2], glow: 'rgba(' + S.theme.accent + ',' + (0.65 + 0.35 * Math.sin(now / 250)) + ')' };
   ctx.save();
   ctx.translate(ax, ay);
-  ctx.rotate(ang + S.recoil * 0.12);
+  ctx.rotate(ang + S.recoil * 0.12 - dip * 0.5);
   ctx.scale(u, u);
-  ctx.translate(0, kick);
+  ctx.translate(0, kick + dip * 16);
   MODELS[w](L, now, colors);
   ctx.restore();
   if (S.muzzle > 0 && !showBlade) {
@@ -278,6 +287,7 @@ export function drawMinimap(now) {
     if (!S.pickupActive[i]) return;
     ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
   });
+  for (const d of S.drops) { ctx.fillStyle = 'rgb(' + GUN_COLOR[d.weapon].join(',') + ')'; ctx.fillRect(d.x - 0.15, d.y - 0.15, 0.3, 0.3); }
   for (const [id, o] of Object.entries(S.others)) {
     if (!o.now) continue;
     ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';
@@ -290,13 +300,39 @@ export function drawMinimap(now) {
 
   ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';
   WEAPON_ORDER.forEach((w, i) => {
-    const has = owned(w), ammo = AMMO[w] !== undefined && has ? ' ' + S.inv[w] : '';
+    const has = owned(w), ammo = has && w !== 'blade' ? ' ' + S.mag[w] + (w === 'rifle' ? '' : '/' + spare(w)) : '';
     ctx.fillStyle = w === S.weapon ? '#fc6' : has ? '#aaa' : '#444';
-    ctx.fillText((w === S.weapon ? '> ' : '') + (i + 1) + ' ' + w.toUpperCase() + ammo, mx + size, my + size + 22 + i * 22);
+    ctx.fillText((w === S.weapon ? '> ' : '') + key('slot' + (i + 1)) + ' ' + w.toUpperCase() + ammo, mx + size, my + size + 22 + i * 22);
   });
   ctx.font = '12px Courier New'; ctx.fillStyle = '#777';
-  ctx.fillText('F quick melee', mx + size, my + size + 22 + WEAPON_ORDER.length * 22);
-  const cd = WEAPONS[S.weapon].cd, left = S.nextFire[S.weapon] - now; // reload bar for slow guns
-  if (cd > 400 && left > 0) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
+  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' last gun', mx + size, my + size + 22 + WEAPON_ORDER.length * 22);
+  const cd = WEAPONS[S.weapon].cd, left = S.nextFire[S.weapon] - now; // chamber bar for slow guns
+  if (cd > 400 && left > 0 && !S.reloading) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
+  ctx.textAlign = 'left';
+}
+
+// big ammo count, bottom right, and the reload bar under the crosshair
+export function drawAmmo(now) {
+  const { W, H } = view, w = S.weapon;
+  if (w === 'blade') return;
+  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w), tail = ' / ' + (left === Infinity ? '∞' : left);
+  ctx.textAlign = 'right'; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+  ctx.font = 'bold 20px Courier New'; ctx.fillStyle = '#aaa';
+  ctx.fillText(tail, W - 20, H - 24);
+  const tw = ctx.measureText(tail).width;
+  ctx.font = 'bold 40px Courier New'; ctx.fillStyle = mag === 0 ? '#f55' : mag <= full / 4 ? '#fc6' : '#fff';
+  ctx.fillText(mag, W - 20 - tw, H - 24);
+  ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#999';
+  ctx.fillText(w.toUpperCase(), W - 20, H - 70);
+  ctx.shadowBlur = 0; ctx.textAlign = 'center';
+  const r = S.reloading, y = H / 2 + 44;
+  if (r) {
+    const k = Math.min(1, (now - r.start) / (r.until - r.start)), bw = 120;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(W / 2 - bw / 2, y, bw, 5);
+    ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(W / 2 - bw / 2, y, bw * k, 5);
+    ctx.font = 'bold 12px Courier New'; ctx.fillStyle = '#ddd'; ctx.fillText('RELOADING', W / 2, y - 6);
+  } else if (mag <= full / 4 && left > 0) {
+    ctx.font = 'bold 13px Courier New'; ctx.fillStyle = '#fc6'; ctx.fillText(key('reload') + ' RELOAD', W / 2, y);
+  }
   ctx.textAlign = 'left';
 }

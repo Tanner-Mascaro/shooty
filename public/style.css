@@ -9,7 +9,7 @@ canvas { display:block; position:absolute; top:0; left:0; }
 .hp-bar { width:140px; height:8px; background:#111; border:1px solid #444; margin-top:2px; }
 .hp-fill { height:100%; transition:width .15s; }
 #msg { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); color:#fc3; font-size:32px; font-weight:bold; text-shadow:0 0 12px #000; z-index:20; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
-#controls { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); color:#666; font-size:11px; z-index:10; pointer-events:none; white-space:nowrap; }
+#controls { position:absolute; max-width:96vw; overflow:hidden; text-overflow:ellipsis; bottom:8px; left:50%; transform:translateX(-50%); color:#666; font-size:11px; z-index:10; pointer-events:none; white-space:nowrap; }
 
 /* in-game: scoreboard + kill feed (top left), toasts + invite popup */
 #scores { position:absolute; top:10px; left:10px; z-index:10; pointer-events:none; color:#ddd; font-size:13px; text-shadow:0 0 4px #000; min-width:120px; }
@@ -157,3 +157,33 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #board th { color:#666; font-size:11px; letter-spacing:.1em; border-bottom:1px solid var(--line); }
 #board tbody tr:nth-child(-n+3) td:first-child { color:var(--accent); font-weight:700; }
 #board tr.you td { color:#fc6; font-weight:700; background:rgba(255,200,100,0.06); }
+
+/* settings: gear buttons, the panel, FPS counter */
+#headBtns { display:flex; gap:8px; justify-content:center; margin-top:14px; }
+#gameGear { position:absolute; bottom:8px; left:8px; z-index:350; width:36px; height:36px; font-size:20px; border-radius:8px; cursor:pointer; color:#ccc; background:rgba(20,20,24,0.8); border:1px solid #444; }
+body:not(.ingame) #gameGear { display:none; }
+#gameGear:hover { color:#fff; border-color:#888; }
+body.locked #gameGear, body.locked #controls { display:none; } /* out of the way while you play */
+body.fs #controls { display:none; }
+#fps { position:absolute; bottom:8px; left:50px; z-index:10; pointer-events:none; color:#8f8; font:bold 13px 'Courier New',monospace; text-shadow:0 0 4px #000; }
+body.locked #fps { left:8px; }
+#settings { position:fixed; inset:0; z-index:400; background:rgba(0,0,0,0.6); display:flex; align-items:safe center; justify-content:center; padding:16px; overflow-y:auto;
+  --accent:#f42; --accent-rgb:255,70,20; --card:rgba(14,14,18,0.96); --line:rgba(255,255,255,0.1); --dim:#8a8a96;
+  color:#d6d6de; font-family:'Chakra Petch',system-ui,sans-serif; font-size:14px; }
+#settings .card { width:100%; max-width:460px; display:flex; flex-direction:column; gap:10px; }
+#settings button, #settings select { font-family:inherit; }
+#setHead { display:flex; justify-content:space-between; align-items:center; font-size:18px; letter-spacing:.2em; color:#fff; margin-bottom:4px; }
+#settings .label { margin-top:8px; }
+#settings .label small { letter-spacing:0; font-weight:400; margin-left:6px; }
+.setRow { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.setRow small { color:var(--dim); }
+.setRow select { background:#111; color:#fff; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:13px; }
+.setRow input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
+.setRow input[type=range] { width:160px; accent-color:var(--accent); }
+#binds { list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:4px 16px; }
+#binds li { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 0; }
+#binds button { min-width:78px; padding:5px 8px; font-size:12px; font-weight:700; border-radius:6px; cursor:pointer; color:#fff; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.18); }
+#binds button:hover { border-color:rgba(255,255,255,0.4); }
+#binds button.waiting { color:var(--accent); border-color:var(--accent); }
+#resetBinds { align-self:flex-start; margin-top:4px; }
+@media (max-width:480px) { #binds { grid-template-columns:1fr; } }

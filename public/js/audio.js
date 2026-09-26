@@ -95,6 +95,8 @@ const SFX = {
     noise(o, { freq:600, dur:1.1, vol:0.35, delay:0.18, attack:0.08 }); // rolling echo
   },
   bolt() { const o = bus(0.6, 0); noise(o, { filter:'bandpass', freq:2500, q:3, dur:0.05, vol:0.8 }); tone(o, { type:'square', freq:300, to:200, dur:0.03, vol:0.1 }); noise(o, { filter:'bandpass', freq:1700, q:3, dur:0.06, vol:0.8, delay:0.2 }); },
+  magOut() { const o = bus(0.5, 0); noise(o, { filter:'bandpass', freq:1100, q:3, dur:0.05, vol:0.8 }); noise(o, { freq:400, dur:0.08, vol:0.4, delay:0.12 }); },
+  magIn() { const o = bus(0.6, 0); noise(o, { filter:'bandpass', freq:1600, q:3, dur:0.05, vol:0.9 }); tone(o, { type:'square', freq:260, to:180, dur:0.03, vol:0.12 }); noise(o, { filter:'bandpass', freq:2600, q:3, dur:0.05, vol:0.7, delay:0.1 }); },
   dry() { const o = bus(0.4, 0); noise(o, { filter:'bandpass', freq:3000, q:4, dur:0.03, vol:0.7 }); },
   heal(v, p) { const o = bus(v * 0.6, p, 0.3); [523, 659, 784, 1047].forEach((f, i) => tone(o, { freq:f, dur:0.25, vol:0.22, delay:i * 0.06 })); noise(o, { filter:'highpass', freq:6000, dur:0.4, vol:0.3, attack:0.05 }); },
   cackle(v, p) { const o = bus(v * 0.7, p, 0.4); [880, 820, 770, 720, 680].forEach((f, i) => { tone(o, { type:'sawtooth', freq:f, to:f * 0.8, dur:0.09, vol:0.2, delay:i * 0.12 }); noise(o, { filter:'bandpass', freq:2200, q:3, dur:0.08, vol:0.4, delay:i * 0.12 }); }); },

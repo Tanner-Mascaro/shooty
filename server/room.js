@@ -1,7 +1,7 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, DROP_TIME } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
@@ -26,6 +26,8 @@ export class Room {
     this.players = {};        // id -> player (the hub's connection object, or a bot)
     this.mode = 'ffa';        // 'ffa' | 'teams'
     this.gameOn = false;
+    this.drops = [];          // guns dead players dropped: { id, weapon, mag, spare, x, y, z, until }
+    this.dropId = 0;
     this.setLevel('hell');
   }
 
@@ -54,8 +56,35 @@ export class Room {
     this.T = TERRAINS[name];
     this.resetPickups();
   }
-  resetPickups() { this.pickups = findPickups(this.map).map(p => Object.assign(p, { active: true, respawnAt: 0 })); }
+  resetPickups() {
+    this.pickups = findPickups(this.map).map(p => Object.assign(p, { active: true, respawnAt: 0 }));
+    this.drops = [];
+  }
   broadcastPickups() { this.broadcast({ type: 'pickups', active: this.pickups.map(p => p.active) }); }
+  dropList() { return { type: 'drops', drops: this.drops.map(d => ({ id: d.id, weapon: d.weapon, x: d.x, y: d.y, z: d.z })) }; }
+
+  // a dying player's picked-up guns fall around the body with whatever ammo was left in them
+  dropGuns(p) {
+    const until = Date.now() + DROP_TIME;
+    for (const w in p.mag) {
+      if (w === 'rifle' || !(p.mag[w] + (p.inv[w] || 0) > 0)) continue;
+      const a = Math.random() * Math.PI * 2, r = 0.2 + Math.random() * 0.3;
+      let x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
+      if (hitsWall(this.T, x, y, 0.1)) { x = p.x; y = p.y; }
+      if (kindAt(this.T, x, y) === 2) continue; // lost in the lava / acid / bog
+      this.drops.push({ id: ++this.dropId, weapon: w, mag: p.mag[w], spare: p.inv[w] || 0, x, y, z: groundAt(this.T, x, y), until });
+    }
+  }
+
+  // hand `p` a gun (or its ammo if they already have one) and tell them what changed
+  giveGun(p, w, mag, spare) {
+    const fresh = p.mag[w] === undefined;
+    if (fresh) { p.mag[w] = mag; p.inv[w] = spare; }
+    else p.inv[w] = (p.inv[w] || 0) + mag + spare;
+    this.send(p, { type: 'ammo', weapon: w, fresh, mag, add: fresh ? spare : mag + spare });
+  }
+  // full ammo state, when the client's own count can't be trusted (respawn, rejected shot/reload)
+  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv }); }
 
   // a random open spot, preferring ones far from everyone in `avoid`
   spawnPos(avoid) {
@@ -96,19 +125,22 @@ export class Room {
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
     p.hp = MAX_HP;
-    p.inv = {}; // picked-up guns are lost on death
+    p.mag = { rifle: WEAPONS.rifle.mag }; // rounds loaded; you own the guns listed here
+    p.inv = {};  // spare rounds per picked-up gun (the rifle's are unlimited)
+    p.lastShot = {};
     if (p.brain) p.brain = newBrain();
     p.seq++;    // client snaps to the new spawn; stale inputs from the old life are ignored
-    this.send(p, { type: 'inv', inv: p.inv });
+    this.syncAmmo(p);
   }
 
   add(p) {
-    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, seq: p.seq || 0, nextFire: {}, inv: {}, sc: false });
+    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false });
     p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     this.resetPlayer(p);
     this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: p.seq });
     this.send(p, { type: 'pickups', active: this.pickups.map(pu => pu.active) });
+    this.send(p, this.dropList());
     if (this.gameOn) this.send(p, { type: 'start', level: this.level }); // drop straight into the running match
     if (BOTS && !p.bot && this.humans.length === 1 && !this.hasBots) this.addBot();
     this.roster();
@@ -136,7 +168,9 @@ export class Room {
     if (killer) killer.kills++;
     this.hub.record(killer, { kills: 1 });
     this.hub.record(victim, { deaths: 1 });
+    this.dropGuns(victim);
     this.resetPlayer(victim);
+    this.broadcast(this.dropList());
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id }, info, at));
     const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
     log(`[${this.code}] ${this.hub.name(killer || victim)} ${how} — ${this.score()}`);
@@ -159,6 +193,7 @@ export class Room {
     this.gameOn = true;
     this.broadcast({ type: 'start', level: this.level });
     this.broadcastPickups();
+    this.broadcast(this.dropList());
     this.roster();
     log(`[${this.code}] Match started on ${LEVEL_NAMES[this.level]} (${this.mode === 'teams' ? 'teams' : 'free-for-all'}): ${this.list.map(p => this.hub.who(p)).join(', ')}`);
   }
@@ -195,6 +230,9 @@ export class Room {
       let respawned = false;
       for (const pu of this.pickups) if (!pu.active && now >= pu.respawnAt) { pu.active = true; respawned = true; }
       if (respawned) this.broadcastPickups();
+      const drops = this.drops.length;
+      this.drops = this.drops.filter(d => now < d.until && !this.list.some(p => this.tryGrab(p, d)));
+      if (this.drops.length !== drops) this.broadcast(this.dropList());
     }
     if (this.list.length < 2) return;
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
@@ -208,9 +246,17 @@ export class Room {
     pu.active = false;
     pu.respawnAt = now + (heal ? HEAL_RESPAWN : PICKUP_RESPAWN);
     if (heal) p.hp = Math.min(MAX_HP, p.hp + HEAL);
-    else { p.inv[pu.weapon] = AMMO[pu.weapon]; this.send(p, { type: 'inv', inv: p.inv }); }
-    this.broadcast({ type: 'pickup', id: p.id, weapon: pu.weapon, idx });
+    else this.giveGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon]);
+    this.broadcast({ type: 'pickup', id: p.id, weapon: pu.weapon, x: pu.x, y: pu.y, z: 0 });
     this.broadcastPickups();
+  }
+
+  // walk over a dropped gun to take it; true if `p` took it
+  tryGrab(p, d) {
+    if (Math.hypot(p.x - d.x, p.y - d.y) > 0.8 || Math.abs(p.z - d.z) > 1) return false;
+    this.giveGun(p, d.weapon, d.mag, d.spare);
+    this.broadcast({ type: 'pickup', id: p.id, weapon: d.weapon, x: d.x, y: d.y, z: d.z });
+    return true;
   }
 }
 
@@ -257,6 +303,17 @@ Room.prototype.handlers = {
     this.roster();
   },
 
+  // sent when the client finishes a reload; it can't have fired that gun for the whole reload
+  reload(p, msg) {
+    const w = WEAPONS[msg.weapon], now = Date.now();
+    if (!w || w.melee || p.mag[msg.weapon] === undefined) return;
+    const spare = msg.weapon === 'rifle' ? Infinity : p.inv[msg.weapon] || 0;
+    const n = Math.min(w.mag - p.mag[msg.weapon], spare);
+    if (n <= 0 || now - (p.lastShot[msg.weapon] || 0) < w.reload * 0.85) { this.syncAmmo(p); return; } // slack for network jitter
+    p.mag[msg.weapon] += n;
+    if (spare !== Infinity) p.inv[msg.weapon] -= n;
+  },
+
   input(p, msg) {
     if (msg.seq !== p.seq || ![msg.x, msg.y, msg.z, msg.a, msg.p].every(Number.isFinite)) return;
     // basic anti-cheat: no teleporting (bhop speed is capped client-side) and no walking into walls
@@ -273,10 +330,12 @@ Room.prototype.handlers = {
     if (!w || !this.gameOn) return;
     const now = Date.now();
     if (now < (p.nextFire[msg.weapon] || 0)) return;
-    if (AMMO[msg.weapon] !== undefined) {
-      if (!(p.inv[msg.weapon] > 0)) return;
-      if (--p.inv[msg.weapon] === 0) delete p.inv[msg.weapon];
-      this.send(p, { type: 'inv', inv: p.inv });
+    if (!w.melee) {
+      // the client counts its own rounds the same way, so no reply unless we disagree
+      if (!(p.mag[msg.weapon] > 0)) { this.syncAmmo(p); return; }
+      p.mag[msg.weapon]--;
+      p.lastShot[msg.weapon] = now;
+      if (msg.weapon !== 'rifle' && !p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
     }
     p.nextFire[msg.weapon] = now + w.cd * 0.85; // slack for network jitter
     const targets = this.enemies(p);
