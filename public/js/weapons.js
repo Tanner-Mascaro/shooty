@@ -1,13 +1,16 @@
-// Firing, melee, scoping and weapon switching. The server decides hits; this only sends
-// requests and plays the local feedback (sound, recoil, screen punch) immediately.
-import { WEAPONS, AMMO, WEAPON_ORDER } from '/shared/config.js';
-import { S, owned } from './state.js';
+// Firing, melee, scoping, reloading and weapon switching. The server decides hits; this only sends
+// requests and plays the local feedback (sound, recoil, screen punch) immediately. Rounds are
+// counted here the same way the server counts them, so the ammo readout never waits on the network.
+import { WEAPONS, WEAPON_ORDER } from '/shared/config.js';
+import { S, owned, spare } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
 
 export function switchWeapon(w) {
   if (w === S.weapon || !owned(w)) return;
+  S.lastWeapon = S.weapon;
   S.weapon = w; S.scoped = false;
+  S.reloading = null; // switching away cancels a reload
   S.switchUntil = performance.now() + 350;
   play('swap');
 }
@@ -20,8 +23,36 @@ export function cycleWeapon(dir) {
   }
 }
 
+// back to the gun you had before this one
+export function swapWeapon() {
+  if (owned(S.lastWeapon) && S.lastWeapon !== S.weapon) switchWeapon(S.lastWeapon);
+  else cycleWeapon(1);
+}
+
+export function reload() {
+  const w = S.weapon, def = WEAPONS[w];
+  if (def.melee || S.reloading || !(S.mag[w] < def.mag) || !(spare(w) > 0)) return;
+  S.reloading = { w, start: performance.now(), until: performance.now() + def.reload };
+  S.scoped = false; S.mouseHeld = false;
+  play('magOut');
+}
+
+// called every frame: finish a reload, or start one when the mag runs dry
+export function updateReload() {
+  const now = performance.now(), r = S.reloading;
+  if (r && now >= r.until) {
+    const n = Math.min(WEAPONS[r.w].mag - S.mag[r.w], spare(r.w));
+    S.mag[r.w] += n;
+    if (r.w !== 'rifle') S.inv[r.w] -= n;
+    S.reloading = null;
+    send({ type: 'reload', weapon: r.w });
+    play('magIn');
+  }
+  if (!S.reloading && S.started && S.mag[S.weapon] === 0 && now >= S.nextFire[S.weapon] && now >= S.switchUntil) reload();
+}
+
 export function toggleScope() {
-  if (S.weapon !== 'sniper') return;
+  if (S.weapon !== 'sniper' || S.reloading) return;
   if (!S.scoped && performance.now() < S.nextFire.sniper) return; // still chambering
   S.scoped = !S.scoped;
   play('scope', S.scoped);
@@ -53,11 +84,14 @@ export function fire() {
   const w = S.weapon;
   if (w === 'blade') { melee(false); return; }
   const now = performance.now();
-  if (now < S.switchUntil || now < S.nextFire[w]) return;
+  if (now < S.switchUntil || now < S.nextFire[w] || S.reloading) return;
   S.nextFire[w] = now + WEAPONS[w].cd;
-  const limited = AMMO[w] !== undefined;
-  if (limited && !(S.inv[w] > 0)) { play('dry'); return; }
-  if (limited) S.inv[w]--; // server confirms with an inv message
+  if (!(S.mag[w] > 0)) { play('dry'); reload(); return; }
+  S.mag[w]--;
+  if (w !== 'rifle' && !S.mag[w] && !spare(w)) { // last round: the empty gun is gone
+    delete S.mag[w]; delete S.inv[w];
+    setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
+  }
   send({ type: 'shoot', weapon: w, scoped: S.scoped });
   play(w);
   S.muzzle = 6; S.fireT = now;
@@ -72,5 +106,6 @@ export function fire() {
 
 // called every frame: auto weapons keep firing while the button is held
 export function autoFire() {
+  updateReload();
   if (S.mouseHeld && S.started && WEAPONS[S.weapon].auto) fire();
 }

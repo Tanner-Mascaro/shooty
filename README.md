@@ -73,7 +73,8 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 | `public/js/room.js`, `friends.js` | Lobby room panel (code, invite link, mode, teams, ready); friends list + invite popup |
 | `public/js/profile.js`, `account.js` | Your profile key + name in the browser; lobby name, stats, sign-in, leaderboard |
 | `public/js/net.js` | WebSocket (joins the `?room=` in the URL) + a handler per server message |
-| `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/switching, movement (bhop) |
+| `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/reloading/switching, movement (bhop) |
+| `public/js/settings.js` | Settings panel: FPS limit, sensitivity, key bindings, fullscreen (saved in the browser) |
 | `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds |
 | `public/js/audio.js` | Synthesized sound effects |
 | `public/js/particles.js` | Blood, sparks, embers |

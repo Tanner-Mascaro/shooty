@@ -15,14 +15,17 @@ export const HEAL_RESPAWN = 20000;
 export const EYE = 0.62;         // eye height above a player's feet
 export const BODY_H = 0.8;       // hitbox height; the top 0.2 is the head
 
+// mag: rounds per magazine, reload: ms to reload it
 export const WEAPONS = {
-  rifle:   { dmg: 20,  head: 2,   cd: 120,  spread: 0.015, scopedSpread: 0.015, airSpread: 0.05, auto: true },
-  sniper:  { dmg: 100, head: 1.5, cd: 1400, spread: 0.12,  scopedSpread: 0,     airSpread: 0.08 },
-  shotgun: { dmg: 12,  head: 1.5, cd: 850,  spread: 0.07,  pellets: 8, falloff: 12 },
-  smg:     { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.03,  airSpread: 0.07, auto: true },
+  rifle:   { dmg: 20,  head: 2,   cd: 120,  spread: 0.015, scopedSpread: 0.015, airSpread: 0.05, auto: true, mag: 30, reload: 1600 },
+  sniper:  { dmg: 100, head: 1.5, cd: 1400, spread: 0.12,  scopedSpread: 0,     airSpread: 0.08, mag: 4, reload: 2400 },
+  shotgun: { dmg: 12,  head: 1.5, cd: 850,  spread: 0.07,  pellets: 8, falloff: 12, mag: 6, reload: 2200 },
+  smg:     { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.03,  airSpread: 0.07, auto: true, mag: 35, reload: 1500 },
   blade:   { dmg: 55,  backstab: 150, cd: 450, range: 1.4, melee: true },
 };
-// pickup weapons and the ammo a pickup gives; rifle and blade are unlimited
-export const AMMO = { sniper: 8, shotgun: 12, smg: 90 };
+// pickup weapons and the spare rounds a pickup gives on top of a full mag (another pickup of a
+// gun you have adds these spares); the rifle has unlimited spares, the blade needs no ammo
+export const AMMO = { sniper: 4, shotgun: 6, smg: 55 };
+export const DROP_TIME = 30000;  // guns dropped by a dead player vanish after this long
 // weapon slots, keys 1-5
 export const WEAPON_ORDER = ['rifle', 'sniper', 'shotgun', 'smg', 'blade'];

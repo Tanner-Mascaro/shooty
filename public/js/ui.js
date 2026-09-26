@@ -19,12 +19,14 @@ export function setWaitText(text) { $('waitMsg').textContent = text; }
 // back to the lobby; `result` (e.g. "You won! Rematch?") stays until the next match starts
 export function showWait(result) {
   wait.style.display = '';
+  document.body.classList.remove('ingame');
   $('result').textContent = result || '';
   showRoom();
   if (document.pointerLockElement) document.exitPointerLock();
 }
 export function hideWait() {
   wait.style.display = 'none';
+  document.body.classList.add('ingame');
   $('result').textContent = '';
   $('msg').style.opacity = 0;
 }
