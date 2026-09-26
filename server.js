@@ -10,13 +10,14 @@ import { WebSocketServer } from 'ws';
 import { staticHandler } from './server/static.js';
 import { Game } from './server/game.js';
 import { clientIp } from './server/log.js';
+import { openProfiles } from './server/profiles.js';
 import { TICK, WIN_SCORE } from './shared/config.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 const server = http.createServer(staticHandler(root));
-const game = new Game();
+const game = new Game(await openProfiles(root));
 new WebSocketServer({ server }).on('connection', (socket, req) => game.connect(socket, clientIp(req)));
 setInterval(() => game.tick(), TICK);
 

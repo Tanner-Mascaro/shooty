@@ -9,6 +9,10 @@
 <body>
 <div id="wait">
   <div id="waitTitle">ARENA</div>
+  <div id="profile">
+    <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
+    <div id="stats"></div>
+  </div>
   <div id="levels">
     <button data-level="hell">HELL</button>
     <button data-level="robot">ROBOT FACTORY</button>
@@ -21,7 +25,7 @@
   <div class="ph"><span style="color:#fa4;font-weight:bold">YOU</span> <span id="sk">0</span>
     <div class="hp-bar"><div class="hp-fill" id="myhp" style="width:100%;background:#fa4"></div></div>
   </div>
-  <div class="ph"><span style="color:#f33;font-weight:bold">ENEMY</span> <span id="ek">0</span>
+  <div class="ph"><span id="ename" style="color:#f33;font-weight:bold">ENEMY</span> <span id="ek">0</span>
     <div class="hp-bar"><div class="hp-fill" id="ehp" style="width:100%;background:#f33"></div></div>
   </div>
 </div>

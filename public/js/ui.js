@@ -2,11 +2,19 @@
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
+import { token, savedName, saveName } from './profile.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait'), waitMsg = $('waitMsg'), readyBtn = $('readyBtn');
 
+// sent on connect and whenever you change your name; the server replies with a profile message
+export function sendHello() { send({ type: 'hello', token: token(), name: savedName() }); }
+
 export function initLobby() {
+  const nameInput = $('nameInput');
+  nameInput.value = savedName();
+  nameInput.addEventListener('change', () => { saveName(nameInput.value.trim()); sendHello(); });
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
   readyBtn.addEventListener('click', () => {
     initAudio();
     send({ type: 'ready' });
@@ -18,6 +26,15 @@ export function initLobby() {
     initAudio();
     send({ type: 'level', level: b.dataset.level });
   }));
+}
+
+export function showProfile(msg) {
+  const nameInput = $('nameInput');
+  // no name picked yet: show the server's default ("Player 3") as a hint, since it changes each visit
+  if (!savedName()) nameInput.placeholder = msg.name;
+  else if (document.activeElement !== nameInput) nameInput.value = msg.name;
+  const kd = msg.deaths ? (msg.kills / msg.deaths).toFixed(2) : msg.kills;
+  $('stats').textContent = `${msg.kills} kills · ${msg.deaths} deaths · K/D ${kd} · ${msg.wins} wins · ${msg.losses} losses`;
 }
 
 export function setWaitText(text) { waitMsg.textContent = text; }
@@ -57,5 +74,5 @@ export function banner(text, gold) { S.bannerText = text; S.bannerT = performanc
 export function updateHud() {
   $('myhp').style.width = Math.max(0, S.me.hp) + '%';
   $('sk').textContent = S.myKills;
-  if (S.enemy) { $('ehp').style.width = Math.max(0, S.enemy.hp) + '%'; $('ek').textContent = S.enemy.kills || 0; }
+  if (S.enemy) { $('ename').textContent = (S.enemy.n || 'ENEMY').toUpperCase(); $('ehp').style.width = Math.max(0, S.enemy.hp) + '%'; $('ek').textContent = S.enemy.kills || 0; }
 }

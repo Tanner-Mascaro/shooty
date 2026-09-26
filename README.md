@@ -31,6 +31,16 @@ Speed, sight range, reaction time, fire rate and aim error are constants at the 
 
 The game is 1v1, so there's one bot and it takes the second player slot: nobody else can join while bots are on.
 
+## Profiles
+
+Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses). There's no password: the browser keeps a random secret key that identifies the profile, so clearing site data or switching browsers starts a new profile. Matches against a bot don't count.
+
+Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render that file is wiped on every redeploy or restart, so use a free Postgres database instead:
+
+1. Create a free database at [neon.tech](https://neon.tech) (or Supabase) and copy its connection string (`postgresql://...`)
+2. In Render: your service → **Environment** → add `DATABASE_URL` with that string
+3. Redeploy. The log should say `Profiles: Postgres`; the table is created automatically
+
 ## Layout
 
 | Path | What's in it |
@@ -38,6 +48,7 @@ The game is 1v1, so there's one bot and it takes the second player slot: nobody 
 | `server.js` | Entry point: HTTP + WebSocket wiring |
 | `server/game.js` | Lobby, match state, respawns, pickups, pits, message handlers |
 | `server/bot.js` | Solo-testing bot: roams, spots you, shoots (tuning constants at the top) |
+| `server/profiles.js` | Saved names + stats (Postgres or `data/profiles.json`) |
 | `server/log.js` | Timestamped server log: joins, leaves, lobby, kills, wins |
 | `server/combat.js` | Hitscan, shotgun pellets, melee (authoritative) |
 | `server/static.js` | Serves `public/` and `shared/` |
@@ -47,6 +58,7 @@ The game is 1v1, so there's one bot and it takes the second player slot: nobody 
 | `public/index.html`, `style.css` | Page + lobby |
 | `public/js/main.js` | Client entry + frame loop |
 | `public/js/state.js` | All mutable client state (`S`) |
+| `public/js/profile.js` | Your profile key + name, kept in the browser |
 | `public/js/net.js` | WebSocket + a handler per server message |
 | `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/switching, movement (bhop) |
 | `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds |

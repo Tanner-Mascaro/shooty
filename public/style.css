@@ -19,5 +19,9 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #levels button[data-level=hell].sel { background:#e33; border-color:#f66; }
 #levels button[data-level=robot].sel { background:#3ce; border-color:#8ef; }
 #levels button[data-level=witch].sel { background:#6d3; border-color:#af7; }
+#profile { display:flex; flex-direction:column; align-items:center; gap:6px; }
+#nameInput { font-family:'Courier New',monospace; font-size:18px; font-weight:bold; text-align:center; width:240px; padding:8px; background:#111; color:#fff; border:2px solid #555; border-radius:4px; }
+#nameInput:focus { outline:none; border-color:#aaa; }
+#stats { font-size:14px; color:#888; min-height:1em; }
 #readyBtn { font-size:18px; padding:12px 28px; background:#ddd; color:#000; border-color:#fff; }
 #readyBtn:disabled { background:#333; color:#777; border-color:#444; cursor:default; }

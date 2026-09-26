@@ -6,7 +6,7 @@ import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, setReady, showMsg, banner } from './ui.js';
+import { showWait, hideWait, setWaitText, setReady, showMsg, banner, sendHello, showProfile } from './ui.js';
 
 let ws = null;
 
@@ -16,7 +16,7 @@ export function send(msg) {
 
 export function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => setWaitText('Waiting for opponent...');
+  ws.onopen = () => { setWaitText('Waiting for opponent...'); sendHello(); };
   ws.onclose = () => { setWaitText('Disconnected — refresh to reconnect.'); setReady(false); };
   ws.onerror = () => { setWaitText('Connection failed — refresh to retry.'); setReady(false); };
   ws.onmessage = e => {
@@ -54,6 +54,8 @@ const handlers = {
   },
 
   waiting(msg) { setWaitText(msg.reason); },
+
+  profile(msg) { showProfile(msg); },
 
   start(msg) {
     setLevel(msg.level);

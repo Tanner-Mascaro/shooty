@@ -5,6 +5,7 @@ import { buildTerrain, groundAt, kindAt, findPickups } from '../shared/terrain.j
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
 import { log } from './log.js';
+import { profileId, STATS } from './profiles.js';
 
 // `node server.js --bots` (or BOTS=1): a bot joins as your opponent (local testing).
 // The flag works in every shell; env vars need different syntax on Windows.
@@ -14,7 +15,8 @@ const TERRAINS = {};
 for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES);
 
 export class Game {
-  constructor() {
+  constructor(profiles) {
+    this.profiles = profiles; // saved names + stats, see profiles.js
     this.players = {};   // id -> player state
     this.clients = [];   // { id, socket }
     this.nextId = 0;
@@ -60,8 +62,17 @@ export class Game {
 
   // --- players ---
   // how a player appears in the server log
-  who(p) { return p.bot ? `Bot ${p.id}` : `Player ${p.id} (${p.ip})`; }
-  score() { return Object.values(this.players).map(p => (p.bot ? 'Bot ' : 'P') + p.id + ' ' + p.kills).join(', '); }
+  name(p) { return p.bot ? `Bot ${p.id}` : p.name; }
+  who(p) { return p.bot ? this.name(p) : `${p.name} (${p.ip})`; }
+  score() { return Object.values(this.players).map(p => this.name(p) + ' ' + p.kills).join(', '); }
+
+  // bump a player's saved stats; matches against a bot don't count
+  record(p, delta) {
+    if (!p || !p.pid || Object.values(this.players).some(o => o.bot)) return;
+    for (const s in delta) p.stats[s] += delta[s];
+    this.send(p.id, Object.assign({ type: 'profile', name: p.name }, p.stats));
+    this.profiles.add(p.pid, delta).catch(e => log(`Could not save stats for ${this.who(p)}: ${e.message}`));
+  }
 
   opponent(p) { return Object.values(this.players).find(o => o.id !== p.id) || null; }
 
@@ -80,6 +91,8 @@ export class Game {
   killPlayer(victim, killer, info) {
     const at = { x: victim.x, y: victim.y, z: victim.z };
     if (killer) killer.kills++;
+    this.record(killer, { kills: 1 });
+    this.record(victim, { deaths: 1 });
     this.resetPlayer(victim, killer || this.opponent(victim));
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id }, info, at));
     const how = killer ? `killed ${this.who(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
@@ -88,6 +101,8 @@ export class Game {
       this.gameOn = false;
       Object.values(this.players).forEach(pl => pl.ready = !!pl.bot);
       this.broadcast({ type: 'win', winner: killer.id });
+      this.record(killer, { wins: 1 });
+      this.record(this.opponent(killer), { losses: 1 });
       log(`${this.who(killer)} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
     }
   }
@@ -110,7 +125,7 @@ export class Game {
     const id = this.nextId++;
     const sp = this.spawnPos(this.clients.length > 0 ? this.players[this.clients[0].id] : null);
     const p = this.players[id] = { id, x: sp.x, y: sp.y, z: groundAt(this.T, sp.x, sp.y), a: Math.random() * Math.PI * 2, p: 0, sc: false,
-      hp: MAX_HP, kills: 0, ready: false, seq: 0, nextFire: {}, inv: {}, ip, joinedAt: Date.now() };
+      hp: MAX_HP, kills: 0, ready: false, seq: 0, nextFire: {}, inv: {}, ip, joinedAt: Date.now(), name: `Player ${id}` };
     this.clients.push({ id, socket });
     log(`${this.who(p)} connected (${this.clients.length}/2 players)`);
     if (BOTS && this.clients.length === 1) this.addBot();
@@ -177,7 +192,7 @@ export class Game {
       if (respawned) this.broadcastPickups();
     }
     if (this.clients.length < 2) return;
-    const players = Object.values(this.players).map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, hp: p.hp, kills: p.kills, seq: p.seq }));
+    const players = Object.values(this.players).map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, hp: p.hp, kills: p.kills, seq: p.seq, n: this.name(p) }));
     this.broadcast({ type: 'state', players });
   }
 
@@ -196,6 +211,22 @@ export class Game {
 
 // client -> server messages; `this` is the Game, `p` the sending player
 Game.prototype.handlers = {
+  // the browser's saved profile { token, name }: sent on connect and whenever the name changes
+  async hello(p, msg) {
+    if (typeof msg.token !== 'string' || msg.token.length < 16 || msg.token.length > 128) return;
+    const name = String(msg.name ?? '').replace(/[^\w .-]/g, '').trim().slice(0, 16) || `Player ${p.id}`;
+    const pid = profileId(msg.token);
+    let saved;
+    try { saved = await this.profiles.load(pid, name); }
+    catch (e) { log(`Could not load profile for ${this.who(p)}: ${e.message}`); return; }
+    if (this.players[p.id] !== p) return; // left while it was loading
+    const before = this.who(p), first = !p.pid;
+    p.pid = pid; p.name = name;
+    p.stats = Object.fromEntries(STATS.map(s => [s, saved[s]]));
+    this.send(p.id, Object.assign({ type: 'profile', name }, p.stats));
+    log(first ? `${before} is ${name} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}` : `${before} renamed to ${name}`);
+  },
+
   level(p, msg) {
     if (this.gameOn || !LEVELS[msg.level]) return;
     this.setLevel(msg.level);

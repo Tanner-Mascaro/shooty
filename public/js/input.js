@@ -12,6 +12,7 @@ export function initInput() {
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return; // typing your name in the lobby
     const k = e.key.toLowerCase();
     S.keys[k] = true;
     if (k === ' ') e.preventDefault();
