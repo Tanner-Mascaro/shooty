@@ -6,6 +6,7 @@ Two-player networked 3D arena shooter. No build step: the browser loads the ES m
 npm install
 npm start          # http://localhost:3000
 npm run dev        # same, restarts the server when files change
+npm run bots       # dev + a bot joins as your opponent (solo testing)
 PORT=4000 npm start
 ```
 
@@ -17,6 +18,7 @@ For remote play run `ngrok http 3000` and share the URL.
 |---|---|
 | `server.js` | Entry point: HTTP + WebSocket wiring |
 | `server/game.js` | Lobby, match state, respawns, pickups, pits, message handlers |
+| `server/bot.js` | Solo-testing bot: roams, spots you, shoots (tuning constants at the top) |
 | `server/combat.js` | Hitscan, shotgun pellets, melee (authoritative) |
 | `server/static.js` | Serves `public/` and `shared/` |
 | `shared/config.js` | Weapons, ammo, HP, tick rate (used by server **and** browser) |
