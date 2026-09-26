@@ -160,7 +160,8 @@ const handlers = {
     const pit = msg.weapon === 'pit';
     const fling = { sniper: 6, shotgun: 5, blade: 3, pit: 0 }[msg.weapon] ?? 2; // how hard the body gets thrown
     const a = msg.a || 0;
-    S.corpses.push({ x: msg.x, y: msg.y, z: msg.z, vx: Math.cos(a) * fling, vy: Math.sin(a) * fling, vz: fling * 0.5 + 1,
+    const victim = S.room && S.room.players.find(p => p.id === msg.victim);
+    S.corpses.push({ x: msg.x, y: msg.y, z: msg.z, skin: victim && victim.skin, vx: Math.cos(a) * fling, vy: Math.sin(a) * fling, vz: fling * 0.5 + 1,
       t: now, landed: false, mine: msg.victim === S.myId });
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');

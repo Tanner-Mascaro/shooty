@@ -1,14 +1,14 @@
 // Lobby profile panel: your name and stats, sign in / create account / sign out, leaderboard.
 // The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
-import { token, setToken, clearToken, savedName, saveName } from './profile.js';
+import { token, setToken, clearToken, savedName, saveName, savedSkin } from './profile.js';
 
 const $ = id => document.getElementById(id);
 let me = {}; // latest profile message, merged (stat-only updates arrive after every kill)
 let board = []; // latest leaderboard rows
 
 // sent on connect and whenever you change your name; the server replies with a profile message
-export function sendHello() { send({ type: 'hello', token: token(), name: savedName() }); }
+export function sendHello() { send({ type: 'hello', token: token(), name: savedName(), skin: savedSkin() }); }
 
 export function initAccount() {
   const nameInput = $('nameInput'), form = $('authForm');

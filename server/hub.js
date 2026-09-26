@@ -3,7 +3,7 @@
 //
 // Rooms are joined by URL: /?room=CODE joins (or creates) that private room; no code means
 // quick play, which picks any public room with space.
-import { MAX_PLAYERS } from '../shared/config.js';
+import { MAX_PLAYERS, PLAYER_SKINS } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
 import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
@@ -202,7 +202,8 @@ Hub.prototype.handlers = {
   // the browser's token + chosen name: sent on connect and whenever the name changes
   async hello(p, msg) {
     if (typeof msg.token !== 'string' || msg.token.length < 16 || msg.token.length > 128) return;
-    const before = this.who(p), first = !p.tokenHash, oldName = p.name;
+    const before = this.who(p), first = !p.tokenHash, oldName = p.name, oldSkin = p.skin;
+    if (PLAYER_SKINS.includes(msg.skin)) p.skin = msg.skin;
     p.tokenHash = hashToken(msg.token);
     const pid = await this.profiles.resolve(p.tokenHash);
     if (!await this.useProfile(p, pid, cleanName(msg.name) || null)) return;
@@ -210,6 +211,7 @@ Hub.prototype.handlers = {
       log(`${before} is ${p.name}${p.username ? ' (account ' + p.username + ')' : ''} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}`);
       this.sendBoard(p);
     } else if (p.name !== oldName) log(`${before} renamed to ${p.name}`);
+    if (p.room && p.skin !== oldSkin) p.room.roster();
   },
 
   // create an account: puts a username + password on your current profile, keeping its stats

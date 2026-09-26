@@ -7,6 +7,7 @@ export const WIN_SCORE = 10;       // free-for-all: first player to this many ki
 export const TEAM_WIN_SCORE = 20;  // teams: first team to this many kills
 export const MAX_PLAYERS = 8;      // per room
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
+export const PLAYER_SKINS = ['demon', 'robot', 'witch', 'cowboy', 'nun', 'knight', 'bodybuilder', 'ghost', 'goose', 'construction', 'superhero', 'ninja', 'werewolf', 'zombie', 'astronaut', 'mummy', 'vampire', 'slime'];
 export const MAX_DEPTH = 40;     // max view / bullet distance
 export const PIT_DPS = 40;       // damage per second standing in lava / acid / bog
 export const PICKUP_RESPAWN = 15000;

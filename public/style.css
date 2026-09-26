@@ -85,6 +85,35 @@ canvas { display:block; position:absolute; top:0; left:0; }
 .maps button:hover::before { opacity:.8; }
 .maps button.sel::before { opacity:1; }
 .maps button.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent), 0 0 24px rgba(var(--accent-rgb),0.35); }
+.skin-stage { display:grid; grid-template-columns:34px minmax(0,1fr) 34px; align-items:center; gap:4px; min-height:250px; }
+#skinWheel { display:grid; grid-template-columns:1fr 1.18fr 1fr; align-items:center; min-width:0; height:250px; }
+.skin-preview { min-width:0; height:224px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; will-change:transform,opacity; }
+.skin-preview canvas { position:relative; top:auto; left:auto; width:min(126px,100%); height:auto; aspect-ratio:2 / 3; object-fit:contain; image-rendering:pixelated; }
+.skin-preview span { max-width:100%; overflow:hidden; color:#dce1e8; font-size:12px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+.skin-preview.side { height:184px; opacity:.24; filter:saturate(.65); }
+.skin-preview.side.left { transform:perspective(360px) rotateY(10deg) scale(.62); transform-origin:right center; }
+.skin-preview.side.right { transform:perspective(360px) rotateY(-10deg) scale(.62); transform-origin:left center; }
+.skin-preview.side span { color:#9ca4af; font-size:11px; }
+.skin-preview.front { z-index:1; transform:translateY(-5px) scale(1.06); }
+.skin-preview.front canvas { filter:drop-shadow(0 0 12px rgba(var(--accent-rgb),0.62)) drop-shadow(0 0 28px rgba(var(--accent-rgb),0.3)); }
+.skin-preview.front span { color:var(--accent); font-size:14px; letter-spacing:.04em; text-shadow:0 0 12px rgba(var(--accent-rgb),0.45); }
+#skinWheel[data-direction=next] .skin-preview.left { animation:wheel-next-left .34s ease-out both; }
+#skinWheel[data-direction=next] .skin-preview.front { animation:wheel-next-front .34s ease-out both; }
+#skinWheel[data-direction=next] .skin-preview.right { animation:wheel-next-right .34s ease-out both; }
+#skinWheel[data-direction=previous] .skin-preview.left { animation:wheel-prev-left .34s ease-out both; }
+#skinWheel[data-direction=previous] .skin-preview.front { animation:wheel-prev-front .34s ease-out both; }
+#skinWheel[data-direction=previous] .skin-preview.right { animation:wheel-prev-right .34s ease-out both; }
+@keyframes wheel-next-left { from { opacity:1; transform:translateX(60px) scale(1); } to { opacity:.24; transform:perspective(360px) rotateY(10deg) scale(.62); } }
+@keyframes wheel-next-front { from { opacity:.24; transform:translateX(54px) scale(.62); } to { opacity:1; transform:translateY(-5px) scale(1.06); } }
+@keyframes wheel-next-right { from { opacity:0; transform:translateX(45px) scale(.42); } to { opacity:.24; transform:perspective(360px) rotateY(-10deg) scale(.62); } }
+@keyframes wheel-prev-left { from { opacity:0; transform:translateX(-45px) scale(.42); } to { opacity:.24; transform:perspective(360px) rotateY(10deg) scale(.62); } }
+@keyframes wheel-prev-front { from { opacity:.24; transform:translateX(-54px) scale(.62); } to { opacity:1; transform:translateY(-5px) scale(1.06); } }
+@keyframes wheel-prev-right { from { opacity:1; transform:translateX(-60px) scale(1); } to { opacity:.24; transform:perspective(360px) rotateY(-10deg) scale(.62); } }
+.skin-arrow { width:32px; height:44px; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.04); color:#eee; font:32px/1 'Chakra Petch',sans-serif; cursor:pointer; }
+.skin-arrow:hover { border-color:rgba(var(--accent-rgb),0.6); color:var(--accent); background:rgba(var(--accent-rgb),0.1); }
+#chooseSkin { width:100%; padding:12px; border:1px solid rgba(var(--accent-rgb),0.45); border-radius:8px; background:rgba(var(--accent-rgb),0.12); color:#fff; font:700 13px 'Chakra Petch',sans-serif; letter-spacing:.12em; cursor:pointer; }
+#chooseSkin:hover:not(:disabled) { background:rgba(var(--accent-rgb),0.24); }
+#chooseSkin:disabled { color:#8f969d; border-color:var(--line); background:rgba(255,255,255,0.035); cursor:default; }
 #teamPick { margin-top:4px; }
 #teamPick .team1 { color:#f88; } #teamPick .team2 { color:#8bf; }
 #teamPick .team1.sel { background:#c33; border-color:#f66; color:#fff; } #teamPick .team2.sel { background:#36c; border-color:#6af; color:#fff; }
