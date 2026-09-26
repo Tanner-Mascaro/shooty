@@ -71,6 +71,10 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 2. In Render: your service → **Environment** → add `DATABASE_URL` with that string
 3. Redeploy. The log should say `Profiles: Postgres`; tables are created (and upgraded) automatically
 
+## Versions
+
+The version in `package.json` shows in the lobby's bottom-left corner and the server log. Bump it before deploying: `npm version patch` for fixes, `npm version minor` for new features, `npm version major` for big changes (each makes a commit and a git tag).
+
 ## Layout
 
 | Path | What's in it |

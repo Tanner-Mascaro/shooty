@@ -52,6 +52,7 @@ function otherSounds(o, prev, cur) {
 const handlers = {
   init(msg) {
     S.myId = msg.id;
+    document.getElementById('version').textContent = 'v' + msg.version;
     setLevel(msg.level);
     S.me = { x: msg.x, y: msg.y, z: msg.z, a: msg.a, hp: msg.hp };
     S.mySeq = msg.seq;

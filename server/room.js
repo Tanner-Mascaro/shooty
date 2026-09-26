@@ -7,6 +7,7 @@ import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
 import { log } from './log.js';
+import { VERSION } from './version.js';
 
 // Anyone can add bots to a room with the lobby's + BOT / − BOT buttons; they only fill empty
 // seats, so a person joining a full room takes a bot's place. `node server.js --bots` (or
@@ -169,7 +170,7 @@ export class Room {
     p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     this.resetPlayer(p);
-    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: p.seq });
+    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: p.seq, version: VERSION });
     this.send(p, this.pickupList());
     this.send(p, this.boxList());
     if (this.gameOn) this.send(p, { type: 'start', level: this.level }); // drop straight into the running match
