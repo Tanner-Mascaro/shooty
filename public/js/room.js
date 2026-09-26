@@ -1,7 +1,7 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER, MODE_NAMES } from '/shared/config.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
@@ -140,15 +140,25 @@ function initSkinCarousel() {
 }
 
 function updateMapVoteLabel(level) {
-  const names = { witch: 'Witch Swamp', castle: 'Gothic Castle', hell: 'Hell', robot: 'Robot Factory', haunt: 'Haunted House', ice: 'Ice Fields', nuke: 'Nuketown' };
-  const text = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
-  const title = $('waitTitle');
-  if (title) {
-    title.textContent = text;
-    title.style.color = '';
-  }
   const el = $('mapVote');
-  if (el) el.textContent = text;
+  if (!el) return;
+  const names = { witch: 'Witch Swamp', castle: 'Gothic Castle', hell: 'Hell', robot: 'Robot Factory', haunt: 'Haunted House', ice: 'Ice Fields', nuke: 'Nuketown' };
+  el.textContent = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
+}
+
+function updateModeVoteLabel(mode) {
+  const el = $('modeVote');
+  if (!el) return;
+  el.textContent = mode ? 'Your vote: ' + (MODE_NAMES[mode] || mode) : 'Click a mode to vote';
+}
+
+function setLocalModeVote(mode) {
+  document.querySelectorAll('#modes button').forEach(b => {
+    const mine = b.dataset.mode === mode;
+    b.classList.toggle('sel', mine);
+    b.classList.toggle('voted', mine);
+  });
+  updateModeVoteLabel(mode);
 }
 
 // --- map carousel: scroll or swipe through the maps, arrows step one card; clicking a card picks it ---
@@ -259,7 +269,11 @@ export function initRoom() {
     setLocalMapVote(b.dataset.level);
     send({ type: 'vote', level: b.dataset.level });
   }));
-  document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
+  document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => {
+    initAudio();
+    setLocalModeVote(b.dataset.mode);
+    send({ type: 'mode', mode: b.dataset.mode });
+  }));
   document.querySelectorAll('#scorePick button, #teamScorePick button').forEach(b => b.addEventListener('click', () => send({ type: 'score', score: +b.dataset.score })));
   document.querySelectorAll('#plagueSelection button').forEach(b => b.addEventListener('click', () => send({ type: 'plagueSetup', selection: b.dataset.selection })));
   document.querySelectorAll('#teamPick button').forEach(b => b.addEventListener('click', () => send({ type: 'team', team: +b.dataset.team })));
@@ -317,7 +331,20 @@ export function showRoom() {
   } catch {}
   $('roomCode').textContent = r.code;
   $('roomKind').textContent = r.private ? 'private' : 'public';
-  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('sel', b.dataset.mode === r.mode));
+  const me = r.players.find(p => p.id === S.myId);
+  const modeVotes = r.modeVotes || {};
+  const myModeVote = me && me.modeVote;
+  document.querySelectorAll('#modes button').forEach(b => {
+    const n = modeVotes[b.dataset.mode] || 0;
+    const mine = myModeVote === b.dataset.mode;
+    b.classList.toggle('sel', mine);
+    b.classList.toggle('voted', mine);
+    b.classList.toggle('leading', b.dataset.mode === r.mode);
+    let badge = b.querySelector('.votes');
+    if (!badge) { badge = document.createElement('span'); badge.className = 'votes'; b.appendChild(badge); }
+    badge.textContent = mine ? (n > 1 ? 'YOU · ' + n : 'YOU') : (n ? String(n) : '');
+  });
+  updateModeVoteLabel(myModeVote);
   document.body.classList.toggle('plague', r.mode === 'plague');
   const win = r.winScore ?? WIN_SCORE, teamWin = r.teamWinScore ?? TEAM_WIN_SCORE;
   $('modeHelp').textContent = r.mode === 'plague'
@@ -351,7 +378,6 @@ export function showRoom() {
     : 'Exactly one player or bot is picked at random when each round starts.';
 
   const teams = r.mode === 'teams';
-  const me = r.players.find(p => p.id === S.myId);
   // server is source of truth — revert a local pick the server rejected (e.g. unknown skin)
   if (me && me.skin && PLAYER_SKIN_NAMES[me.skin] && me.skin !== savedSkin()) {
     saveSkin(me.skin);
@@ -427,6 +453,6 @@ export function showRoom() {
     r.gameOn ? 'Match in progress — joining...'
     : n < 2 ? 'Waiting for players — send friends the invite link, or fill with bots'
     : r.plagueSetupValid === false ? 'Choose at least one infected and one healthy player in the list above.'
-    : me && me.ready ? `Waiting for everyone (${ready}/${n}) · map votes decide the arena`
-    : `Vote a map, then click "I'm Here" (${ready}/${n} ready)`;
+    : me && me.ready ? `Waiting for everyone (${ready}/${n}) · votes decide the map and mode`
+    : `Vote a map and mode, then click "I'm Here" (${ready}/${n} ready)`;
 }

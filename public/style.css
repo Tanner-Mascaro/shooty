@@ -340,10 +340,6 @@ body.on-home #corner { z-index:210; }
   color:#f0e6d0; line-height:.95; text-transform:uppercase;
   text-shadow:0 2px 0 #1a1020, 0 0 28px rgba(180,120,255,0.22);
 }
-#waitTitle {
-  font-family:'Caslon Antique',Georgia,serif; font-size:clamp(16px,2.6vw,22px); font-weight:700; letter-spacing:.28em;
-  margin:10px 0 0; text-indent:.28em; color:#d8c8a8; transition:color .35s;
-}
 #tagline {
   margin:12px auto 0; max-width:36ch; font-size:14px; font-weight:400; line-height:1.45;
   color:#b8a890; letter-spacing:.02em; font-style:italic;
@@ -406,6 +402,15 @@ body.on-home #corner { z-index:210; }
   background:rgba(var(--accent-rgb),0.18); color:#3a1010; border-color:rgba(var(--accent-rgb),0.55);
   font-weight:700;
 }
+.seg button.voted { border-color:rgba(var(--accent-rgb),0.55); }
+.seg button.leading:not(.sel):not(.voted) { border-color:rgba(139,30,45,0.4); }
+#modes button { position:relative; padding-bottom:16px; }
+#modes button .votes {
+  position:absolute; left:4px; right:4px; bottom:2px; font-size:9px; letter-spacing:.04em;
+  color:var(--muted); font-weight:600; text-transform:uppercase;
+}
+#modes button.voted .votes, #modes button.sel .votes { color:var(--accent); }
+#modeVote, #mapVote, #skinStatus { color:var(--accent); }
 .map-stage { display:grid; grid-template-columns:34px minmax(0,1fr) 34px; align-items:center; gap:4px; }
 /* map carousel: parchment realm cards */
 .maps { position:relative; display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; scrollbar-width:none; padding:8px 14%; }
@@ -537,7 +542,7 @@ body.on-home #corner { z-index:210; }
   box-shadow:0 3px 0 #4a0c12, inset 0 1px 0 rgba(255,200,200,0.3); cursor:default;
 }
 #chooseSkin:disabled:not(.picked) { color:#9a8060; border-color:var(--line); background:rgba(90,60,30,0.05); cursor:default; }
-#mapVote, #skinStatus { color:var(--accent); }
+#modeVote, #mapVote, #skinStatus { color:var(--accent); }
 #teamPick { margin-top:4px; }
 #teamPick .team1 { color:#8b1e2d; } #teamPick .team2 { color:#5a3a70; }
 #teamPick .team1.sel { background:#8b1e2d; border-color:#5a1018; color:#fff; } #teamPick .team2.sel { background:#5a3a70; border-color:#3a2048; color:#fff; }
@@ -873,7 +878,7 @@ body.display-dark #summaryHeadline { color:#e4e9f1; }
 body.display-dark #summarySub, body.display-dark #summaryBoard th, body.display-dark #summaryBoard .deaths { color:#98a2b1; }
 body.display-dark #summaryBoard td { border-color:#222a35; }
 body.display-dark #brand, body.display-dark #homeBrand { color:#e8dcc8; }
-body.display-dark #homeTag, body.display-dark #waitTitle, body.display-dark #tagline { color:#b8a890; }
+body.display-dark #homeTag, body.display-dark #tagline { color:#b8a890; }
 
 /* parchment panels stay scroll-framed (do not replace background / border-image) */
 body.display-dark #homePanel,
