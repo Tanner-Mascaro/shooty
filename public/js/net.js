@@ -77,6 +77,7 @@ const handlers = {
     }
     lastRoster = next;
     S.room = msg;
+    S.hardpoint = msg.hardpoint || null;
     S.plagueEndsAt = performance.now() + (msg.plagueRemainingMs || 0);
     const mine = msg.players.find(p => p.id === S.myId);
     if (mine) S.myTeam = mine.team;
@@ -93,6 +94,7 @@ const handlers = {
   start(msg) {
     setLevel(msg.level);
     S.started = true;
+    S.hardpoint = msg.hardpoint || null;
     S.damageIndicators = [];
     S.myKills = 0;
     S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
@@ -150,6 +152,7 @@ const handlers = {
 
   state(msg, now) {
     S.plagueEndsAt = now + (msg.plagueRemainingMs || 0);
+    S.hardpoint = msg.hardpoint || null;
     S.thrown = msg.nades || [];
     for (const p of msg.players) {
       if (p.id === S.myId) {
@@ -285,6 +288,7 @@ const handlers = {
     }));
     showSummary({
       headline, rematch, scores, mode, level: msg.level || S.room?.level, won,
+      hardpointScores: msg.hardpointScores,
     });
   },
 
@@ -300,6 +304,7 @@ const handlers = {
         mode: msg.mode || S.room?.mode,
         level: msg.level || S.room?.level,
         won: false,
+        hardpointScores: msg.hardpointScores,
       });
     } else showWait(msg.reason);
   },

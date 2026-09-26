@@ -1,7 +1,7 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { WIN_SCORE, TEAM_WIN_SCORE, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER } from '/shared/config.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
@@ -317,6 +317,7 @@ export function showRoom() {
   const win = r.winScore ?? WIN_SCORE, teamWin = r.teamWinScore ?? TEAM_WIN_SCORE;
   $('modeHelp').textContent = r.mode === 'plague'
     ? `Infect everyone, or survive ${PLAGUE_DURATION / 60000} minutes. Monsters are fast and claw to infect.`
+    : r.mode === 'hardpoint' ? `Red vs blue. Hold the rotating hill for 1 point per second. Contested hills stop scoring; first to ${HARDPOINT_SCORE_LIMIT} wins or the leader at ${Math.floor(HARDPOINT_MATCH_MS / 60000)}:${String(Math.floor(HARDPOINT_MATCH_MS / 1000) % 60).padStart(2, '0')}.`
     : r.mode === 'teams' ? `Red vs blue. First team to ${teamWin} kills wins.`
     : r.mode === 'snipers' ? `Sniper, crossbow, and beam rifle only. First to ${win} kills wins.`
     : `Every player for themselves. First to ${win} kills wins.`;
@@ -345,7 +346,7 @@ export function showRoom() {
     ? 'Set each player or bot to Infected or Healthy in the player list above. Choose at least one of each. Role changes reset ready status.'
     : 'Exactly one player or bot is picked at random when each round starts.';
 
-  const teams = r.mode === 'teams';
+  const teams = r.mode === 'teams' || r.mode === 'hardpoint';
   const me = r.players.find(p => p.id === S.myId);
   // server is source of truth — revert a local pick the server rejected (e.g. unknown skin)
   if (me && me.skin && PLAYER_SKIN_NAMES[me.skin] && me.skin !== savedSkin()) {

@@ -7,9 +7,16 @@ export const WIN_SCORE = 10;       // free-for-all default kills to win
 export const TEAM_WIN_SCORE = 20;  // teams default kills to win
 export const WIN_SCORE_OPTIONS = [5, 10, 15, 20, 25, 30];
 export const TEAM_WIN_SCORE_OPTIONS = [10, 20, 30, 40];
+export const HARDPOINT_SCORE_LIMIT = 250;
+export const HARDPOINT_MATCH_MS = 5 * 60 * 1000;
+export const HARDPOINT_ROTATION_MS = 60 * 1000;
+export const HARDPOINT_FIRST_MS = 5 * 1000;
+export const HARDPOINT_REVEAL_MS = 10 * 1000;
+export const HARDPOINT_SITE_COUNT = 5;
+export const HARDPOINT_RADIUS = 2.25;
 export const MAX_PLAYERS = 8;      // per room
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
-export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', plague: 'Plague', snipers: 'Snipers' };
+export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers' };
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
 export const PLAGUE_TEAM = 1;
 export const HEALTHY_TEAM = 2;
@@ -22,7 +29,7 @@ export const PLAGUE_DASH_DURATION = 200; // ms
 export const PLAGUE_DASH_COOLDOWN = 2000; // ms between dash starts
 export const MOVE_SPEED = 3, MOVE_SPEED_LIMIT = 10, MOVE_GRAVITY = 7.5, MOVE_JUMP_V = 2.55;
 export const PLAGUE_TEAMS = { [PLAGUE_TEAM]: 'PLAGUE', [HEALTHY_TEAM]: 'HEALTHY' };
-export const isTeamMode = mode => mode === 'teams' || mode === 'plague';
+export const isTeamMode = mode => mode === 'teams' || mode === 'hardpoint' || mode === 'plague';
 export const teamName = (mode, team) => (mode === 'plague' ? PLAGUE_TEAMS : TEAMS)[team] || '';
 export const PLAYER_SKINS = ['witch', 'robotWitch', 'gothicWitch', 'infernalWitch', 'iceWitch', 'ghostWitch', 'plagueWitch'];
 

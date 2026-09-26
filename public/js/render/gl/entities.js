@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { S } from '../../state.js';
 import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
-import { GUN_COLOR } from '../../constants.js';
+import { ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, GUN_COLOR } from '../../constants.js';
 import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
 import { getScene } from './scene.js';
 
@@ -188,7 +188,7 @@ function glowFor(o) {
   const teams = S.room && isTeamMode(S.room.mode);
   const ally = teams && o.now.team === S.myTeam;
   // Visible glow only — never draws through walls.
-  return { col: !teams ? [255, 255, 255] : ally ? [90, 170, 255] : [255, 70, 55] };
+  return { col: !teams ? [255, 255, 255] : ally ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR };
 }
 
 function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline) {
@@ -276,7 +276,7 @@ export function drawOthersAndCorpses(now) {
     const player = S.room && S.room.players.find(p => p.id === o.now.id);
     const team = player ? player.team : o.now.team;
     const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM
-      ? PLAGUE_TINT : (S.room && S.room.mode === 'teams') ? TEAM_TINT[team] : null;
+      ? PLAGUE_TINT : (S.room && ['teams', 'hardpoint'].includes(S.room.mode)) ? TEAM_TINT[team] : null;
     drawPlayerBillboard(
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,

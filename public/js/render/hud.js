@@ -3,7 +3,7 @@
 import { MW, MH } from '/shared/levels.js';
 import { WEAPONS, GUN_SLOTS, EYE, BODY_H } from '/shared/config.js';
 import { S, spare, isEnemy, nameOf } from '../state.js';
-import { BASE_FOV, SCOPE_FOV, MAX_SPEED, GUN_COLOR } from '../constants.js';
+import { BASE_FOV, SCOPE_FOV, MAX_SPEED, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
@@ -232,6 +232,54 @@ export function drawDamageIndicators(now) {
   }
 }
 
+// Project a visible perimeter onto the ground so the objective is readable in-world as well as
+// on the minimap. A small floating label keeps the point number identifiable at a distance.
+export function drawHardpointMarker() {
+  const hp = S.hardpoint;
+  if (!S.started || S.room?.mode !== 'hardpoint' || !hp) return;
+  const site = hp.active || hp.next;
+  if (!site) return;
+  const active = !!hp.active;
+  const rgb = !active ? '245,225,150' : hp.contested ? '255,190,80'
+    : hp.owner ? (hp.owner === S.myTeam ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR).join(',') : '245,225,150';
+  const points = [];
+  let visible = true;
+  for (let i = 0; i < 40; i++) {
+    const a = i * Math.PI * 2 / 40;
+    const p = project(site.x + Math.cos(a) * site.radius, site.y + Math.sin(a) * site.radius, site.z + 0.04);
+    const onScreen = p.f > 0.2 && p.x >= -4 && p.x <= view.W + 4 && p.y >= -4 && p.y <= view.H + 4 && !occluded(p);
+    points.push(onScreen ? p : null);
+    if (!onScreen) visible = false;
+  }
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = `rgba(${rgb},${active ? 0.9 : 0.7})`;
+  ctx.setLineDash(active ? [] : [7, 6]);
+  ctx.beginPath();
+  let drawing = false;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    if (!p) { drawing = false; continue; }
+    if (drawing) ctx.lineTo(p.x, p.y);
+    else { ctx.moveTo(p.x, p.y); drawing = true; }
+  }
+  if (visible) {
+    ctx.closePath();
+    if (active) { ctx.fillStyle = `rgba(${rgb},0.07)`; ctx.fill(); }
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const marker = project(site.x, site.y, site.z + 2.4);
+  if (marker.f > 0.4 && marker.x >= 8 && marker.x <= view.W - 8 && marker.y >= 18 && marker.y <= view.H - 8 && !occluded(marker)) {
+    const label = `${active ? 'HARDPOINT' : 'NEXT'} P${site.index + 1}`;
+    ctx.font = 'bold 13px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(label, marker.x, marker.y);
+    ctx.fillStyle = `rgb(${rgb})`; ctx.fillText(label, marker.x, marker.y);
+  }
+  ctx.restore();
+}
+
 // full-screen color flashes (kill, damage, heal) and the pit vignette
 export function drawFlashes() {
   const { W, H } = view;
@@ -286,6 +334,20 @@ export function drawMinimap(now) {
     ctx.globalAlpha = 0.9;
     ctx.drawImage(mini, 0, 0, MW, MH);
     ctx.globalAlpha = 1;
+    const hp = S.hardpoint;
+    const drawHill = (point, color, alpha, dashed) => {
+      if (!point) return;
+      ctx.beginPath(); ctx.arc(point.x, point.y, point.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${color},${alpha * 0.18})`; ctx.fill();
+      ctx.strokeStyle = `rgba(${color},${alpha})`; ctx.lineWidth = 2 / ms;
+      ctx.setLineDash(dashed ? [3 / ms, 2 / ms] : []); ctx.stroke(); ctx.setLineDash([]);
+    };
+    if (hp?.next) drawHill(hp.next, '245,225,150', 0.8, true);
+    if (hp?.active) {
+      const color = hp.contested ? '255,190,80'
+        : hp.owner ? (hp.owner === S.myTeam ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR).join(',') : '245,225,150';
+      drawHill(hp.active, color, 1, false);
+    }
     S.pickupSpots.forEach((p, i) => {
       if (!S.pickupActive[i]) return;
       ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);

@@ -1,7 +1,7 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, HARDPOINT_ROTATION_MS, HARDPOINT_FIRST_MS, HARDPOINT_REVEAL_MS, HARDPOINT_SITE_COUNT, HARDPOINT_RADIUS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, FEATURED_LEVELS, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
@@ -21,6 +21,46 @@ export const BOTS = process.argv.includes('--bots') || !!process.env.BOTS;
 
 const PLAYER_R = 0.22; // body radius for wall collisions, as in public/js/physics.js
 
+// Pick five stable, map-specific hills on broad, flat, open ground. Their order is fixed for
+// each map so teams can learn the rotation instead of chasing a randomly moving objective.
+function makeHardpointSites(MAP, T) {
+  const candidates = [];
+  for (let y = 3; y < MH - 3; y++) for (let x = 3; x < MW - 3; x++) {
+    if (MAP[y][x] !== '.') continue;
+    const sx = x + 0.5, sy = y + 0.5;
+    if (groundAt(T, sx, sy) > 0.05 || hitsWall(T, sx, sy, PLAYER_R)) continue;
+    let clear = true;
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, px = sx + Math.cos(a) * HARDPOINT_RADIUS, py = sy + Math.sin(a) * HARDPOINT_RADIUS;
+      if (kindAt(T, px, py) !== 0 || groundAt(T, px, py) > 0.05 || hitsWall(T, px, py, PLAYER_R)) { clear = false; break; }
+    }
+    if (clear) candidates.push({ x: sx, y: sy, z: 0, radius: HARDPOINT_RADIUS });
+  }
+  const anchors = [
+    { x: MW / 2, y: MH / 2 }, { x: MW / 4, y: MH / 4 }, { x: MW * 3 / 4, y: MH / 4 },
+    { x: MW * 3 / 4, y: MH * 3 / 4 }, { x: MW / 4, y: MH * 3 / 4 },
+  ];
+  const sites = [];
+  for (const anchor of anchors) {
+    let options = candidates.filter(c => sites.every(s => Math.hypot(c.x - s.x, c.y - s.y) >= 12));
+    if (!options.length) options = candidates.filter(c => sites.every(s => Math.hypot(c.x - s.x, c.y - s.y) >= 6));
+    options.sort((a, b) => Math.hypot(a.x - anchor.x, a.y - anchor.y) - Math.hypot(b.x - anchor.x, b.y - anchor.y));
+    if (options.length) sites.push(options[0]);
+  }
+  // Dense maps may not have a valid point near every anchor; fill remaining slots with the
+  // farthest clear sites so the rotation still spans the map.
+  while (sites.length < HARDPOINT_SITE_COUNT) {
+    let best = null, bestGap = -1;
+    for (const c of candidates) {
+      const gap = sites.length ? Math.min(...sites.map(s => Math.hypot(c.x - s.x, c.y - s.y))) : Infinity;
+      if (gap >= 4 && gap > bestGap) { best = c; bestGap = gap; }
+    }
+    if (!best) break;
+    sites.push(best);
+  }
+  return sites;
+}
+
 const TERRAINS = {};
 for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES, k); // level key = obstacle style
 
@@ -30,11 +70,20 @@ export class Room {
     this.code = code;
     this.private = isPrivate; // quick play never drops strangers into a private room
     this.players = {};        // id -> player (the hub's connection object, or a bot)
-    this.mode = 'ffa';        // 'ffa' | 'teams' | 'plague'
+    this.mode = 'ffa';        // 'ffa' | 'teams' | 'hardpoint' | 'plague'
     this.winScore = WIN_SCORE;
     this.teamWinScore = TEAM_WIN_SCORE;
     this.gameOn = false;
     this.plagueEndsAt = 0;
+    this.hardpointStartedAt = 0;
+    this.hardpointEndsAt = 0;
+    this.hardpointLastScoreAt = 0;
+    this.hardpointScores = { 1: 0, 2: 0 };
+    this.hardpointScoreMs = { 1: 0, 2: 0 };
+    this.hardpointOwner = 0;
+    this.hardpointContested = false;
+    this.hardpointOvertime = false;
+    this.hardpointOvertimeScores = null;
     this.plagueSelection = 'random'; // 'random' | 'manual'; manual roles survive rematches
     this.boxes = [];          // loot boxes: { id, x, y, z, items: [{ w, mag, spare }], until }
     this.boxId = 0;
@@ -67,7 +116,35 @@ export class Room {
   }
   get plagueRemainingMs() { return this.mode === 'plague' && this.gameOn ? Math.max(0, this.plagueEndsAt - Date.now()) : 0; }
   skinOf(p) { return this.mode === 'plague' && this.gameOn && p.team === PLAGUE_TEAM ? PLAGUE_SKIN : p.skin || 'witch'; }
-  startMessage() { return { type: 'start', level: this.level, mode: this.mode, plagueRemainingMs: this.plagueRemainingMs }; }
+  hardpointSnapshot(now = Date.now()) {
+    if (this.mode !== 'hardpoint' || !this.gameOn || !this.hardpointSites.length) return null;
+    const elapsed = now - this.hardpointStartedAt, beforeStart = elapsed < HARDPOINT_FIRST_MS;
+    const rotationElapsed = Math.max(0, elapsed - HARDPOINT_FIRST_MS);
+    const index = Math.floor(rotationElapsed / HARDPOINT_ROTATION_MS) % this.hardpointSites.length;
+    const rotationRemainingMs = beforeStart ? 0 : HARDPOINT_ROTATION_MS - (rotationElapsed % HARDPOINT_ROTATION_MS);
+    const point = (i, active) => Object.assign({ index: i, active }, this.hardpointSites[i]);
+    const active = beforeStart ? null : point(index, true);
+    const revealNext = beforeStart || rotationRemainingMs <= HARDPOINT_REVEAL_MS;
+    const next = revealNext ? point(beforeStart ? 0 : (index + 1) % this.hardpointSites.length, false) : null;
+    return {
+      scores: { ...this.hardpointScores },
+      matchRemainingMs: Math.max(0, this.hardpointEndsAt - now),
+      hillRemainingMs: beforeStart ? HARDPOINT_FIRST_MS - elapsed : rotationRemainingMs,
+      activatesInMs: beforeStart ? HARDPOINT_FIRST_MS - elapsed : 0,
+      index: beforeStart ? -1 : index,
+      count: this.hardpointSites.length,
+      active, next, owner: this.hardpointOwner, contested: this.hardpointContested,
+      overtime: this.hardpointOvertime,
+    };
+  }
+  hardpointTarget(now = Date.now()) {
+    const state = this.hardpointSnapshot(now);
+    return state && (state.active || state.next);
+  }
+  startMessage() {
+    return { type: 'start', level: this.level, mode: this.mode, plagueRemainingMs: this.plagueRemainingMs,
+      hardpoint: this.hardpointSnapshot() };
+  }
   plagueSetupValid() {
     return this.mode !== 'plague' || this.plagueSelection === 'random'
       || [PLAGUE_TEAM, HEALTHY_TEAM].every(team => this.list.some(p => p.plagueStartTeam === team));
@@ -87,7 +164,7 @@ export class Room {
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
       gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
-      winScore: this.winScore, teamWinScore: this.teamWinScore,
+      winScore: this.winScore, teamWinScore: this.teamWinScore, hardpoint: this.hardpointSnapshot(),
       players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
   }
 
@@ -96,6 +173,7 @@ export class Room {
     this.level = name;
     this.map = LEVELS[name];
     this.T = TERRAINS[name];
+    this.hardpointSites = makeHardpointSites(this.map, this.T);
     this.resetPickups();
   }
   // the level's pads (gun pads roll a random gun every time they come back; health / nades stay)
@@ -207,12 +285,13 @@ export class Room {
   teamKills(t) { return this.list.filter(p => p.team === t).reduce((n, p) => n + p.kills, 0); }
   score() {
     if (this.mode === 'plague') return `${this.list.filter(p => p.team === HEALTHY_TEAM).length} healthy, ${this.list.filter(p => p.team === PLAGUE_TEAM).length} infected`;
+    if (this.mode === 'hardpoint') return `${TEAMS[1]} ${this.hardpointScores[1]}, ${TEAMS[2]} ${this.hardpointScores[2]}`;
     if (this.mode === 'teams') return `${TEAMS[1]} ${this.teamKills(1)}, ${TEAMS[2]} ${this.teamKills(2)}`;
     return this.list.map(p => this.hub.name(p) + ' ' + p.kills).join(', ');
   }
   enoughPlayers() {
     if (this.list.length < 2) return false;
-    return this.mode !== 'teams' || [1, 2].every(t => this.list.some(p => p.team === t));
+    return !['teams', 'hardpoint'].includes(this.mode) || [1, 2].every(t => this.list.some(p => p.team === t));
   }
 
   resetPlayer(p, avoid = this.enemies(p)) {
@@ -248,7 +327,7 @@ export class Room {
     Object.assign(p, { room: this, kills: 0, deaths: 0, ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
-    p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : this.mode === 'teams' ? this.smallerTeam() : 0;
+    p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : ['teams', 'hardpoint'].includes(this.mode) ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     this.resetPlayer(p);
@@ -343,15 +422,28 @@ export class Room {
     if (!killer) return;
     if (this.mode === 'teams') {
       if (this.teamKills(killer.team) >= this.teamWinScore) this.finish(this.list.filter(p => p.team === killer.team), { team: killer.team }, TEAMS[killer.team] + ' team');
-    } else if (killer.kills >= this.winScore) this.finish([killer], { winner: killer.id }, this.hub.name(killer));
+    } else if (this.mode !== 'hardpoint' && killer.kills >= this.winScore) this.finish([killer], { winner: killer.id }, this.hub.name(killer));
   }
 
   startGame() {
     if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid()) return;
-    if (this.mode === 'teams' && ![1, 2].every(t => this.list.some(p => p.team === t)))
+    if (['teams', 'hardpoint'].includes(this.mode) && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
     const map = this.voteWinner();
     if (map !== this.level) this.setLevel(map);
+    if (this.mode === 'hardpoint' && !this.hardpointSites.length) return;
+    const now = Date.now();
+    if (this.mode === 'hardpoint') {
+      this.hardpointStartedAt = now;
+      this.hardpointEndsAt = now + HARDPOINT_MATCH_MS;
+      this.hardpointLastScoreAt = now;
+      this.hardpointScores = { 1: 0, 2: 0 };
+      this.hardpointScoreMs = { 1: 0, 2: 0 };
+      this.hardpointOwner = 0;
+      this.hardpointContested = false;
+      this.hardpointOvertime = false;
+      this.hardpointOvertimeScores = null;
+    }
     if (this.mode === 'plague') {
       this.list.forEach(p => p.team = this.plagueSelection === 'manual' ? p.plagueStartTeam : HEALTHY_TEAM);
       if (this.plagueSelection === 'random') this.list[Math.floor(Math.random() * this.list.length)].team = PLAGUE_TEAM;
@@ -383,6 +475,48 @@ export class Room {
     return true;
   }
 
+  updateHardpoint(now) {
+    if (!this.gameOn || this.mode !== 'hardpoint') return false;
+    const state = this.hardpointSnapshot(now), present = { 1: false, 2: false };
+    if (state.active) for (const p of this.list) {
+      if (p.team !== 1 && p.team !== 2) continue;
+      const floor = walkHeight(this.T, p.x, p.y, p.z);
+      if (p.z - floor > 0.55 || Math.hypot(p.x - state.active.x, p.y - state.active.y) > state.active.radius) continue;
+      present[p.team] = true;
+    }
+    this.hardpointContested = present[1] && present[2];
+    this.hardpointOwner = this.hardpointContested ? 0 : present[1] ? 1 : present[2] ? 2 : 0;
+
+    const elapsed = Math.min(200, Math.max(0, now - this.hardpointLastScoreAt));
+    this.hardpointLastScoreAt = now;
+    if (state.active && this.hardpointOwner && !this.hardpointContested) {
+      const team = this.hardpointOwner;
+      this.hardpointScoreMs[team] += elapsed;
+      const earned = Math.floor(this.hardpointScoreMs[team] / 1000);
+      if (earned) {
+        this.hardpointScores[team] += earned;
+        this.hardpointScoreMs[team] -= earned * 1000;
+      }
+    }
+
+    let winner = this.hardpointScores[1] >= HARDPOINT_SCORE_LIMIT ? 1
+      : this.hardpointScores[2] >= HARDPOINT_SCORE_LIMIT ? 2 : 0;
+    if (!winner && now >= this.hardpointEndsAt && !this.hardpointOvertime) {
+      if (this.hardpointScores[1] === this.hardpointScores[2]) {
+        this.hardpointOvertime = true;
+        this.hardpointOvertimeScores = { ...this.hardpointScores };
+      } else winner = this.hardpointScores[1] > this.hardpointScores[2] ? 1 : 2;
+    } else if (!winner && this.hardpointOvertime && this.hardpointOvertimeScores
+      && (this.hardpointScores[1] !== this.hardpointOvertimeScores[1] || this.hardpointScores[2] !== this.hardpointOvertimeScores[2])) {
+      winner = this.hardpointScores[1] > this.hardpointOvertimeScores[1] ? 1 : 2;
+    }
+    if (!winner) return false;
+    this.finish(this.list.filter(p => p.team === winner), {
+      team: winner, mode: 'hardpoint', hardpointScores: { ...this.hardpointScores },
+    }, TEAMS[winner] + ' team');
+    return true;
+  }
+
   // final scoreboard for the post-match summary screen
   scoreboard() {
     return this.list
@@ -405,7 +539,8 @@ export class Room {
     this.gameOn = false;
     this.plagueEndsAt = 0;
     this.list.forEach(p => p.ready = !!p.bot);
-    this.broadcast({ type: 'end', reason, mode: this.mode, level: this.level, scores: this.scoreboard() });
+    this.broadcast({ type: 'end', reason, mode: this.mode, level: this.level, scores: this.scoreboard(),
+      ...(this.mode === 'hardpoint' ? { hardpointScores: { ...this.hardpointScores } } : {}) });
     log(`[${this.code}] Match ended: ${reason}`);
   }
 
@@ -415,6 +550,7 @@ export class Room {
     for (const p of this.list) if (p.bot) botTick(this, p);
     if (this.gameOn) {
       const now = Date.now(), dt = TICK / 1000;
+      if (this.updateHardpoint(now)) return;
       this.stepNades(dt, now);
       for (const p of this.list) {
         if (kindAt(this.T, p.x, p.y) === 2 && p.z < -0.15) {
@@ -433,7 +569,8 @@ export class Room {
     }
     if (this.list.length < 2) return;
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
-    this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs, nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
+    this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs,
+      hardpoint: this.hardpointSnapshot(), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
   }
 
   stepNades(dt, now) {
@@ -547,7 +684,7 @@ Room.prototype.handlers = {
     if (this.gameOn || !Object.hasOwn(MODE_NAMES, msg.mode) || msg.mode === this.mode) return;
     this.mode = msg.mode;
     this.plagueEndsAt = 0;
-    this.list.forEach((pl, i) => { pl.team = this.mode === 'plague' ? HEALTHY_TEAM : this.mode === 'teams' ? i % 2 + 1 : 0; pl.ready = !!pl.bot; });
+    this.list.forEach((pl, i) => { pl.team = this.mode === 'plague' ? HEALTHY_TEAM : ['teams', 'hardpoint'].includes(this.mode) ? i % 2 + 1 : 0; pl.ready = !!pl.bot; });
     log(`[${this.code}] ${this.hub.who(p)} switched to ${MODE_NAMES[this.mode]}`);
     this.roster();
   },
@@ -568,7 +705,7 @@ Room.prototype.handlers = {
   },
 
   team(p, msg) {
-    if (this.gameOn || this.mode !== 'teams' || !TEAMS[msg.team]) return;
+    if (this.gameOn || !['teams', 'hardpoint'].includes(this.mode) || ![1, 2].includes(msg.team)) return;
     p.team = msg.team;
     this.roster();
   },

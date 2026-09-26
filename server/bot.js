@@ -57,6 +57,147 @@ function clearPath(T, a, b) {
   return true;
 }
 
+const HARDPOINT_UNREACHABLE = 0xffff;
+const HARDPOINT_STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const hardpointFields = new WeakMap();
+
+function routePositionOpen(T, x, y) {
+  return kindAt(T, x, y) === 0
+    && kindAt(T, x + 0.22, y) === 0 && kindAt(T, x - 0.22, y) === 0
+    && kindAt(T, x, y + 0.22) === 0 && kindAt(T, x, y - 0.22) === 0
+    && kindAt(T, x + 0.155, y + 0.155) === 0 && kindAt(T, x + 0.155, y - 0.155) === 0
+    && kindAt(T, x - 0.155, y + 0.155) === 0 && kindAt(T, x - 0.155, y - 0.155) === 0;
+}
+
+// Like clearPath, but follows the ground height. Hardpoint routes can cross gentle slopes,
+// where testing every point at z=0 would incorrectly mark the hillside as blocked.
+function routeClearPath(T, a, b) {
+  const d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(d / 0.1));
+  const nx = -(b.y - a.y) / (d || 1) * 0.25, ny = (b.x - a.x) / (d || 1) * 0.25;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+    if (!routePositionOpen(T, x, y) || !routePositionOpen(T, x + nx, y + ny) || !routePositionOpen(T, x - nx, y - ny)) return false;
+  }
+  return true;
+}
+
+function hardpointField(T, hill) {
+  let fields = hardpointFields.get(T);
+  if (!fields) { fields = new Map(); hardpointFields.set(T, fields); }
+  const key = `${hill.index}:${hill.x}:${hill.y}`;
+  if (fields.has(key)) return fields.get(key);
+
+  const count = MW * MH, distance = new Uint16Array(count);
+  distance.fill(HARDPOINT_UNREACHABLE);
+  const queue = new Int32Array(count);
+  let goal = -1, goalScore = Infinity;
+  for (let radius = 0; radius <= 3 && goal < 0; radius++) {
+    for (let y = Math.max(0, Math.floor(hill.y) - radius); y <= Math.min(MH - 1, Math.floor(hill.y) + radius); y++) {
+      for (let x = Math.max(0, Math.floor(hill.x) - radius); x <= Math.min(MW - 1, Math.floor(hill.x) + radius); x++) {
+        const point = { x: x + 0.5, y: y + 0.5 };
+        if (!routePositionOpen(T, point.x, point.y)) continue;
+        const score = Math.hypot(point.x - hill.x, point.y - hill.y);
+        if (score < goalScore) { goal = y * MW + x; goalScore = score; }
+      }
+    }
+  }
+  let head = 0, tail = 0;
+  if (goal >= 0) {
+    distance[goal] = 0;
+    queue[tail++] = goal;
+  }
+  while (head < tail) {
+    const at = queue[head++], x = at % MW, y = Math.floor(at / MW);
+    for (const [dx, dy] of HARDPOINT_STEPS) {
+      const tx = x + dx, ty = y + dy;
+      if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) continue;
+      const next = ty * MW + tx;
+      if (distance[next] !== HARDPOINT_UNREACHABLE) continue;
+      const a = { x: x + 0.5, y: y + 0.5 }, b = { x: tx + 0.5, y: ty + 0.5 };
+      if (!routePositionOpen(T, b.x, b.y) || !routeClearPath(T, a, b)) continue;
+      distance[next] = distance[at] + 1;
+      queue[tail++] = next;
+    }
+  }
+  const field = { distance, goal, goalPoint: goal >= 0 ? { x: goal % MW + 0.5, y: Math.floor(goal / MW) + 0.5 } : null };
+  fields.set(key, field);
+  if (fields.size > 32) fields.delete(fields.keys().next().value);
+  return field;
+}
+
+function makeHardpointRoute(T, p, hill) {
+  const { distance, goal, goalPoint } = hardpointField(T, hill);
+  if (goal < 0) return [];
+  const px = Math.floor(p.x), py = Math.floor(p.y);
+  let start = -1, best = Infinity, fallbackStart = -1, fallbackBest = Infinity;
+  for (let radius = 0; radius <= 8 && start < 0; radius++) {
+    for (let y = Math.max(0, py - radius); y <= Math.min(MH - 1, py + radius); y++) {
+      for (let x = Math.max(0, px - radius); x <= Math.min(MW - 1, px + radius); x++) {
+        if (Math.max(Math.abs(x - px), Math.abs(y - py)) !== radius) continue;
+        const id = y * MW + x, point = { x: x + 0.5, y: y + 0.5 };
+        if (distance[id] === HARDPOINT_UNREACHABLE || !routePositionOpen(T, point.x, point.y)) continue;
+        const score = Math.hypot(point.x - p.x, point.y - p.y) + distance[id] * 0.025;
+        if (score < fallbackBest) { fallbackStart = id; fallbackBest = score; }
+        if (!routeClearPath(T, p, point)) continue;
+        if (score < best) { start = id; best = score; }
+      }
+    }
+    if (start >= 0) break;
+  }
+  if (start < 0) start = fallbackStart;
+  if (start < 0) return [];
+
+  const nodes = [start];
+  let at = start;
+  while (at !== goal && nodes.length < MW * MH) {
+    const x = at % MW, y = Math.floor(at / MW), nextOptions = [];
+    for (const [dx, dy] of HARDPOINT_STEPS) {
+      const tx = x + dx, ty = y + dy;
+      if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) continue;
+      const next = ty * MW + tx;
+      if (distance[next] !== distance[at] - 1) continue;
+      if (routeClearPath(T, { x: x + 0.5, y: y + 0.5 }, { x: tx + 0.5, y: ty + 0.5 })) nextOptions.push(next);
+    }
+    if (!nextOptions.length) break;
+    at = nextOptions[Math.floor(Math.random() * nextOptions.length)];
+    nodes.push(at);
+  }
+
+  // Skip intermediate tile centers when a straight, body-width route remains clear.
+  const route = [];
+  let from = { x: p.x, y: p.y }, cursor = 0;
+  while (cursor < nodes.length) {
+    let furthest = cursor;
+    for (let i = cursor; i < Math.min(nodes.length, cursor + 12); i++) {
+      const point = { x: nodes[i] % MW + 0.5, y: Math.floor(nodes[i] / MW) + 0.5 };
+      if (routeClearPath(T, from, point)) furthest = i;
+    }
+    const id = nodes[furthest];
+    from = { x: id % MW + 0.5, y: Math.floor(id / MW) + 0.5 };
+    route.push(from);
+    cursor = furthest + 1;
+  }
+  return route.length ? route : goalPoint ? [goalPoint] : [];
+}
+
+function hardpointWaypoint(T, p, hill, brain, slot = 'hardpoint', forceReplan = false) {
+  const key = `${hill.index}:${hill.x}:${hill.y}`;
+  const keyField = `${slot}RouteKey`, routeField = `${slot}Route`, indexField = `${slot}RouteIndex`;
+  if (brain[keyField] !== key || forceReplan || brain.stuck > 10 || !brain[routeField]) {
+    brain[keyField] = key;
+    brain[routeField] = makeHardpointRoute(T, p, hill);
+    brain[indexField] = 0;
+    brain.stuck = 0;
+  }
+  if (slot === 'combat' && !brain[routeField].length) return null;
+  while (brain[indexField] < brain[routeField].length) {
+    const waypoint = brain[routeField][brain[indexField]];
+    if (Math.hypot(waypoint.x - p.x, waypoint.y - p.y) >= 0.45) return waypoint;
+    brain[indexField]++;
+  }
+  return brain[routeField].at(-1) || { x: hill.x, y: hill.y };
+}
+
 // a bullet from the bot's eye would reach the target's chest
 function canSee(T, p, o, sight) {
   const d = Math.hypot(o.x - p.x, o.y - p.y);
@@ -143,8 +284,25 @@ function pickGoal(game, p) {
 export function botTick(game, p) {
   const T = game.T, b = p.brain, dt = TICK / 1000, now = Date.now(), L = BOT_LEVELS[p.level] || BOT_LEVELS.medium;
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
-  const foe = game.enemies(p).filter(o => canSee(T, p, o, L.sight)).sort((x, y) => dist(x) - dist(y))[0];
+  const hill = game.mode === 'hardpoint' ? game.hardpointTarget(now) : null;
+  const visibleEnemies = game.enemies(p).filter(o => canSee(T, p, o, L.sight));
+  const foe = visibleEnemies.sort((x, y) => {
+    const xThreat = hill && Math.hypot(x.x - hill.x, x.y - hill.y) <= hill.radius + 5 ? 0 : 1;
+    const yThreat = hill && Math.hypot(y.x - hill.x, y.y - hill.y) <= hill.radius + 5 ? 0 : 1;
+    return xThreat - yThreat || dist(x) - dist(y);
+  })[0];
   const infected = game.isInfected(p);
+  if (foe) b.lastSeen = { id: foe.id, x: foe.x, y: foe.y, at: now };
+  const hillDistance = hill ? Math.hypot(hill.x - p.x, hill.y - p.y) : Infinity;
+  const forceRouteReplan = b.stuck > 10;
+  const hardpointGoal = hill && hillDistance > hill.radius * 0.65
+    ? hardpointWaypoint(T, p, hill, b, 'hardpoint', forceRouteReplan) : null;
+  const hardpointHold = !!hill && !hardpointGoal;
+  const hillAnchor = hill && game.list
+    .filter(o => o.team === p.team && Math.hypot(o.x - hill.x, o.y - hill.y) <= hill.radius
+      && o.z - walkHeight(T, o.x, o.y, o.z) <= 0.55)
+    .sort((a, c) => (a.bot ? 1 : 0) - (c.bot ? 1 : 0) || a.id - c.id)[0];
+  const leadBot = hill && game.list.filter(o => o.bot && o.team === p.team).sort((a, c) => a.id - c.id)[0];
   const selectedGun = botGun(p, b, foe ? dist(foe) : 10);
   p.vx = p.vx || 0; p.vy = p.vy || 0;
 
@@ -154,7 +312,6 @@ export function botTick(game, p) {
   b.combatSprint = false;
   if (foe && !infected && !p.knife && !p.nadeBot && selectedGun) {
     const d = dist(foe), [min, max] = GUN_RANGES[selectedGun] || GUN_RANGES.pistol;
-    b.lastSeen = { id: foe.id, x: foe.x, y: foe.y, at: now };
     if (b.coverGoal && (selectedGun !== 'sniper' || b.coverTarget !== foe.id)) b.coverGoal = null;
     if (selectedGun === 'sniper' && (!b.coverGoal || now >= b.coverUntil || b.coverTarget !== foe.id) && now >= (b.coverSearchAt || 0)) {
       b.coverSearchAt = now + 5000;
@@ -190,7 +347,37 @@ export function botTick(game, p) {
   const gunPickup = needsGun && game.pickups
     .filter(pu => pu.active && pu.gun && pu.crate && p.mag[pu.weapon] === undefined && clearPath(T, p, pu))
     .sort((a, c) => dist(a) - dist(c))[0];
-  if (chasing) {
+  const rememberedThreat = !foe && hill && b.lastSeen && now - b.lastSeen.at <= 1800
+    && Math.hypot(b.lastSeen.x - hill.x, b.lastSeen.y - hill.y) <= hill.radius + 5 ? b.lastSeen : null;
+  const combatTarget = foe || rememberedThreat;
+  const foeNearHill = hill && combatTarget && Math.hypot(combatTarget.x - hill.x, combatTarget.y - hill.y) <= hill.radius + 5;
+  const shouldFightForHill = hillAnchor ? hillAnchor !== p : leadBot === p;
+  const combatDestination = combatTarget && (tacticalGoal || (
+    selectedGun && !p.knife && !p.nadeBot
+      ? engagementPoint(p, combatTarget, selectedGun, b.combatSide || 1)
+      : { x: combatTarget.x, y: combatTarget.y }
+  ));
+  const combatRouteTarget = combatDestination && {
+    index: `combat-${combatTarget.id}`,
+    x: Math.floor(combatDestination.x) + 0.5,
+    y: Math.floor(combatDestination.y) + 0.5,
+  };
+  const hardpointCombatGoal = foeNearHill && hillDistance <= hill.radius + 6 && shouldFightForHill && combatRouteTarget
+    ? hardpointWaypoint(T, p, combatRouteTarget, b, 'combat', forceRouteReplan)
+    : null;
+  if (hardpointCombatGoal) {
+    b.goal = hardpointCombatGoal;
+    b.pickupGoal = false;
+    b.combatGoal = true;
+  } else if (hardpointGoal) {
+    b.goal = hardpointGoal;
+    b.pickupGoal = false;
+    b.combatGoal = false;
+  } else if (hardpointHold) {
+    b.goal = null;
+    b.pickupGoal = false;
+    b.combatGoal = false;
+  } else if (chasing) {
     b.goal = { x: foe.x, y: foe.y };
     b.pickupGoal = false;
     b.combatGoal = false;
@@ -206,12 +393,13 @@ export function botTick(game, p) {
   if (infected && chasing && b.target === foe.id && b.seenAt && now - b.seenAt >= L.reaction && dist(foe) > 3 && dist(foe) < 6)
     game.dash(p, foe.x - p.x, foe.y - p.y, now);
   // move toward the current goal, picking a new one on arrival or when blocked
-  if (!chasing && !tacticalGoal && !gunPickup && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10 || b.pickupGoal || b.combatGoal)) {
+  if (!hardpointGoal && !hardpointHold && !chasing && !tacticalGoal && !gunPickup && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10 || b.pickupGoal || b.combatGoal)) {
     b.goal = pickGoal(game, p); b.stuck = 0; b.pickupGoal = false; b.combatGoal = false;
   }
 
   let heading = p.a;
-  const stopClose = holdInCover || (chasing && foe && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : p.nadeBot ? 4 : 0.8));
+  const stopClose = hardpointHold && !hardpointCombatGoal
+    || (!hardpointGoal && !hardpointHold && (holdInCover || chasing && foe && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : p.nadeBot ? 4 : 0.8)));
   let wx = 0, wy = 0;
   if (b.goal && !stopClose) {
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
@@ -228,7 +416,7 @@ export function botTick(game, p) {
     wx /= wl; wy /= wl;
   }
 
-  const sprinting = chasing || p.knife || p.nadeBot || infected || b.pickupGoal || b.combatSprint;
+  const sprinting = !!hardpointGoal || chasing || p.knife || p.nadeBot || infected || b.pickupGoal || b.combatSprint;
   let wishSpeed = sprinting ? L.sprint : L.speed;
   if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
   else if (p.knife && chasing) wishSpeed = L.sprint * 1.12;
@@ -278,6 +466,26 @@ export function botTick(game, p) {
     if (p.z <= floor) { p.z = floor; p.vz = 0; p.onGround = true; }
   } else {
     p.z = walkHeight(T, p.x, p.y, p.z);
+  }
+
+  // Sliding against a tree can produce tiny steps without increasing `stuck`; watch whether
+  // the current waypoint is actually getting closer and force a fresh route if it isn't.
+  if (b.goal && (wx || wy)) {
+    const goalKey = `${Math.round(b.goal.x * 2)}:${Math.round(b.goal.y * 2)}`;
+    const remaining = Math.hypot(b.goal.x - p.x, b.goal.y - p.y);
+    if (b.progressGoalKey !== goalKey) {
+      b.progressGoalKey = goalKey;
+      b.progressAt = now;
+      b.progressRemaining = remaining;
+    } else if (now - (b.progressAt || 0) >= 800) {
+      if (b.progressRemaining - remaining < 0.35) b.stuck = Math.max(11, b.stuck);
+      b.progressAt = now;
+      b.progressRemaining = remaining;
+    }
+  } else {
+    b.progressGoalKey = null;
+    b.progressAt = now;
+    b.progressRemaining = 0;
   }
 
   // turn toward the target and shoot once it has had time to react

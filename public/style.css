@@ -13,6 +13,13 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 #plagueStatus.infected #plagueRole { color:#9e5; }
 #plagueClock { color:#fff; font-weight:bold; margin-left:8px; }
 #plagueObjective { margin-top:4px; }
+#hardpointStatus { text-align:center; color:#eee; font-size:12px; line-height:1.45; text-shadow:0 1px 4px #000; white-space:nowrap; }
+#hardpointRole { color:#ffe7a3; font-size:14px; letter-spacing:.08em; }
+#hardpointClock { color:#fff; font-weight:bold; font-variant-numeric:tabular-nums; }
+#hardpointObjective { color:#ddd; }
+#hardpointStatus.contested #hardpointRole { color:#ffc45d; }
+#hardpointStatus.friendly #hardpointRole { color:#5aaaff; }
+#hardpointStatus.enemy #hardpointRole { color:#ff4637; }
 .plague.ingame #feed { margin-top:92px; }
 .plague .team1, .plague #scores .team1 { color:#9e5; }
 #modeHelp, #plagueSetupHelp { color:var(--muted); font-size:12px; line-height:1.5; }

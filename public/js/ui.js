@@ -68,7 +68,7 @@ export function showMsg(text, persist) {
 }
 
 // post-match scoreboard; Continue (or auto) returns to the lobby rematch prompt
-export function showSummary({ headline, rematch, scores, mode, level, won }) {
+export function showSummary({ headline, rematch, scores, mode, level, won, hardpointScores }) {
   clearTimeout(summaryTimer);
   summaryNext = rematch || '';
   $('msg').style.opacity = 0;
@@ -80,7 +80,9 @@ export function showSummary({ headline, rematch, scores, mode, level, won }) {
 
   const map = LEVEL_NAMES[level] || level || '';
   const modeLabel = MODE_NAMES[mode] || mode || '';
-  $('summarySub').textContent = [modeLabel, map].filter(Boolean).join(' · ');
+  const objectiveScore = mode === 'hardpoint' && hardpointScores
+    ? `${teamName('hardpoint', 1)} ${hardpointScores[1] || 0} — ${teamName('hardpoint', 2)} ${hardpointScores[2] || 0}` : '';
+  $('summarySub').textContent = [modeLabel, map, objectiveScore].filter(Boolean).join(' · ');
 
   const teams = isTeamMode(mode);
   const tbody = $('summaryBoard').tBodies[0];
@@ -177,7 +179,8 @@ function scoreRows() {
 let lastScores = '';
 function drawScores() {
   const rows = scoreRows(), mode = S.room && S.room.mode, teams = isTeamMode(mode);
-  const key = JSON.stringify([rows, mode, S.myTeam, S.room && S.room.players.map(p => p.name)]);
+  const hardpointScores = S.hardpoint?.scores || { 1: 0, 2: 0 };
+  const key = JSON.stringify([rows, mode, S.myTeam, hardpointScores, S.room && S.room.players.map(p => p.name)]);
   if (key === lastScores) return; // only touch the DOM when something changed
   lastScores = key;
   const line = r => {
@@ -193,7 +196,9 @@ function drawScores() {
       const h = document.createElement('div');
       h.className = 'teamHead team' + t;
       const members = rows.filter(r => r.team === t);
-      h.textContent = mode === 'plague' ? `${teamName(mode, t)} (${members.length})` : `${teamName(mode, t)} ${members.reduce((n, r) => n + r.kills, 0)}`;
+      h.textContent = mode === 'plague' ? `${teamName(mode, t)} (${members.length})`
+        : mode === 'hardpoint' ? `${teamName(mode, t)} ${hardpointScores[t] || 0}`
+        : `${teamName(mode, t)} ${members.reduce((n, r) => n + r.kills, 0)}`;
       out.push(h, ...rows.filter(r => r.team === t).map(line));
     }
   } else out.push(...rows.map(line));
@@ -216,6 +221,30 @@ export function updateHud() {
     $('plagueRole').textContent = infected ? 'YOU ARE PLAGUE' : 'YOU ARE HEALTHY';
     $('plagueClock').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
     $('plagueObjective').textContent = `${healthy} healthy remaining · ${infected ? 'Infect everyone' : 'Survive until time runs out'}`;
+  }
+  const hardpoint = S.started && S.room?.mode === 'hardpoint' && S.hardpoint;
+  const hardpointEl = $('hardpointStatus');
+  hardpointEl.hidden = !hardpoint;
+  hardpointEl.classList.toggle('contested', !!hardpoint?.contested);
+  hardpointEl.classList.toggle('friendly', !!hardpoint?.owner && !hardpoint.contested && hardpoint.owner === S.myTeam);
+  hardpointEl.classList.toggle('enemy', !!hardpoint?.owner && !hardpoint.contested && hardpoint.owner !== S.myTeam);
+  if (hardpoint) {
+    const clock = ms => {
+      const seconds = Math.max(0, Math.ceil(ms / 1000));
+      return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    };
+    if (hardpoint.active) {
+      $('hardpointRole').textContent = `HARDPOINT ${hardpoint.index + 1} / ${hardpoint.count}`;
+      $('hardpointObjective').textContent = hardpoint.contested ? 'CONTESTED · SCORING PAUSED'
+        : hardpoint.owner ? `${teamName('hardpoint', hardpoint.owner)} CONTROLS THE HILL` : 'HILL UNCLAIMED';
+      $('hardpointClock').textContent = hardpoint.overtime
+        ? `OVERTIME · HILL ROTATES IN ${clock(hardpoint.hillRemainingMs)}`
+        : `MATCH ${clock(hardpoint.matchRemainingMs)} · HILL ${clock(hardpoint.hillRemainingMs)}`;
+    } else {
+      $('hardpointRole').textContent = 'HARDPOINT INCOMING';
+      $('hardpointObjective').textContent = `POINT ${hardpoint.next.index + 1} / ${hardpoint.count} · GET IN POSITION`;
+      $('hardpointClock').textContent = `MATCH ${clock(hardpoint.matchRemainingMs)} · OPENS IN ${clock(hardpoint.activatesInMs)}`;
+    }
   }
   drawScores();
   $('feed').hidden = !settings.showFeed;
