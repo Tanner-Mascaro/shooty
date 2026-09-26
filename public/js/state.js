@@ -4,7 +4,7 @@ import { isTeamMode } from '/shared/config.js';
 
 export const S = {
   // connection / match
-  myId: null, started: false, myKills: 0, myTeam: 0,
+  myId: null, started: false, myKills: 0, myTeam: 0, hacks: false,
   plagueEndsAt: 0, // estimated local deadline from the server's remaining time
   // the room from the server: { code, private, mode, level, gameOn, bots, max, players: [{ id, name, team, ready, bot }] }
   room: null,

@@ -1,7 +1,7 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
@@ -48,7 +48,20 @@ export class Room {
   get full() { return this.humans.length >= MAX_PLAYERS; } // bots give up their seats
   get hasBots() { return this.list.some(p => p.bot); }
   isInfected(p) { return this.mode === 'plague' && p.team === PLAGUE_TEAM; }
-  maxHp(p) { return this.isInfected(p) ? PLAGUE_MAX_HP : MAX_HP; }
+  maxHp(p) { return p.hacks ? HACK_HP : this.isInfected(p) ? PLAGUE_MAX_HP : MAX_HP; }
+
+  // cheater loadout: strong guns, full mags, max nades
+  giveHackLoadout(p) {
+    if (!p.hacks || this.isInfected(p)) return;
+    if (this.mode === 'snipers') {
+      p.mag = { sniper: WEAPONS.sniper.mag, beam: WEAPONS.beam.mag };
+      p.inv = { sniper: MAX_SPARE('sniper'), beam: MAX_SPARE('beam') };
+    } else {
+      p.mag = { rifle: WEAPONS.rifle.mag, shotgun: WEAPONS.shotgun.mag };
+      p.inv = { rifle: MAX_SPARE('rifle'), shotgun: MAX_SPARE('shotgun') };
+    }
+    p.nades = this.mode === 'snipers' ? 0 : NADE.maxCarry;
+  }
   dash(p, dx, dy, now = Date.now()) {
     return this.gameOn && this.isInfected(p) && tryDash(p, dx, dy, now);
   }
@@ -209,7 +222,9 @@ export class Room {
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
     p.hp = this.maxHp(p);
+    p.nades = 0;
     if (this.isInfected(p)) { p.mag = {}; p.inv = {}; }
+    else if (p.hacks) this.giveHackLoadout(p);
     else if (this.mode === 'snipers') {
       // both long guns from the start; pads only restock sniper / crossbow
       p.mag = { sniper: WEAPONS.sniper.mag, crossbow: WEAPONS.crossbow.mag };
@@ -219,7 +234,6 @@ export class Room {
       p.mag = { [gun]: WEAPONS[gun].mag };
       p.inv = { [gun]: AMMO[gun] };
     }
-    p.nades = 0;
     p.lastShot = {};
     p.sc = false; p.sl = false;
     p.vz = 0; p.vx = 0; p.vy = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
@@ -404,6 +418,7 @@ export class Room {
       this.stepNades(dt, now);
       for (const p of this.list) {
         if (kindAt(this.T, p.x, p.y) === 2 && p.z < -0.15) {
+          if (p.hacks) continue; // god mode: lava is a hot tub
           p.hp -= PIT_DPS * TICK / 1000;
           if (p.hp <= 0) { this.killPlayer(p, null, { weapon: 'pit' }); continue; }
         }
@@ -453,8 +468,11 @@ export class Room {
       if (d > NADE.radius) continue;
       const dmg = Math.round(NADE.dmg * (1 - d / NADE.radius));
       if (dmg <= 0) continue;
-      o.hp -= dmg;
-      this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z });
+      let hit = dmg;
+      if (killer && killer.hacks) hit = Math.round(hit * HACK_DMG);
+      if (o.hacks) hit = 0;
+      o.hp -= hit;
+      this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg: hit, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z });
       if (o.hp <= 0) {
         this.killPlayer(o, killer && killer !== o ? killer : null, { weapon: 'nade', head: false, dist: d, a: Math.atan2(o.y - n.y, o.x - n.x) });
         if (!this.gameOn) break;
@@ -666,7 +684,7 @@ Room.prototype.handlers = {
 
   nade(p) {
     if (!this.gameOn || this.mode === 'snipers' || this.isInfected(p) || !(p.nades > 0)) return;
-    p.nades--;
+    if (!p.hacks) p.nades--;
     this.syncAmmo(p);
     const cos = Math.cos(p.a), sin = Math.sin(p.a), cp = Math.cos(p.p), sp = Math.sin(p.p);
     const eye = p.z + EYE - (p.sl ? 0.25 : 0);
@@ -701,7 +719,8 @@ Room.prototype.handlers = {
   input(p, msg) {
     if (msg.seq !== p.seq || ![msg.x, msg.y, msg.z, msg.a, msg.p].every(Number.isFinite)) return;
     // basic anti-cheat: no teleporting (bhop speed is capped client-side) and no walking into walls
-    const maxStep = this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1; // match the infected movement cap
+    let maxStep = this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1; // match the infected movement cap
+    if (p.hacks) maxStep *= HACK_SPEED;
     if (Math.hypot(msg.x - p.x, msg.y - p.y) < maxStep && !hitsWall(this.T, msg.x, msg.y, PLAYER_R)) { p.x = msg.x; p.y = msg.y; }
     const g = walkHeight(this.T, p.x, p.y, msg.z);
     p.z = Math.max(g - 0.4, Math.min(g + 2, msg.z));
@@ -721,11 +740,14 @@ Room.prototype.handlers = {
     if (!w.melee) {
       // the client counts its own rounds the same way, so no reply unless we disagree
       if (!(p.mag[msg.weapon] > 0)) { this.syncAmmo(p); return; }
-      p.mag[msg.weapon]--;
-      p.lastShot[msg.weapon] = now;
-      if (!p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
+      if (!p.hacks) {
+        p.mag[msg.weapon]--;
+        p.lastShot[msg.weapon] = now;
+        if (!p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
+      } else p.lastShot[msg.weapon] = now;
     }
-    p.nextFire[msg.weapon] = now + w.cd * (msg.weapon === 'claws' ? 1 : 0.85); // guns keep their network slack
+    const cd = w.cd * (msg.weapon === 'claws' ? 1 : 0.85) * (p.hacks ? HACK_FIRE : 1);
+    p.nextFire[msg.weapon] = now + cd;
     const targets = this.enemies(p);
     const res = w.melee ? doMelee(this.T, p, targets, msg.weapon) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped);
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,
@@ -733,8 +755,11 @@ Room.prototype.handlers = {
     for (const h of res.hits) {
       const o = h.target, r = h.ray;
       if (!this.players[o.id]) continue;
-      o.hp -= h.dmg;
-      this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg: h.dmg, head: h.head, weapon: msg.weapon,
+      let dmg = h.dmg;
+      if (p.hacks) dmg = Math.round(dmg * HACK_DMG);
+      if (o.hacks) dmg = 0;
+      o.hp -= dmg;
+      this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg, head: h.head, weapon: msg.weapon,
         x: p.x + Math.cos(r.a) * r.dist, y: p.y + Math.sin(r.a) * r.dist,
         z: w.melee ? o.z + BODY_H / 2 : p.z + EYE + r.p * r.dist });
       if (o.hp <= 0) this.killPlayer(o, p, { weapon: msg.weapon, head: h.head, backstab: h.backstab, dist: r.dist, a: r.a });

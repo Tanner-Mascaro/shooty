@@ -1,7 +1,7 @@
 // Firing, melee, scoping, reloading and weapon switching. The server decides hits; this only sends
 // requests and plays the local feedback (sound, recoil, screen punch) immediately. Rounds are
 // counted here the same way the server counts them, so the ammo readout never waits on the network.
-import { WEAPONS, GUN_SLOTS, USE_RANGE } from '/shared/config.js';
+import { WEAPONS, GUN_SLOTS, USE_RANGE, HACK_FIRE } from '/shared/config.js';
 import { S, owned, spare, gunSlots } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
@@ -35,7 +35,7 @@ export function swapWeapon() {
 
 export function throwNade() {
   if (!S.started || S.clawsOnly || !(S.nades > 0) || performance.now() < S.switchUntil) return;
-  S.nades--;
+  if (!S.hacks) S.nades--;
   S.switchUntil = performance.now() + 400;
   send({ type: 'nade' });
   play('swing');
@@ -126,7 +126,7 @@ export function melee(quick) {
   const weapon = S.clawsOnly ? 'claws' : 'blade';
   const now = performance.now();
   if (now < S.nextFire[weapon]) return;
-  S.nextFire[weapon] = now + WEAPONS[weapon].cd;
+  S.nextFire[weapon] = now + WEAPONS[weapon].cd * (S.hacks ? HACK_FIRE : 1);
   S.swingT = now;
   if (!S.clawsOnly && quick && S.weapon !== 'blade') { S.quickUntil = now + 360; S.switchUntil = Math.max(S.switchUntil, now + 360); }
   S.scoped = false;
@@ -162,12 +162,14 @@ export function fire() {
   if (S.clawsOnly || w === 'blade') { melee(false); return; }
   const now = performance.now();
   if (now < S.switchUntil || now < S.nextFire[w] || S.reloading) return;
-  S.nextFire[w] = now + WEAPONS[w].cd;
+  S.nextFire[w] = now + WEAPONS[w].cd * (S.hacks ? HACK_FIRE : 1);
   if (!(S.mag[w] > 0)) { play('dry'); reload(); return; }
-  S.mag[w]--;
-  if (!S.mag[w] && !spare(w)) { // last round: the empty gun is gone
-    delete S.mag[w]; delete S.inv[w];
-    setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
+  if (!S.hacks) {
+    S.mag[w]--;
+    if (!S.mag[w] && !spare(w)) { // last round: the empty gun is gone
+      delete S.mag[w]; delete S.inv[w];
+      setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
+    }
   }
   send({ type: 'shoot', weapon: w, scoped: S.scoped });
   play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt' }[w] || w);

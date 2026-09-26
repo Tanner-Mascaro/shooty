@@ -3,7 +3,7 @@
 //
 // Rooms are joined by URL: /?room=CODE joins (or creates) that private room; /?play=1 is
 // quick play (any public room with space). Bare / is the sign-in menu — no room until they pick.
-import { MAX_PLAYERS, PLAYER_SKINS } from '../shared/config.js';
+import { MAX_PLAYERS, PLAYER_SKINS, isHackName } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
 import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
@@ -48,6 +48,23 @@ export class Hub {
   // how a player appears in-game and in the server log
   name(p) { return p.name || (p.bot ? `Player ${p.id}` : `Player ${p.id}`); }
   who(p) { return p.bot ? this.name(p) : `${p.name} (${p.ip})`; }
+
+  // display-name easter egg: "hacker" / "godmode" / etc. unlocks cheats for that connection
+  setHacks(p) {
+    const on = isHackName(p.name);
+    if (!!p.hacks === on) return;
+    p.hacks = on;
+    this.send(p, { type: 'hacks', on });
+    this.notice(p, on
+      ? 'Hacks unlocked. God mode, big damage, infinite ammo. Change your name to turn them off.'
+      : 'Hacks disabled.');
+    if (on) log(`${this.who(p)} enabled hacks`);
+    if (on && p.room && p.room.gameOn) {
+      p.hp = p.room.maxHp(p);
+      p.room.giveHackLoadout(p);
+      p.room.syncAmmo(p);
+    }
+  }
 
   tick() { for (const r of Object.values(this.rooms)) r.tick(); }
 
@@ -213,6 +230,7 @@ Hub.prototype.handlers = {
     p.tokenHash = hashToken(msg.token);
     const pid = await this.profiles.resolve(p.tokenHash);
     if (!await this.useProfile(p, pid, cleanName(msg.name) || null)) return;
+    this.setHacks(p);
     if (first) {
       log(`${before} is ${p.name}${p.username ? ' (account ' + p.username + ')' : ''} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}`);
       this.sendBoard(p);
