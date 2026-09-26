@@ -33,6 +33,17 @@ function buildColors() {
   // shapes are lit from the side the level's moon / planet is on
   const lx = Math.cos(theme.orbA) * 0.6, ly = Math.sin(theme.orbA) * 0.6, lz = 0.8;
   const h = (i, j) => T.hgt[Math.min(T.TH - 1, Math.max(0, j)) * T.TW + Math.min(T.TW - 1, Math.max(0, i))];
+  // how close a floor sample is to a wall (0 = flush, 1 = open); used for contact darkening
+  const wallProx = (i, j) => {
+    let best = 3;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+      if (!di && !dj) continue;
+      const ii = i + di, jj = j + dj;
+      if (ii < 0 || jj < 0 || ii >= T.TW || jj >= T.TH) continue;
+      if (T.kind[jj * T.TW + ii] === 1) best = Math.min(best, Math.hypot(di, dj));
+    }
+    return Math.min(1, best / 2.2);
+  };
   for (let j = 0; j < T.TH; j++) for (let i = 0; i < T.TW; i++) {
     const k = j * T.TW + i, x = (i + 0.5) / RES, y = (j + 0.5) / RES, n = hash(i, j), m = T.mat[k];
     let r, g, b;
@@ -43,6 +54,9 @@ function buildColors() {
         if (isPit(cx + dx, cy + dy)) ld = Math.min(ld, Math.max(0, Math.max(Math.abs(x - cx - dx - 0.5), Math.abs(y - cy - dy - 0.5)) - 0.5));
       const glow = Math.max(0, 1 - ld / 1.5) ** 2;
       [r, g, b] = FLOORS[theme.id](x, y, n, glow, ld, k, EM);
+      // soft shadow where floor meets walls / props
+      const ao = 0.62 + 0.38 * wallProx(i, j);
+      r *= ao; g *= ao; b *= ao;
     } else if (m === MAT.PIT) { r = 255; g = 90; b = 10; EM[k] = 2; }
     else {
       [r, g, b] = SHAPE_COLORS[m](x, y, T.hgt[k], n, theme);
@@ -60,76 +74,139 @@ function buildColors() {
 
 // obstacle surface colors by material: (world x, y, height, noise 0..1, theme) -> [r, g, b]
 const SHAPE_COLORS = {
-  [MAT.ROCK](x, y, h, n) { // volcanic rock with darker strata
-    const v = 0.75 + 0.35 * noise(x * 3, y * 3) + n * 0.1, band = Math.sin(h * 11 + noise(x, y) * 4) > 0.6 ? 0.7 : 1;
-    return [118 * v * band, 54 * v * band, 40 * v * band];
+  [MAT.ROCK](x, y, h, n, theme) {
+    if (theme.id === 'ice') { // packed ice and snow
+      const mott = 0.75 + 0.35 * noise(x * 4, y * 4) + n * 0.08;
+      const crack = Math.sin(h * 14 + noise(x, y) * 5) > 0.7 ? 0.78 : 1;
+      return [170 * mott * crack, 200 * mott * crack, 230 * mott * crack];
+    }
+    // volcanic rock: ash mottling, darker strata, hot undertone near the rim
+    const mott = 0.7 + 0.4 * noise(x * 4.2, y * 4.2) + n * 0.08;
+    const band = Math.sin(h * 11 + noise(x, y) * 4) > 0.55 ? 0.68 : 1;
+    const ash = noise(x * 9, y * 9) > 0.78 ? 1.18 : 1;
+    const hot = Math.max(0, (h - 1.2) / 1.6) * 0.15;
+    return [(118 + 40 * hot) * mott * band * ash, (54 + 10 * hot) * mott * band, 40 * mott * band];
   },
   [MAT.LAVA]() { return [255, 90, 10]; },
-  [MAT.BARK](x, y, h, n) { const v = 0.8 + 0.3 * n; return [64 * v, 46 * v, 32 * v]; },
-  [MAT.ROOTS](x, y, h, n) { const v = 0.7 + 0.5 * noise(x * 6, y * 6); return [52 * v, 50 * v, 30 * v]; },
+  [MAT.BARK](x, y, h, n) { // trunk tops: grain rings + darker pith
+    const ring = 0.85 + 0.2 * Math.sin(h * 18 + noise(x * 3, y * 3) * 6), v = (0.75 + 0.35 * n) * ring;
+    return [68 * v, 48 * v, 30 * v];
+  },
+  [MAT.ROOTS](x, y, h, n) { const v = 0.65 + 0.55 * noise(x * 7, y * 7); return [48 * v, 46 * v, 26 * v]; },
   [MAT.LEAVES](x, y, h, n) { // bushes and hedges: mottled greens with light speckles
-    const v = 0.6 + 0.6 * noise(x * 5, y * 5);
-    return n > 0.9 ? [90, 140, 60] : [34 * v, 80 * v, 30 * v];
+    const v = 0.55 + 0.7 * noise(x * 5.5, y * 5.5);
+    if (n > 0.92) return [100, 155, 70];
+    if (noise(x * 8, y * 8) > 0.82) return [22 * v, 55 * v, 20 * v]; // deep shade pockets
+    return [34 * v, 82 * v, 30 * v];
   },
-  [MAT.WALL](x, y, h, n, theme) { const v = 0.85 + n * 0.3; return theme.wallTop.map(c => c * v); },
-  [MAT.RACK](x, y) { // rack tops: dark with vent slots
+  [MAT.WALL](x, y, h, n, theme) {
+    const v = 0.8 + n * 0.25 + 0.1 * noise(x * 2, y * 2);
+    return theme.wallTop.map(c => c * v);
+  },
+  [MAT.RACK](x, y) { // rack tops: dark with vent slots and a cable channel
     const vent = (x * 10) % 1 < 0.5 && (y * 3) % 1 < 0.8;
-    return vent ? [22, 25, 30] : [44, 48, 56];
+    const cable = (y * 6) % 1 < 0.12;
+    if (cable) return [18, 20, 24];
+    return vent ? [20, 23, 28] : [46, 50, 58];
   },
-  [MAT.CRATE](x, y, h, n) { const v = 0.85 + 0.25 * n; return [118 * v, 94 * v, 46 * v]; },
+  [MAT.CRATE](x, y, h, n) {
+    const plank = ((x + y) * 3) % 1 < 0.08 ? 0.7 : 1, v = (0.82 + 0.28 * n) * plank;
+    return [124 * v, 96 * v, 48 * v];
+  },
 };
 
 // floor color per theme: (world x, y, noise 0..1, pit glow 0..1, pit distance, sample index, emissive array) -> [r, g, b]
 const FLOORS = {
   hell(x, y, n, glow, ld, k, EM) {
-    const v = 0.75 + n * 0.5;
+    // scorched basalt with ash patches and glowing cracks
+    const basalt = 0.65 + 0.45 * noise(x * 2.4, y * 2.4) + n * 0.12;
+    const ash = noise(x * 5.5 + 3, y * 5.5) > 0.72 ? 1.25 : 1;
     const c = Math.abs(Math.sin(x * 1.9 + Math.sin(y * 1.3) * 2.2) + Math.sin(y * 2.1 + Math.sin(x * 1.1) * 2.0));
-    if (c < 0.022) { EM[k] = 1; return [255, 70 + n * 50, 15]; } // glowing crack
-    return [60 * v + 130 * glow, 24 * v + 35 * glow, 20 * v];
+    if (c < 0.028) { EM[k] = 1; return [255, 75 + n * 55, 12]; } // glowing crack
+    const grit = noise(x * 11, y * 11) > 0.85 ? 0.82 : 1;
+    return [(52 * basalt * ash + 140 * glow) * grit, (20 * basalt + 40 * glow) * grit, 16 * basalt * grit];
   },
   robot(x, y, n, glow, ld, k, EM) {
-    // metal floor plates with seams, rivets, hazard stripes by the acid and floor lights
+    // metal floor plates with seams, rivets, scuffs, hazard stripes by the acid and floor lights
     const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
-    const v = (0.9 + n * 0.15) * (((cx + cy) & 1) ? 1 : 0.88);
-    let r = 52 * v, g = 58 * v, b = 66 * v;
-    if (fx < 0.07 || fy < 0.07) { r = 28; g = 31; b = 36; }
-    if ((Math.abs(fx - 0.15) < 0.04 || Math.abs(fx - 0.85) < 0.04) && (Math.abs(fy - 0.15) < 0.04 || Math.abs(fy - 0.85) < 0.04)) { r = 95; g = 100; b = 110; }
-    if (ld < 0.5) { const s = ((x + y) * 2.5) % 1 < 0.5; r = s ? 200 : 25; g = s ? 165 : 25; b = s ? 20 : 25; }
-    r += 10 * glow; g += 60 * glow; b += 40 * glow;
-    if (cx % 4 === 2 && cy % 4 === 2 && Math.hypot(fx - 0.5, fy - 0.5) < 0.12) { EM[k] = 1; return [60, 220, 255]; }
+    const v = (0.88 + n * 0.18) * (((cx + cy) & 1) ? 1 : 0.86);
+    const scuff = noise(x * 6, y * 6) > 0.8 ? 0.78 : 1;
+    let r = 48 * v * scuff, g = 54 * v * scuff, b = 62 * v * scuff;
+    if (fx < 0.06 || fy < 0.06) { r = 22; g = 25; b = 30; } // deep plate seams
+    else if (fx < 0.1 || fy < 0.1) { r = 34; g = 38; b = 44; }
+    if ((Math.abs(fx - 0.15) < 0.035 || Math.abs(fx - 0.85) < 0.035) && (Math.abs(fy - 0.15) < 0.035 || Math.abs(fy - 0.85) < 0.035)) { r = 105; g = 112; b = 122; }
+    if (ld < 0.55) { const s = ((x + y) * 2.8) % 1 < 0.5; r = s ? 210 : 22; g = s ? 170 : 22; b = s ? 18 : 22; }
+    r += 10 * glow; g += 65 * glow; b += 45 * glow;
+    if (cx % 4 === 2 && cy % 4 === 2 && Math.hypot(fx - 0.5, fy - 0.5) < 0.14) { EM[k] = 1; return [50, 230, 255]; }
     return [r, g, b];
   },
   haunt(x, y, n, glow) {
-    // Backrooms: damp mustard carpet with darker stains; the house: worn floorboards.
+    // Backrooms: damp mustard carpet with stains and threadbare patches; the house: worn floorboards with nail heads.
     // Both go dark toward a hole into the void.
     let r, g, b;
     if (inBackrooms(x, y)) {
-      const v = 0.8 + n * 0.3, stain = noise(x * 0.8, y * 0.8) > 0.68 ? 0.72 : 1;
-      r = 118 * v * stain; g = 102 * v * stain; b = 58 * v * stain;
+      const v = 0.75 + n * 0.35, stain = noise(x * 0.7, y * 0.7);
+      const damp = stain > 0.7 ? 0.68 : stain > 0.55 ? 0.85 : 1;
+      const thread = noise(x * 4, y * 4) > 0.88 ? 1.15 : 1;
+      r = 122 * v * damp * thread; g = 106 * v * damp * thread; b = 60 * v * damp;
     } else {
-      const plank = Math.floor(y * 4), seam = (y * 4) % 1 < 0.08, tone = seam ? 0.45 : 0.75 + 0.4 * hash(plank, Math.floor(x * 0.7 + plank * 0.37));
-      r = 64 * tone; g = 42 * tone; b = 26 * tone;
+      const plank = Math.floor(y * 4), seam = (y * 4) % 1 < 0.07;
+      const tone = seam ? 0.4 : 0.72 + 0.45 * hash(plank, Math.floor(x * 0.7 + plank * 0.37));
+      const wear = noise(x * 3, y * 0.8) > 0.75 ? 0.85 : 1;
+      const nail = !seam && Math.abs((x * 3.2) % 1 - 0.5) < 0.03 && Math.abs((y * 4) % 1 - 0.5) < 0.04;
+      if (nail) return [38, 32, 22];
+      r = 70 * tone * wear; g = 46 * tone * wear; b = 28 * tone * wear;
     }
     const dark = 1 - 0.8 * glow;
     return [r * dark, g * dark, b * dark];
   },
   witch(x, y, n, glow, ld, k, EM) {
-    // mossy swamp ground with dark grass tufts and glowing mushrooms
-    const v = 0.7 + n * 0.5, m = 0.5 + 0.5 * Math.sin(x * 0.9 + Math.sin(y * 0.7) * 2) * Math.sin(y * 1.1);
-    let r = (28 + 14 * m) * v, g = (46 + 26 * m) * v, b = (22 + 6 * m) * v;
-    if (n > 0.93) { r *= 0.5; g *= 0.6; b *= 0.5; }
-    r += 20 * glow; g += 90 * glow; b += 20 * glow;
+    // mossy swamp ground with dark grass tufts, mud patches and glowing mushrooms
+    const v = 0.65 + n * 0.5, m = 0.5 + 0.5 * Math.sin(x * 0.9 + Math.sin(y * 0.7) * 2) * Math.sin(y * 1.1);
+    const mud = noise(x * 1.8, y * 1.8) > 0.78;
+    let r = mud ? 42 * v : (26 + 16 * m) * v, g = mud ? 36 * v : (48 + 28 * m) * v, b = mud ? 22 * v : (20 + 8 * m) * v;
+    if (n > 0.9) { r *= 0.45; g *= 0.55; b *= 0.45; } // grass tufts
+    else if (noise(x * 9, y * 9) > 0.9) { r *= 1.15; g *= 1.25; b *= 0.9; } // leaf flecks
+    r += 18 * glow; g += 95 * glow; b += 22 * glow;
     const cx = Math.floor(x), cy = Math.floor(y);
-    if ((cx * 7 + cy * 13) % 11 === 0 && Math.hypot(x - cx - 0.3, y - cy - 0.6) < 0.08) { EM[k] = 1; return [190, 90, 255]; }
+    if ((cx * 7 + cy * 13) % 11 === 0 && Math.hypot(x - cx - 0.3, y - cy - 0.6) < 0.09) { EM[k] = 1; return [200, 95, 255]; }
+    return [r, g, b];
+  },
+  ice(x, y, n, glow, ld, k, EM) {
+    // packed snow with wind-scoured ice patches and blue cracks near open water
+    const pack = 0.8 + 0.25 * noise(x * 2.2, y * 2.2) + n * 0.1;
+    const ice = noise(x * 3.5, y * 3.5) > 0.62;
+    let r = ice ? 140 * pack : 210 * pack, g = ice ? 175 * pack : 225 * pack, b = ice ? 210 * pack : 240 * pack;
+    const crack = Math.abs(Math.sin(x * 2.4 + Math.sin(y * 1.8) * 2)) < 0.04;
+    if (crack) { EM[k] = 1; return [120, 190, 255]; }
+    r += 20 * glow; g += 50 * glow; b += 80 * glow;
+    return [r, g, b];
+  },
+  castle(x, y, n, glow) {
+    // worn flagstones with mortar seams and torch-warmed edges
+    const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
+    const tone = 0.7 + 0.35 * hash(cx, cy) + n * 0.08;
+    let r = 72 * tone, g = 64 * tone, b = 52 * tone;
+    if (fx < 0.06 || fy < 0.06) { r = 38; g = 34; b = 28; }
+    else if (noise(x * 5, y * 5) > 0.85) { r *= 0.82; g *= 0.82; b *= 0.8; } // scuffs
+    r += 40 * glow; g += 18 * glow; b += 5 * glow;
     return [r, g, b];
   },
 };
 
-// one pixel per heightmap sample
+// one pixel per heightmap sample; floors use a muted version of their real color so the
+// HUD map and lobby cards read the layout with theme detail instead of flat blocks
 function buildMini() {
-  const { T, theme } = S;
+  const { T, theme } = S, { CR, CG, CB } = colors;
   mini.width = T.TW; mini.height = T.TH;
   const mc = mini.getContext('2d'), id = mc.createImageData(T.TW, T.TH), p32 = new Uint32Array(id.data.buffer);
-  for (let k = 0; k < T.TW * T.TH; k++) { const c = theme.minimap[T.kind[k]]; p32[k] = pk(c[0], c[1], c[2]); }
+  for (let k = 0; k < T.TW * T.TH; k++) {
+    const kind = T.kind[k];
+    if (kind === 2) { const c = theme.minimap[2]; p32[k] = pk(c[0], c[1], c[2]); }
+    else if (CR) {
+      const dim = kind === 1 ? 1 : 0.65;
+      p32[k] = pk(Math.min(255, CR[k] * dim), Math.min(255, CG[k] * dim), Math.min(255, CB[k] * dim));
+    } else { const c = theme.minimap[kind]; p32[k] = pk(c[0], c[1], c[2]); }
+  }
   mc.putImageData(id, 0, 0);
 }

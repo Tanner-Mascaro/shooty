@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Shooty</title>
 <meta name="description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
-<meta name="theme-color" content="#0c0c10">
+<meta name="theme-color" content="#12100e">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -17,15 +17,16 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="corner"><button class="fsToggle ghost">⛶ Fullscreen</button><button class="gear ghost">⚙ Settings</button></div>
+<div id="corner"><button class="fsToggle ghost">Fullscreen</button><button class="gear ghost">Settings</button></div>
 <div id="wait">
   <header id="lobbyHead">
     <div id="brand">SHOOTY</div>
     <div id="waitTitle">HELL</div>
+    <p id="tagline">Pick a map. Load in. Don’t miss.</p>
   </header>
   <div id="lobby">
     <section id="play" class="card">
@@ -51,6 +52,8 @@
             <button data-level="robot"><b>ROBOT FACTORY</b><small>Acid &amp; steel</small></button>
             <button data-level="witch"><b>WITCH SWAMP</b><small>Bog &amp; fireflies</small></button>
             <button data-level="haunt"><b>HAUNTED HOUSE</b><small>Backrooms &amp; things that hunt</small></button>
+            <button data-level="ice"><b>ICE FIELDS</b><small>Snow &amp; black ice</small></button>
+            <button data-level="castle"><b>CASTLE KEEP</b><small>Stone halls &amp; torches</small></button>
           </div>
           <button id="mapNext" class="skin-arrow" type="button" aria-label="Next map">&#x203A;</button>
         </div>

@@ -39,7 +39,7 @@ server.listen(PORT, () => {
   Local:  http://localhost:${PORT}
   Remote: ngrok http ${PORT}, then share the ngrok URL.
 
-  Levels: Hell / Robot Factory / Witch Swamp
+  Levels: Hell / Robot Factory / Witch Swamp / Haunted House / Ice Fields / Castle Keep
   WASD + mouse, SPACE jump (hold = bhop), E pick up, R reload, 1-3/Q weapon, RMB scope, F melee
   Rooms of up to ${MAX_PLAYERS}. Free-for-all: first to ${WIN_SCORE} kills. Teams: first team to ${TEAM_WIN_SCORE}.
 `);

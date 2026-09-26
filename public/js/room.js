@@ -9,7 +9,7 @@ import { toast } from './ui.js';
 import { PLAYER_SKIN_NAMES, PLAYER_SPRITES } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
 import { LEVELS } from '/shared/levels.js';
-import { buildTerrain } from '/shared/terrain.js';
+import { buildTerrain, MAT, noise } from '/shared/terrain.js';
 import { THEMES } from './themes.js';
 import { muted, toggleMute, voiceOn } from './voice.js';
 
@@ -53,13 +53,30 @@ function renderSkinWheel(direction) {
 // --- map carousel: scroll or swipe through the maps, arrows step one card; clicking a card picks it ---
 const cards = () => [...document.querySelectorAll('#levels button')];
 
-// a top-down picture of each map on its card, in the level's minimap colors
+// a top-down picture of each map on its card, shaded by height and material
 function drawMapPreview(b) {
-  const name = b.dataset.level, T = buildTerrain(LEVELS[name], 3, name), c = document.createElement('canvas');
+  const name = b.dataset.level, T = buildTerrain(LEVELS[name], 3, name), th = THEMES[name];
+  const c = document.createElement('canvas');
   c.className = 'preview'; c.width = T.TW; c.height = T.TH;
-  const g = c.getContext('2d'), img = g.createImageData(T.TW, T.TH), cols = THEMES[name].minimap;
-  for (let k = 0; k < T.TW * T.TH; k++) { const col = cols[T.kind[k]]; img.data.set([col[0], col[1], col[2], 255], k * 4); }
-  g.putImageData(img, 0, 0);
+  const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
+  const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [70, 62, 50] }[name] || th.minimap[0];
+  for (let k = 0; k < T.TW * T.TH; k++) {
+    const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
+    let r, g, bl;
+    if (kind === 2) { r = pit[0]; g = pit[1]; bl = pit[2]; }
+    else if (m === MAT.LAVA) { r = 255; g = 90; bl = 20; }
+    else if (kind === 1) {
+      const shade = 0.55 + 0.45 * Math.min(1, h / 2.2), top = th.wallTop || th.wall;
+      const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [50, 55, 65] : m === MAT.CRATE ? [120, 95, 50] : top;
+      const mott = 0.85 + 0.2 * noise((k % T.TW) * 0.4, (k / T.TW | 0) * 0.4);
+      r = base[0] * shade * mott; g = base[1] * shade * mott; bl = base[2] * shade * mott;
+    } else {
+      const mott = 0.8 + 0.3 * noise((k % T.TW) * 0.5, (k / T.TW | 0) * 0.5);
+      r = floor[0] * mott; g = floor[1] * mott; bl = floor[2] * mott;
+    }
+    img.data.set([r, g, bl, 255], k * 4);
+  }
+  ctx.putImageData(img, 0, 0);
   b.prepend(c);
 }
 

@@ -11,18 +11,22 @@ import { inBackrooms } from '/shared/levels.js';
 const hash = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const LED = [[60, 255, 120], [60, 160, 255], [255, 170, 40]]; // server rack status lights
 
-// a ceiling instead of sky (haunted house): each row above the horizon looks up at the plane
+// a ceiling instead of sky (haunted house / castle): each row above the horizon looks up at the plane
 // CEILING_H high. Backrooms: stained tiles with fluorescent panels, a few of them flickering;
-// the house: dark boards between heavy beams.
+// the house: dark boards between heavy beams; the castle: vaulted stone with torch soot.
 function drawCeiling(c, ybot, dx, dy, horizon, focal, eye, t, fr, fg, fb, fogK) {
-  const { RW, pix, zbuf } = view, me = S.me;
+  const { RW, pix, zbuf } = view, me = S.me, castle = S.theme.id === 'castle';
   for (let y = 0; y < ybot; y++) {
     const idx = y * RW + c, up = horizon - y - 0.5;
     const z = up > 0 ? (CEILING_H - eye) * focal / up : MAX_DEPTH;
     if (z >= MAX_DEPTH) { pix[idx] = pk(fr, fg, fb); zbuf[idx] = 1e9; continue; }
     const wx = me.x + dx * z, wy = me.y + dy * z, cx = Math.floor(wx), cy = Math.floor(wy), fx = wx - cx, fy = wy - cy;
     let r, g, b, f = 1 - Math.exp(-z * fogK);
-    if (inBackrooms(wx, wy)) {
+    if (castle) {
+      const rib = (wx * 0.5) % 1 < 0.1 || (wy * 0.5) % 1 < 0.1;
+      const v = 0.75 + 0.3 * hash(cx, cy);
+      r = rib ? 28 : 48 * v; g = rib ? 24 : 42 * v; b = rib ? 20 : 34 * v;
+    } else if (inBackrooms(wx, wy)) {
       const h = hash(cx, cy);
       if ((cx + 2 * cy) % 3 === 0 && fx > 0.15 && fx < 0.85 && fy > 0.3 && fy < 0.7) {
         const lit = h > 0.12 || Math.sin(t * 23 + h * 90) * Math.sin(t * 7 + h * 30) > -0.1; // a few panels flicker
@@ -47,7 +51,7 @@ export function drawTerrain(now) {
   const { RW, RH, pix, zbuf, skyRow } = view;
   const { CR, CG, CB, EM } = colors;
   const me = S.me, th = S.theme, T = S.T;
-  const t = now / 1000, robot = th.id === 'robot', witch = th.id === 'witch', haunt = th.id === 'haunt';
+  const t = now / 1000, robot = th.id === 'robot', witch = th.id === 'witch', haunt = th.id === 'haunt', ice = th.id === 'ice', castle = th.id === 'castle';
 
   // sky gradient by row (depends only on elevation above the horizon)
   const lo = th.skyLo, hi = th.skyHi;
@@ -100,32 +104,42 @@ export function drawTerrain(now) {
             const tone = frame ? 0.62 : (hh * 12 | 0) & 1 ? 0.92 : 1;
             r = CR[k] * tone * sh; g = CG[k] * tone * sh; b = CB[k] * tone * sh;
           }
+          if (ff === f) { const ao = 0.55 + 0.45 * Math.min(1, hh / 0.3); r *= ao; g *= ao; b *= ao; }
           const idx = y * RW + c;
           pix[idx] = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff); zbuf[idx] = z;
         }
-      } else if (m === MAT.WALL && haunt) {
-        // Backrooms: yellow striped wallpaper with damp stains over a baseboard;
-        // the house: dark wood wainscoting, a rail, and faded damask wallpaper above
-        const sh = xFace ? 0.78 : 1, along = xFace ? wy : wx, back = inBackrooms(wx, wy);
+      } else if (m === MAT.WALL && (haunt || castle)) {
+        // Backrooms: yellow striped wallpaper; house: wood wainscoting; castle: ashlar blocks + torch band
+        const sh = xFace ? 0.78 : 1, along = xFace ? wy : wx, back = haunt && inBackrooms(wx, wy);
         for (let y = ytop; y < ybot; y++) {
           const hh = eye + (horizon - y - 0.5) * z / focal;
-          let r, g, b;
-          if (back) {
-            if (hh < 0.1) { r = 72; g = 60; b = 32; }
+          let r, g, b, ff = f;
+          if (castle) {
+            if (hh > 1.15 && hh < 1.28) { r = bc[0] * pulse; g = bc[1] * pulse; b = bc[2] * pulse; ff = f * 0.45; } // torch glow strip
             else {
-              const stripe = (along * 8) % 1 < 0.5 ? 1 : 0.92, stain = noise(along * 1.7, hh * 1.3) > 0.68 ? 0.72 : 1;
-              r = wc[0] * stripe * stain; g = wc[1] * stripe * stain; b = wc[2] * stripe * stain * 0.95;
+              const brick = ((along * 2.2) % 1 < 0.06) || ((hh * 3.5 + Math.floor(along * 2.2) * 0.5) % 1 < 0.08);
+              const v = brick ? 0.55 : 0.9 + 0.15 * noise(along * 3, hh * 2);
+              r = wc[0] * v; g = wc[1] * v; b = wc[2] * v;
             }
-          } else if (hh < 0.9) { const panel = (along * 2.5) % 1 < 0.06 || hh < 0.08 ? 0.6 : 1; r = 62 * panel; g = 40 * panel; b = 26 * panel; }
+          } else if (back) {
+            if (hh < 0.12) { r = 68; g = 56; b = 30; }
+            else {
+              const stripe = (along * 8) % 1 < 0.5 ? 1 : 0.9, stain = noise(along * 1.7, hh * 1.3);
+              const damp = stain > 0.7 ? 0.68 : stain > 0.55 ? 0.85 : 1;
+              const peel = noise(along * 3.5, hh * 2.2) > 0.88 ? 1.2 : 1;
+              r = wc[0] * stripe * damp * peel; g = wc[1] * stripe * damp * peel; b = wc[2] * stripe * damp * 0.94;
+            }
+          } else if (hh < 0.9) { const panel = (along * 2.5) % 1 < 0.06 || hh < 0.08 ? 0.55 : 0.92 + 0.12 * noise(along * 4, hh * 2); r = 62 * panel; g = 40 * panel; b = 26 * panel; }
           else if (hh < 0.98) { r = 86; g = 58; b = 34; }
-          else { const d = Math.sin(along * 13) * Math.sin(hh * 13) > 0.45 ? 1.3 : 1; r = 56 * d; g = 44 * d; b = 64 * d; }
-          const idx = y * RW + c;
-          r *= sh; g *= sh; b *= sh;
-          pix[idx] = pk(r + (fr - r) * f, g + (fg - g) * f, b + (fb - b) * f); zbuf[idx] = z;
+          else { const d = Math.sin(along * 13) * Math.sin(hh * 13) > 0.45 ? 1.35 : 0.95 + 0.1 * noise(along * 2, hh); r = 56 * d; g = 44 * d; b = 64 * d; }
+          const idx = y * RW + c, ao = 0.52 + 0.48 * Math.min(1, hh / 0.4);
+          if (ff === f) { r *= sh * ao; g *= sh * ao; b *= sh * ao; }
+          else { r *= sh; g *= sh; b *= sh; }
+          pix[idx] = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff); zbuf[idx] = z;
         }
       } else if (m === MAT.WALL) {
         // wall faces are textured by world height (hell: rune bands; robot: panels + light strip; witch: moss + runes)
-        const sh = xFace ? 0.75 : 1, seam = ((wx + wy) * (robot ? 1 : 2)) % 1 < 0.05 ? 0.6 : 1;
+        const sh = xFace ? 0.75 : 1, seam = ((wx + wy) * (robot ? 1.4 : 2)) % 1 < (robot ? 0.04 : 0.05) ? 0.55 : 1;
         for (let y = ytop; y < ybot; y++) {
           const hh = eye + (horizon - y - 0.5) * z / focal;
           let r, g, b, ff = f;
@@ -134,8 +148,45 @@ export function drawTerrain(now) {
             r = bc[0] * pulse; g = bc[1] * pulse; b = bc[2] * pulse; ff = f * 0.5;
           }
           else if (robot && (h - hh) % 0.4 < 0.03) { r = wc[0] * 0.5; g = wc[1] * 0.5; b = wc[2] * 0.5; }
-          else if (witch && hh < 0.35 + 0.15 * Math.sin((wx + wy) * 5)) { const m = sh * seam; r = 30 * m; g = 62 * m; b = 26 * m; }
-          else { const m = sh * seam; r = wc[0] * m; g = wc[1] * m; b = wc[2] * m; }
+          else if (witch && hh < 0.35 + 0.15 * Math.sin((wx + wy) * 5)) { const m = sh * seam * (0.9 + 0.2 * noise(wx * 3, hh * 4)); r = 28 * m; g = 64 * m; b = 24 * m; }
+          else {
+            const grit = robot ? (0.92 + 0.12 * noise(wx * 5, hh * 3)) : witch ? (0.9 + 0.15 * noise(wx * 2, wy * 2)) : (0.88 + 0.18 * noise(wx * 3.5, hh * 2));
+            const m = sh * seam * grit; r = wc[0] * m; g = wc[1] * m; b = wc[2] * m;
+          }
+          if (ff === f) { const ao = 0.52 + 0.48 * Math.min(1, hh / 0.4); r *= ao; g *= ao; b *= ao; } // contact shadow at the floor, not on glowing bands
+          const idx = y * RW + c;
+          pix[idx] = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff); zbuf[idx] = z;
+        }
+      } else if (m === MAT.ROCK || m === MAT.BARK || m === MAT.LEAVES || m === MAT.ROOTS) {
+        // textured vertical faces: strata / bark grain / leaf mottling instead of a flat fill
+        const sh = xFace ? 0.78 : 1, along = xFace ? wy : wx;
+        for (let y = ytop; y < ybot; y++) {
+          const hh = eye + (horizon - y - 0.5) * z / focal;
+          let r, g, b, ff = f;
+          if (hh > h - 0.03) { r = CR[k]; g = CG[k]; b = CB[k]; }
+          else if (m === MAT.ROCK) {
+            if (ice) {
+              const mott = 0.8 + 0.3 * noise(along * 4, hh * 3), crack = Math.sin(hh * 12 + along * 3) > 0.75 ? 0.7 : 1;
+              r = 160 * mott * crack * sh; g = 195 * mott * crack * sh; b = 230 * mott * crack * sh;
+            } else {
+              const mott = 0.75 + 0.35 * noise(along * 4, hh * 3), band = Math.sin(hh * 10 + along * 2) > 0.55 ? 0.7 : 1;
+              const hot = EM[k] === 3 || (hh > h * 0.55 && noise(along * 2, hh) > 0.9);
+              if (hot) { r = 220; g = 70 + 60 * Math.sin(t * 2 + along); b = 15; ff = f * 0.35; }
+              else { r = 110 * mott * band * sh; g = 50 * mott * band * sh; b = 36 * mott * band * sh; }
+            }
+          } else if (m === MAT.BARK) {
+            const grain = 0.7 + 0.35 * Math.sin(hh * 22) * Math.sin(along * 14), crack = ((along * 5) % 1 < 0.06) ? 0.55 : 1;
+            r = 62 * grain * crack * sh; g = 44 * grain * crack * sh; b = 28 * grain * crack * sh;
+          } else if (m === MAT.ROOTS) {
+            const v = (0.7 + 0.4 * noise(along * 6, hh * 4)) * sh;
+            r = 48 * v; g = 46 * v; b = 26 * v;
+          } else {
+            const mott = 0.55 + 0.7 * noise(along * 5, hh * 4), fleck = noise(along * 9, hh * 7) > 0.85;
+            if (fleck) { r = 95 * sh; g = 150 * sh; b = 65 * sh; }
+            else { r = 32 * mott * sh; g = 78 * mott * sh; b = 28 * mott * sh; }
+          }
+          const ao = 0.55 + 0.45 * Math.min(1, hh / 0.35);
+          r *= ao; g *= ao; b *= ao;
           const idx = y * RW + c;
           pix[idx] = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff); zbuf[idx] = z;
         }
@@ -144,8 +195,9 @@ export function drawTerrain(now) {
         if (kind === 2) { // animated pit surface
           const v = 0.5 + 0.5 * Math.sin(wx * 3.1 + t * 1.7) * Math.sin(wy * 2.7 - t * 1.3);
           if (robot) { r = 20 + v * 60; g = 200 + v * 55; b = 120 + v * 80; }
-          else if (haunt) { r = 18 + v * 30; g = 4 + v * 6; b = 34 + v * 50; } // a hole into the void
+          else if (haunt || castle) { r = 18 + v * 30; g = 4 + v * 6; b = 34 + v * 50; }
           else if (witch) { const bub = Math.sin(wx * 11 + t * 3) * Math.sin(wy * 9 - t * 2) > 0.9; r = bub ? 200 : 50 + v * 50; g = bub ? 255 : 150 + v * 90; b = bub ? 140 : 30 + v * 30; }
+          else if (ice) { r = 40 + v * 50; g = 110 + v * 80; b = 180 + v * 70; } // black ice / freezing water
           else { r = 255; g = 60 + v * 130; b = 10 + v * 40; }
           ff = f * 0.4;
         } else if (EM[k] === 3) { // lava in a volcano crater / running down its side
