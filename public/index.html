@@ -12,6 +12,17 @@
   <div id="profile">
     <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
     <div id="stats"></div>
+    <div id="account">
+      <span id="signedOut"><button id="showAuth" class="link">Sign in / create account</button> to keep your stats on any device</span>
+      <span id="signedIn" hidden>Signed in as <b id="acctName"></b> · <button id="logoutBtn" class="link">Sign out</button></span>
+      <form id="authForm" hidden>
+        <input id="authUser" placeholder="Username" maxlength="16" autocomplete="username" spellcheck="false">
+        <input id="authPass" type="password" placeholder="Password" maxlength="72" autocomplete="current-password">
+        <button type="submit">Sign in</button>
+        <button type="button" id="registerBtn">Create account</button>
+        <div id="authErr"></div>
+      </form>
+    </div>
   </div>
   <div id="levels">
     <button data-level="hell">HELL</button>
@@ -20,6 +31,11 @@
   </div>
   <div id="waitMsg">Connecting...</div>
   <button id="readyBtn" disabled>I'm Here</button>
+  <table id="board" hidden>
+    <caption>LEADERBOARD</caption>
+    <thead><tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Kills</th><th>K/D</th></tr></thead>
+    <tbody></tbody>
+  </table>
 </div>
 <div id="hud">
   <div class="ph"><span style="color:#fa4;font-weight:bold">YOU</span> <span id="sk">0</span>

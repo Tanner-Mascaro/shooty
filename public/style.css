@@ -1,5 +1,6 @@
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 * { margin:0; padding:0; box-sizing:border-box; }
+[hidden] { display:none !important; }
 body { background:#000; overflow:hidden; height:100vh; font-family:'Courier New',monospace; }
 canvas { display:block; position:absolute; top:0; left:0; }
 
@@ -11,7 +12,7 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #controls { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); color:#666; font-size:11px; z-index:10; pointer-events:none; white-space:nowrap; }
 
 /* lobby */
-#wait { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#bbb; font-size:20px; z-index:100; gap:16px; }
+#wait { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; overflow-y:auto; padding:16px; color:#bbb; font-size:20px; z-index:100; gap:16px; }
 #waitTitle { font-size:40px; font-weight:bold; letter-spacing:6px; }
 #levels { display:flex; gap:12px; }
 #levels button, #readyBtn { font-family:'Courier New',monospace; font-size:16px; padding:10px 20px; border:2px solid #555; border-radius:4px; cursor:pointer; font-weight:bold; background:#111; color:#aaa; }
@@ -23,5 +24,17 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #nameInput { font-family:'Courier New',monospace; font-size:18px; font-weight:bold; text-align:center; width:240px; padding:8px; background:#111; color:#fff; border:2px solid #555; border-radius:4px; }
 #nameInput:focus { outline:none; border-color:#aaa; }
 #stats { font-size:14px; color:#888; min-height:1em; }
+#account { font-size:13px; color:#777; text-align:center; }
+#account .link { font:inherit; color:#bbb; background:none; border:none; text-decoration:underline; cursor:pointer; }
+#authForm { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+#authForm input { font-family:'Courier New',monospace; font-size:14px; width:150px; padding:6px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; }
+#authForm button { font-family:'Courier New',monospace; font-size:13px; font-weight:bold; padding:6px 12px; background:#222; color:#ccc; border:1px solid #666; border-radius:4px; cursor:pointer; }
+#authErr { width:100%; color:#f66; min-height:1em; }
+#board { border-collapse:collapse; font-size:14px; color:#aaa; background:rgba(0,0,0,0.5); }
+#board caption { font-weight:bold; letter-spacing:3px; color:#ccc; padding-bottom:6px; }
+#board th, #board td { padding:3px 10px; text-align:right; }
+#board th:nth-child(2), #board td:nth-child(2) { text-align:left; }
+#board th { color:#666; border-bottom:1px solid #333; }
+#board tr.you td { color:#fc6; font-weight:bold; }
 #readyBtn { font-size:18px; padding:12px 28px; background:#ddd; color:#000; border-color:#fff; }
 #readyBtn:disabled { background:#333; color:#777; border-color:#444; cursor:default; }

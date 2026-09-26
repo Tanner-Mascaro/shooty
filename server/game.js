@@ -5,7 +5,16 @@ import { buildTerrain, groundAt, kindAt, findPickups } from '../shared/terrain.j
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
 import { log } from './log.js';
-import { profileId, STATS } from './profiles.js';
+import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
+
+// failed sign-ins per IP: 5 a minute, then locked out until the minute is up
+const fails = new Map();
+const lockedOut = ip => { const f = fails.get(ip); return !!f && f.until > Date.now() && f.n >= 5; };
+const failedLogin = ip => {
+  const f = fails.get(ip);
+  if (!f || f.until < Date.now()) fails.set(ip, { n: 1, until: Date.now() + 60000 }); else f.n++;
+};
+const cleanName = name => String(name ?? '').replace(/[^\w .-]/g, '').trim().slice(0, 16);
 
 // `node server.js --bots` (or BOTS=1): a bot joins as your opponent (local testing).
 // The flag works in every shell; env vars need different syntax on Windows.
@@ -20,6 +29,7 @@ export class Game {
     this.players = {};   // id -> player state
     this.clients = [];   // { id, socket }
     this.nextId = 0;
+    this.saving = Promise.resolve();
     this.gameOn = false;
     this.setLevel('hell');
   }
@@ -66,12 +76,43 @@ export class Game {
   who(p) { return p.bot ? this.name(p) : `${p.name} (${p.ip})`; }
   score() { return Object.values(this.players).map(p => this.name(p) + ' ' + p.kills).join(', '); }
 
+  // --- profiles (see profiles.js) ---
   // bump a player's saved stats; matches against a bot don't count
   record(p, delta) {
     if (!p || !p.pid || Object.values(this.players).some(o => o.bot)) return;
     for (const s in delta) p.stats[s] += delta[s];
-    this.send(p.id, Object.assign({ type: 'profile', name: p.name }, p.stats));
-    this.profiles.add(p.pid, delta).catch(e => log(`Could not save stats for ${this.who(p)}: ${e.message}`));
+    this.send(p.id, Object.assign({ type: 'profile' }, p.stats));
+    const save = this.profiles.add(p.pid, delta).catch(e => log(`Could not save stats for ${this.who(p)}: ${e.message}`));
+    this.saving = Promise.all([this.saving, save]); // the leaderboard waits for these
+  }
+
+  // point a connection at a saved profile and send it; false if they left meanwhile
+  async useProfile(p, pid, name) {
+    const saved = await this.profiles.load(pid, name, 'Player ' + pid.slice(0, 4));
+    if (this.players[p.id] !== p) return false;
+    p.pid = pid; p.name = saved.name; p.username = saved.username;
+    p.stats = Object.fromEntries(STATS.map(s => [s, saved[s]]));
+    await this.sendProfile(p);
+    return true;
+  }
+
+  async sendProfile(p) {
+    const rank = await this.profiles.rank(p.stats).catch(() => null);
+    this.send(p.id, Object.assign({ type: 'profile', name: p.name, username: p.username, rank }, p.stats));
+  }
+
+  // top players, to one player or everyone, once pending stat saves have landed
+  async sendBoard(to) {
+    await this.saving;
+    try {
+      const msg = { type: 'leaderboard', rows: await this.profiles.board() };
+      if (to) this.send(to.id, msg); else this.broadcast(msg);
+    } catch (e) { log('Could not load leaderboard: ' + e.message); }
+  }
+
+  async afterMatch() {
+    await this.sendBoard();
+    for (const p of Object.values(this.players)) if (p.pid) await this.sendProfile(p); // new rank
   }
 
   opponent(p) { return Object.values(this.players).find(o => o.id !== p.id) || null; }
@@ -103,6 +144,7 @@ export class Game {
       this.broadcast({ type: 'win', winner: killer.id });
       this.record(killer, { wins: 1 });
       this.record(this.opponent(killer), { losses: 1 });
+      this.afterMatch();
       log(`${this.who(killer)} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
     }
   }
@@ -139,7 +181,11 @@ export class Game {
       let msg;
       try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
       const handler = this.handlers[msg.type];
-      if (handler && this.players[id]) handler.call(this, this.players[id], msg);
+      if (!handler || !this.players[id]) return;
+      Promise.resolve(handler.call(this, this.players[id], msg)).catch(e => {
+        log(`Error handling ${msg.type} from ${this.who(this.players[id] || { name: '?', ip })}: ${e.message}`);
+        if (['register', 'login', 'logout'].includes(msg.type)) this.send(id, { type: 'auth', error: 'Server error — try again' });
+      });
     });
     const leave = () => this.disconnect(id);
     socket.on('close', leave);
@@ -211,20 +257,61 @@ export class Game {
 
 // client -> server messages; `this` is the Game, `p` the sending player
 Game.prototype.handlers = {
-  // the browser's saved profile { token, name }: sent on connect and whenever the name changes
+  // the browser's token + chosen name: sent on connect and whenever the name changes
   async hello(p, msg) {
     if (typeof msg.token !== 'string' || msg.token.length < 16 || msg.token.length > 128) return;
-    const name = String(msg.name ?? '').replace(/[^\w .-]/g, '').trim().slice(0, 16) || `Player ${p.id}`;
-    const pid = profileId(msg.token);
-    let saved;
-    try { saved = await this.profiles.load(pid, name); }
-    catch (e) { log(`Could not load profile for ${this.who(p)}: ${e.message}`); return; }
-    if (this.players[p.id] !== p) return; // left while it was loading
-    const before = this.who(p), first = !p.pid;
-    p.pid = pid; p.name = name;
-    p.stats = Object.fromEntries(STATS.map(s => [s, saved[s]]));
-    this.send(p.id, Object.assign({ type: 'profile', name }, p.stats));
-    log(first ? `${before} is ${name} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}` : `${before} renamed to ${name}`);
+    const before = this.who(p), first = !p.pid, oldName = p.name;
+    p.tokenHash = hashToken(msg.token);
+    const pid = await this.profiles.resolve(p.tokenHash);
+    if (!await this.useProfile(p, pid, cleanName(msg.name) || null)) return;
+    if (first) {
+      log(`${before} is ${p.name}${p.username ? ' (account ' + p.username + ')' : ''} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}`);
+      this.sendBoard(p);
+    } else if (p.name !== oldName) log(`${before} renamed to ${p.name}`);
+  },
+
+  // create an account: puts a username + password on your current profile, keeping its stats
+  async register(p, msg) {
+    if (!p.pid || this.gameOn) return;
+    const username = String(msg.username ?? '').trim(), password = String(msg.password ?? '');
+    const bad = p.username ? 'You are already signed in'
+      : !/^\w{3,16}$/.test(username) ? 'Username: 3-16 letters, numbers or _'
+      : password.length < 6 || password.length > 72 ? 'Password: 6-72 characters' : null;
+    if (bad) return this.send(p.id, { type: 'auth', error: bad });
+    if (!await this.profiles.claim(p.pid, username, await hashPassword(password)))
+      return this.send(p.id, { type: 'auth', error: 'That username is taken' });
+    p.username = username;
+    log(`${this.who(p)} created account ${username}`);
+    this.send(p.id, { type: 'auth', ok: true });
+    await this.sendProfile(p);
+  },
+
+  // sign in on this browser: it gets a new token tied to the account's profile
+  async login(p, msg) {
+    if (!p.tokenHash || this.gameOn) return;
+    if (lockedOut(p.ip)) return this.send(p.id, { type: 'auth', error: 'Too many tries — wait a minute' });
+    const username = String(msg.username ?? '').trim().slice(0, 16), password = String(msg.password ?? '').slice(0, 72);
+    const acct = username && await this.profiles.account(username);
+    // check against a dummy hash when there's no such user, so both cases take the same time
+    if (!await checkPassword(password, acct ? acct.passHash : '00:00') || !acct) {
+      failedLogin(p.ip);
+      log(`${this.who(p)} failed to sign in as ${username}`);
+      return this.send(p.id, { type: 'auth', error: 'Wrong username or password' });
+    }
+    const before = this.who(p), token = newToken();
+    await this.profiles.addSession(hashToken(token), acct.id);
+    p.tokenHash = hashToken(token);
+    this.send(p.id, { type: 'auth', ok: true, token });
+    if (await this.useProfile(p, acct.id, null)) log(`${before} signed in as ${p.username}`);
+  },
+
+  // the browser throws its token away and starts over as a new guest
+  async logout(p) {
+    if (!p.username || this.gameOn) return;
+    await this.profiles.removeSession(p.tokenHash);
+    log(`${this.who(p)} signed out`);
+    p.pid = p.username = null;
+    this.send(p.id, { type: 'auth', ok: true, signedOut: true });
   },
 
   level(p, msg) {

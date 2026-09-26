@@ -6,7 +6,8 @@ import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, setReady, showMsg, banner, sendHello, showProfile } from './ui.js';
+import { showWait, hideWait, setWaitText, setReady, showMsg, banner } from './ui.js';
+import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 
 let ws = null;
 
@@ -56,6 +57,8 @@ const handlers = {
   waiting(msg) { setWaitText(msg.reason); },
 
   profile(msg) { showProfile(msg); },
+  auth(msg) { onAuth(msg); },
+  leaderboard(msg) { showBoard(msg.rows); },
 
   start(msg) {
     setLevel(msg.level);

@@ -13,5 +13,8 @@ export function token() {
   return t;
 }
 
+export const setToken = t => set('shooty.token', t);
+export const clearToken = () => { try { localStorage.removeItem('shooty.token'); } catch {} };
+
 export const savedName = () => get('shooty.name') || '';
 export const saveName = name => set('shooty.name', name);
