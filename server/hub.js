@@ -44,7 +44,7 @@ export class Hub {
   notice(p, text) { this.send(p, { type: 'notice', text }); }
 
   // how a player appears in-game and in the server log
-  name(p) { return p.bot ? `Bot ${p.id}` : p.name; }
+  name(p) { return p.bot ? `${p.level[0].toUpperCase() + p.level.slice(1)} Bot ${p.id}` : p.name; } // "Hard Bot 7"
   who(p) { return p.bot ? this.name(p) : `${p.name} (${p.ip})`; }
 
   tick() { for (const r of Object.values(this.rooms)) r.tick(); }

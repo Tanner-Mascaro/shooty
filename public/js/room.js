@@ -8,6 +8,9 @@ import { initAudio } from './audio.js';
 import { toast } from './ui.js';
 import { PLAYER_SKIN_NAMES, PLAYER_SPRITES } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
+import { LEVELS } from '/shared/levels.js';
+import { buildTerrain } from '/shared/terrain.js';
+import { THEMES } from './themes.js';
 import { muted, toggleMute, voiceOn } from './voice.js';
 
 const $ = id => document.getElementById(id);
@@ -47,6 +50,49 @@ function renderSkinWheel(direction) {
   $('chooseSkin').disabled = chosen || !!(S.room && S.room.gameOn);
 }
 
+// --- map carousel: scroll or swipe through the maps, arrows step one card; clicking a card picks it ---
+const cards = () => [...document.querySelectorAll('#levels button')];
+
+// a top-down picture of each map on its card, in the level's minimap colors
+function drawMapPreview(b) {
+  const name = b.dataset.level, T = buildTerrain(LEVELS[name], 3, name), c = document.createElement('canvas');
+  c.className = 'preview'; c.width = T.TW; c.height = T.TH;
+  const g = c.getContext('2d'), img = g.createImageData(T.TW, T.TH), cols = THEMES[name].minimap;
+  for (let k = 0; k < T.TW * T.TH; k++) { const col = cols[T.kind[k]]; img.data.set([col[0], col[1], col[2], 255], k * 4); }
+  g.putImageData(img, 0, 0);
+  b.prepend(c);
+}
+
+// which card is in the middle of the strip
+function centered() {
+  const strip = $('levels'), mid = strip.scrollLeft + strip.clientWidth / 2;
+  return cards().reduce((best, b) => Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid) < Math.abs(best.offsetLeft + best.offsetWidth / 2 - mid) ? b : best);
+}
+export function scrollToMap(name) {
+  const strip = $('levels'), b = cards().find(c => c.dataset.level === name);
+  if (b) strip.scrollTo({ left: b.offsetLeft + b.offsetWidth / 2 - strip.clientWidth / 2 });
+}
+
+function initMapCarousel() {
+  const strip = $('levels');
+  cards().forEach(drawMapPreview);
+  const step = dir => {
+    const list = cards(), i = list.indexOf(centered());
+    scrollToMap(list[(i + dir + list.length) % list.length].dataset.level);
+  };
+  $('mapPrev').addEventListener('click', () => step(-1));
+  $('mapNext').addEventListener('click', () => step(1));
+  // a mouse wheel scrolls the strip sideways
+  strip.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    strip.scrollBy({ left: e.deltaY });
+  }, { passive: false });
+  const mark = () => { const c = centered(); cards().forEach(b => b.classList.toggle('centered', b === c)); };
+  strip.addEventListener('scroll', mark);
+  requestAnimationFrame(mark);
+}
+
 export const inviteLink = code => location.origin + location.pathname + '?room=' + code;
 export const goToRoom = code => { location.href = code ? '?room=' + code : location.pathname; };
 
@@ -71,9 +117,19 @@ export function initRoom() {
     initAudio();
     send({ type: 'level', level: b.dataset.level });
   }));
+  initMapCarousel();
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
   document.querySelectorAll('#teamPick button').forEach(b => b.addEventListener('click', () => send({ type: 'team', team: +b.dataset.team })));
-  $('addBot').addEventListener('click', () => send({ type: 'addBot' }));
+  // bot difficulty for the next + BOT, remembered in this browser
+  let botLevel = 'medium';
+  try { botLevel = localStorage.getItem('botLevel') || 'medium'; } catch {}
+  const showBotLevel = () => document.querySelectorAll('#botLevel button').forEach(b => b.classList.toggle('sel', b.dataset.level === botLevel));
+  document.querySelectorAll('#botLevel button').forEach(b => b.addEventListener('click', () => {
+    botLevel = b.dataset.level; showBotLevel();
+    try { localStorage.setItem('botLevel', botLevel); } catch {}
+  }));
+  showBotLevel();
+  $('addBot').addEventListener('click', () => send({ type: 'addBot', level: botLevel }));
   $('removeBot').addEventListener('click', () => send({ type: 'removeBot' }));
 
   $('copyLink').addEventListener('click', async () => {

@@ -44,11 +44,15 @@
       </div>
       <div class="field">
         <div class="label">MAP</div>
-        <div id="levels" class="choice maps">
-          <button data-level="hell"><b>HELL</b><small>Lava &amp; brimstone</small></button>
-          <button data-level="robot"><b>ROBOT FACTORY</b><small>Acid &amp; steel</small></button>
-          <button data-level="witch"><b>WITCH SWAMP</b><small>Bog &amp; fireflies</small></button>
-          <button data-level="haunt"><b>HAUNTED HOUSE</b><small>Backrooms &amp; things that hunt</small></button>
+        <div class="map-stage">
+          <button id="mapPrev" class="skin-arrow" type="button" aria-label="Previous map">&#x2039;</button>
+          <div id="levels" class="choice maps">
+            <button data-level="hell"><b>HELL</b><small>Lava &amp; brimstone</small></button>
+            <button data-level="robot"><b>ROBOT FACTORY</b><small>Acid &amp; steel</small></button>
+            <button data-level="witch"><b>WITCH SWAMP</b><small>Bog &amp; fireflies</small></button>
+            <button data-level="haunt"><b>HAUNTED HOUSE</b><small>Backrooms &amp; things that hunt</small></button>
+          </div>
+          <button id="mapNext" class="skin-arrow" type="button" aria-label="Next map">&#x203A;</button>
         </div>
       </div>
       <div class="field">
@@ -67,7 +71,10 @@
           <button data-team="1" class="team1">JOIN RED</button>
           <button data-team="2" class="team2">JOIN BLUE</button>
         </div>
-        <div id="botCtl"><button id="addBot">+ BOT</button> <button id="removeBot">− BOT</button></div>
+        <div id="botCtl">
+          <div id="botLevel" class="choice seg"><button data-level="easy">EASY</button><button data-level="medium">MEDIUM</button><button data-level="hard">HARD</button></div>
+          <button id="addBot">+ BOT</button> <button id="removeBot">− BOT</button>
+        </div>
       </div>
       <div id="result"></div>
       <div id="waitMsg">Connecting...</div>

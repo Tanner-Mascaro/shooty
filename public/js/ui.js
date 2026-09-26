@@ -1,7 +1,7 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
 import { TEAMS } from '/shared/config.js';
 import { S, nameOf, teamOf } from './state.js';
-import { initRoom, showRoom } from './room.js';
+import { initRoom, showRoom, scrollToMap } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
 import { refreshChat } from './chat.js';
@@ -36,6 +36,7 @@ export function hideWait() {
 
 export function applyLevelUI(name, theme) {
   document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('sel', b.dataset.level === name));
+  scrollToMap(name); // the picked map slides to the middle of the carousel
   const title = $('waitTitle');
   title.textContent = theme.name;
   title.style.color = theme.title;

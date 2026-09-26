@@ -164,6 +164,7 @@ const handlers = {
     else if (S.others[msg.who]) S.others[msg.who].hitT = now;
     else if (S.creatures[msg.who]) S.creatures[msg.who].hitT = now;
     if (msg.by === S.myId) {
+      if (S.others[msg.who]) S.others[msg.who].markT = now; // they glow through walls for a bit (render/index.js)
       S.hitMarker = 14; S.hitHead = msg.head;
       play(msg.head ? 'headshot' : 'hitmarker');
     }

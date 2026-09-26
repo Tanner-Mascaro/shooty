@@ -184,7 +184,9 @@ export function drawTerrain(now) {
 }
 
 // billboard at (ex, ey) with its bottom at height ez; w/h are world size
-export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint) {
+// `outline` { col: [r, g, b], xray }: a one-pixel glowing rim around the shape, like Minecraft's
+// Glowing effect; with xray it shows through walls too
+export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint, outline) {
   const { eye, horizon, focal, fwdx, fwdy, rtx, rty } = S.cam;
   const { RW, RH, pix, zbuf } = view;
   const dx = ex - S.me.x, dy = ey - S.me.y, f = dx * fwdx + dy * fwdy;
@@ -210,19 +212,38 @@ export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint) {
       pix[idx] = cols[p]; zbuf[idx] = f;
     }
   }
+  if (outline) drawOutline(cx, hw, y0, y1, xa, xb, ya, yb, f, px, glint, outline);
+}
+
+// the silhouette's edge: pixels just outside the shape next to one inside it
+function drawOutline(cx, hw, y0, y1, xa, xb, ya, yb, f, px, glint, { col, xray }) {
+  const { RW, RH, pix, zbuf } = view, mw = xb - xa + 3, mh = yb - ya + 3, mask = new Uint8Array(mw * mh);
+  for (let x = xa; x <= xb; x++) {
+    const u = (x + 0.5 - (cx - hw)) / (2 * hw);
+    for (let y = ya; y <= yb; y++) if (px(u, (y + 0.5 - y0) / (y1 - y0), glint)) mask[(y - ya + 1) * mw + (x - xa + 1)] = 1;
+  }
+  const c = pk(col[0], col[1], col[2]);
+  for (let j = 0; j < mh; j++) for (let i = 0; i < mw; i++) {
+    const k = j * mw + i;
+    if (mask[k] || !((i > 0 && mask[k - 1]) || (i < mw - 1 && mask[k + 1]) || (j > 0 && mask[k - mw]) || (j < mh - 1 && mask[k + mw]))) continue;
+    const x = xa + i - 1, y = ya + j - 1;
+    if (x < 0 || y < 0 || x >= RW || y >= RH) continue;
+    const idx = y * RW + x;
+    if (xray || zbuf[idx] > f) pix[idx] = c;
+  }
 }
 
 // another player (or a corpse: squashed tall, stretched wide) using the level's character;
 // `tint` [r, g, b] recolors the body for teams
 const tinted = {};
-export function drawPlayer(x, y, z, hScale, wScale, flash, glint, tint, skin) {
+export function drawPlayer(x, y, z, hScale, wScale, flash, glint, tint, skin, outline) {
   const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES[S.theme.sprite];
   let pal = s.pal;
   if (tint) {
     const key = (skin || S.theme.sprite) + tint;
     pal = tinted[key] ??= s.pal.map((c, i) => c && (i === 1 || i === 2) ? c.map((v, j) => v * 0.35 + tint[j] * (i === 1 ? 0.65 : 0.4)) : c);
   }
-  drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, pal, s.emit, flash, glint);
+  drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, pal, s.emit, flash, glint, outline);
 }
 
 export function drawParticles(list) {

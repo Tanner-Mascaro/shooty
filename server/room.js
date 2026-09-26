@@ -5,7 +5,7 @@ import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYE
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
-import { newBrain, botTick } from './bot.js';
+import { newBrain, botTick, BOT_LEVELS } from './bot.js';
 import { CREATURE, CREATURE_LEVELS, newCreature, creatureTick } from './creature.js';
 import { log } from './log.js';
 import { VERSION } from './version.js';
@@ -52,7 +52,7 @@ export class Room {
   roster() {
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
       gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS,
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, skin: p.skin || 'demon', ready: p.ready, bot: !!p.bot })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, skin: p.skin || 'demon', ready: p.ready, bot: !!p.bot, level: p.level })) });
   }
 
   // --- level / pickups ---
@@ -199,10 +199,12 @@ export class Room {
     return true;
   }
 
-  addBot() {
-    if (this.list.length >= MAX_PLAYERS) return;
+  // level: 'easy' | 'medium' | 'hard' (bot.js BOT_LEVELS); each bot gets a random character
+  addBot(level = 'medium') {
+    if (this.list.length >= MAX_PLAYERS || !BOT_LEVELS[level]) return;
     const id = this.hub.nextId++;
-    const bot = { id, bot: true, brain: newBrain(), a: 0, p: 0, seq: 0 };
+    const skin = PLAYER_SKINS[Math.floor(Math.random() * PLAYER_SKINS.length)];
+    const bot = { id, bot: true, level, skin, brain: newBrain(), a: 0, p: 0, seq: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
   }
@@ -381,7 +383,7 @@ Room.prototype.handlers = {
     if (!this.maybeStart()) this.roster();
   },
 
-  addBot() { this.addBot(); this.maybeStart(); }, // you may have readied up before adding it
+  addBot(p, msg) { this.addBot(msg.level); this.maybeStart(); }, // you may have readied up before adding it
   removeBot() {
     if (!this.dropBot()) return;
     if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
