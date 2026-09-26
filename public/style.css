@@ -21,6 +21,59 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 .hp-bar { width:140px; height:8px; background:#111; border:1px solid #444; margin-top:2px; }
 .hp-fill { height:100%; transition:width .15s; }
 #msg { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); color:#fc3; font-size:32px; font-weight:bold; text-shadow:0 0 12px #000; z-index:20; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
+
+/* post-match summary */
+#summary {
+  position:absolute; inset:0; z-index:150; display:flex; align-items:center; justify-content:center;
+  padding:24px 16px; background:rgba(8,6,4,0.72); backdrop-filter:blur(4px);
+  font-family:'IBM Plex Sans',system-ui,sans-serif; color:#ebe4d6;
+}
+#summaryCard {
+  width:min(440px, 100%); background:#1a1814; border:1px solid #322e28;
+  box-shadow:6px 6px 0 rgba(0,0,0,0.55); padding:22px 22px 18px;
+  display:flex; flex-direction:column; gap:12px;
+  animation:summaryIn .35s ease-out;
+}
+@keyframes summaryIn {
+  from { opacity:0; transform:translateY(12px); }
+  to { opacity:1; transform:translateY(0); }
+}
+#summaryHeadline {
+  font-family:Teko,sans-serif; font-size:clamp(36px,8vw,52px); font-weight:700;
+  letter-spacing:.04em; line-height:.95; text-align:center; color:#f3efe6; text-transform:uppercase;
+}
+#summaryHeadline.won { color:#e8c060; }
+#summaryHeadline.lost { color:#e8e8e8; }
+#summarySub { text-align:center; font-size:13px; color:#9a9184; margin-top:-4px; }
+#summaryBoard { width:100%; border-collapse:collapse; font-size:14px; }
+#summaryBoard th {
+  text-align:left; font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase;
+  color:#9a9184; padding:0 8px 8px; border-bottom:1px solid #322e28;
+}
+#summaryBoard th:first-child, #summaryBoard td:first-child { width:2.2ch; text-align:right; color:#666; }
+#summaryBoard th:nth-child(3), #summaryBoard th:nth-child(4),
+#summaryBoard td:nth-child(3), #summaryBoard td:nth-child(4) { text-align:right; width:3.5ch; }
+#summaryBoard td { padding:9px 8px; border-bottom:1px solid #241f1a; }
+#summaryBoard tr:last-child td { border-bottom:none; }
+#summaryBoard tr.you td { background:rgba(232,192,96,0.08); }
+#summaryBoard tr.winner td:nth-child(2)::after {
+  content:' WIN'; font-size:10px; font-weight:700; letter-spacing:.12em; color:#e8c060; margin-left:6px;
+}
+#summaryBoard .name { font-weight:600; color:#ebe4d6; }
+#summaryBoard .kills { font-weight:700; color:#fff; font-variant-numeric:tabular-nums; }
+#summaryBoard .deaths { color:#9a9184; font-variant-numeric:tabular-nums; }
+#summaryBoard .team1 .name { color:#f76; }
+#summaryBoard .team2 .name { color:#6af; }
+body.plague #summaryBoard .team1 .name { color:#9e5; }
+#summaryContinue {
+  font-family:Teko,sans-serif; font-size:26px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  padding:10px 16px 8px; margin-top:4px; cursor:pointer; color:#120e0a;
+  background:var(--accent, #e24); border:1px solid color-mix(in srgb, var(--accent, #e24) 70%, #fff);
+  box-shadow:4px 4px 0 rgba(0,0,0,0.55); transition:transform .08s, box-shadow .08s, filter .15s;
+}
+#summaryContinue:hover { filter:brightness(1.06); }
+#summaryContinue:active { transform:translate(2px, 2px); box-shadow:2px 2px 0 rgba(0,0,0,0.55); }
+
 #controls { position:absolute; max-width:96vw; overflow:hidden; text-overflow:ellipsis; bottom:8px; left:50%; transform:translateX(-50%); color:#666; font-size:11px; z-index:10; pointer-events:none; white-space:nowrap; }
 
 /* in-game: scoreboard + kill feed (top left), toasts + invite popup */
@@ -86,7 +139,7 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 body.on-home #wait { display:none !important; }
 body.on-home #c, body.on-home #hud, body.on-home #scores, body.on-home #feed,
 body.on-home #toasts, body.on-home #msg, body.on-home #controls, body.on-home #talking,
-body.on-home #fps, body.on-home #gameGear, body.on-home #gameLeave { display:none !important; }
+body.on-home #fps, body.on-home #gameGear, body.on-home #gameLeave, body.on-home #summary { display:none !important; }
 body.on-home #corner { z-index:210; }
 
 /* lobby — --accent / --accent-rgb / --wash follow the selected level (applyLevelUI in ui.js) */

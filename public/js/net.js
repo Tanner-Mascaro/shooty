@@ -6,7 +6,7 @@ import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, showMsg, banner, toast, pushFeed } from './ui.js';
+import { showWait, hideWait, setWaitText, showMsg, showSummary, banner, toast, pushFeed } from './ui.js';
 import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 import { showFriends, showInvite } from './friends.js';
@@ -251,7 +251,7 @@ const handlers = {
     } else playAt(pit ? 'burn' : 'death', msg.x, msg.y);
   },
 
-  // { winner: id } in free-for-all, { team } in teams or plague
+  // { winner: id } in free-for-all, { team } in teams or plague; scores = final board
   win(msg) {
     const mode = msg.mode || S.room?.mode;
     const won = msg.team ? msg.team === S.myTeam : msg.winner === S.myId;
@@ -267,18 +267,32 @@ const handlers = {
       sys = won ? (msg.team ? 'Your team wins!' : 'You win!') : who + ' wins';
       rematch = won ? 'You won! Rematch?' : who.toLowerCase().replace(/^\w/, c => c.toUpperCase()) + ' won. Rematch?';
     }
-    showMsg(headline, true);
     play(won ? 'win' : 'lose');
     addSystem(sys);
     S.started = false;
-    setTimeout(() => showWait(rematch), 2000);
+    const scores = (msg.scores || []).map(r => ({
+      ...r,
+      winner: msg.team ? r.team === msg.team : r.id === msg.winner,
+    }));
+    showSummary({
+      headline, rematch, scores, mode, level: msg.level || S.room?.level, won,
+    });
   },
 
   // the match stopped early (not enough players left)
   end(msg) {
     S.started = false;
     addSystem(msg.reason || 'Match ended');
-    showWait(msg.reason);
+    if (msg.scores && msg.scores.length) {
+      showSummary({
+        headline: 'MATCH ENDED',
+        rematch: msg.reason || 'Match ended',
+        scores: msg.scores,
+        mode: msg.mode || S.room?.mode,
+        level: msg.level || S.room?.level,
+        won: false,
+      });
+    } else showWait(msg.reason);
   },
 
   notice(msg) { toast(msg.text); },

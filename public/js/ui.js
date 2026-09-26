@@ -1,5 +1,6 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
-import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName } from '/shared/config.js';
+import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES } from '/shared/config.js';
+import { LEVEL_NAMES } from '/shared/levels.js';
 import { S, nameOf, isEnemy } from './state.js';
 import { settings } from './settings.js';
 import { initRoom, showRoom, scrollToMap } from './room.js';
@@ -10,18 +11,23 @@ import { refreshChat } from './chat.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait');
+const summary = $('summary');
+let summaryTimer = 0;
+let summaryNext = null;
 
 export function initLobby() {
   initHome();
   initRoom();
   initAccount();
   initFriends();
+  $('summaryContinue').addEventListener('click', dismissSummary);
 }
 
 export function setWaitText(text) { $('waitMsg').textContent = text; }
 
 // back to the lobby; `result` (e.g. "You won! Rematch?") stays until the next match starts
 export function showWait(result) {
+  hideSummary(true);
   wait.style.display = '';
   document.body.classList.remove('ingame');
   refreshChat();
@@ -35,6 +41,7 @@ export function hideWait() {
   refreshChat();
   $('result').textContent = '';
   $('msg').style.opacity = 0;
+  hideSummary(true);
 }
 
 export function applyLevelUI(name, theme) {
@@ -45,7 +52,7 @@ export function applyLevelUI(name, theme) {
   title.textContent = theme.name;
   title.style.color = theme.title;
   title.style.textShadow = '';
-  for (const el of [wait, $('corner')]) { // the corner buttons match the level too
+  for (const el of [wait, $('corner'), summary]) { // the corner buttons match the level too
     el.style.setProperty('--accent', theme.title);
     el.style.setProperty('--accent-rgb', theme.accent);
     el.style.setProperty('--wash', theme.bg);
@@ -58,6 +65,62 @@ export function showMsg(text, persist) {
   el.textContent = text;
   el.style.opacity = 1;
   if (!persist) setTimeout(() => el.style.opacity = 0, 1500);
+}
+
+// post-match scoreboard; Continue (or auto) returns to the lobby rematch prompt
+export function showSummary({ headline, rematch, scores, mode, level, won }) {
+  clearTimeout(summaryTimer);
+  summaryNext = rematch || '';
+  $('msg').style.opacity = 0;
+  if (document.pointerLockElement) document.exitPointerLock();
+
+  const head = $('summaryHeadline');
+  head.textContent = headline;
+  head.className = won ? 'won' : 'lost';
+
+  const map = LEVEL_NAMES[level] || level || '';
+  const modeLabel = MODE_NAMES[mode] || mode || '';
+  $('summarySub').textContent = [modeLabel, map].filter(Boolean).join(' · ');
+
+  const teams = isTeamMode(mode);
+  const tbody = $('summaryBoard').tBodies[0];
+  tbody.replaceChildren();
+  (scores || []).forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (r.id === S.myId) tr.classList.add('you');
+    if (r.winner) tr.classList.add('winner');
+    if (teams && r.team) tr.classList.add('team' + r.team);
+    const rank = document.createElement('td');
+    rank.textContent = String(i + 1);
+    const name = document.createElement('td');
+    name.className = 'name';
+    name.textContent = r.name || nameOf(r.id);
+    const k = document.createElement('td');
+    k.className = 'kills';
+    k.textContent = String(r.kills ?? 0);
+    const d = document.createElement('td');
+    d.className = 'deaths';
+    d.textContent = String(r.deaths ?? 0);
+    tr.append(rank, name, k, d);
+    tbody.appendChild(tr);
+  });
+
+  summary.hidden = false;
+  summaryTimer = setTimeout(dismissSummary, 12000);
+}
+
+function dismissSummary() {
+  if (summary.hidden) return;
+  const next = summaryNext;
+  hideSummary(true);
+  showWait(next);
+}
+
+function hideSummary(silent) {
+  clearTimeout(summaryTimer);
+  summaryTimer = 0;
+  summary.hidden = true;
+  if (!silent) summaryNext = null;
 }
 
 // small message in the corner (friend requests, errors, "link copied")

@@ -231,7 +231,7 @@ export class Room {
 
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
-    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
+    Object.assign(p, { room: this, kills: 0, deaths: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
     p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : this.mode === 'teams' ? this.smallerTeam() : 0;
@@ -311,6 +311,7 @@ export class Room {
     const skin = this.skinOf(victim);
     const infected = this.mode === 'plague' && killer && killer.team === PLAGUE_TEAM && victim.team === HEALTHY_TEAM;
     if (killer) killer.kills++;
+    victim.deaths = (victim.deaths || 0) + 1;
     this.hub.record(killer, { kills: 1 });
     this.hub.record(victim, { deaths: 1 });
     this.dropLoot(victim);
@@ -344,7 +345,7 @@ export class Room {
     }
     const placed = [];
     for (const p of this.list) {
-      p.kills = 0; p.ready = !!p.bot;
+      p.kills = 0; p.deaths = 0; p.ready = !!p.bot;
       this.resetPlayer(p, placed.filter(o => !isTeamMode(this.mode) || o.team !== p.team));
       placed.push(p);
     }
@@ -368,11 +369,18 @@ export class Room {
     return true;
   }
 
+  // final scoreboard for the post-match summary screen
+  scoreboard() {
+    return this.list
+      .map(p => ({ id: p.id, name: this.hub.name(p), kills: p.kills || 0, deaths: p.deaths || 0, team: p.team || 0 }))
+      .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.name.localeCompare(b.name));
+  }
+
   finish(winners, result, label) {
     this.gameOn = false;
     this.plagueEndsAt = 0;
     this.list.forEach(p => p.ready = !!p.bot);
-    this.broadcast(Object.assign({ type: 'win' }, result));
+    this.broadcast(Object.assign({ type: 'win', mode: this.mode, level: this.level, scores: this.scoreboard() }, result));
     for (const p of this.humans) this.hub.record(p, winners.includes(p) ? { wins: 1 } : { losses: 1 });
     log(`[${this.code}] ${label} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
     this.hub.afterMatch(this);
@@ -383,7 +391,7 @@ export class Room {
     this.gameOn = false;
     this.plagueEndsAt = 0;
     this.list.forEach(p => p.ready = !!p.bot);
-    this.broadcast({ type: 'end', reason });
+    this.broadcast({ type: 'end', reason, mode: this.mode, level: this.level, scores: this.scoreboard() });
     log(`[${this.code}] Match ended: ${reason}`);
   }
 
