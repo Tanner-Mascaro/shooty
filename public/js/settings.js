@@ -15,13 +15,18 @@ const $ = id => document.getElementById(id);
 export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
   jump: ['Jump', 'Space'], slide: ['Slide', 'ShiftLeft'], reload: ['Reload', 'KeyR'], use: ['Pick up / loot', 'KeyE'], swap: ['Swap to last weapon', 'KeyQ'],
-  melee: ['Quick melee', 'KeyF'], slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
-  chat: ['Text chat', 'Enter'], talk: ['Push to talk', 'KeyV'],
+  melee: ['Quick melee', 'KeyF'], nade: ['Throw grenade', 'KeyG'],
+  slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
+  chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
 };
 // ads: right click scopes while held ('hold') or until clicked again ('toggle');
 // voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
-const DEFAULTS = { fps: 0, showFps: false, volume: 1, ambient: 1, voice: 'ptt', voiceVol: 1, sens: 1, ads: 'toggle', keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])) };
+const DEFAULTS = {
+  fps: 0, showFps: false, fov: 1, crosshair: 1, showMinimap: true, showFeed: true,
+  volume: 1, sfx: 1, ambient: 1, voice: 'ptt', voiceVol: 1, sens: 1, invertY: false, ads: 'toggle',
+  keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])),
+};
 const FPS_CHOICES = [0, 30, 60, 90, 120, 144, 165, 240]; // 0 = as fast as the display refreshes
 
 // a full, valid settings object from whatever was saved (older versions, another device)
@@ -36,8 +41,14 @@ function normalize(saved) {
   return {
     fps: FPS_CHOICES.includes(saved.fps) ? saved.fps : DEFAULTS.fps,
     showFps: typeof saved.showFps === 'boolean' ? saved.showFps : DEFAULTS.showFps,
-    volume: num(saved.volume, 0, 1, DEFAULTS.volume), ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient),
+    fov: num(saved.fov, 0.75, 1.35, DEFAULTS.fov),
+    crosshair: num(saved.crosshair, 0.6, 1.8, DEFAULTS.crosshair),
+    showMinimap: typeof saved.showMinimap === 'boolean' ? saved.showMinimap : DEFAULTS.showMinimap,
+    showFeed: typeof saved.showFeed === 'boolean' ? saved.showFeed : DEFAULTS.showFeed,
+    volume: num(saved.volume, 0, 1, DEFAULTS.volume), sfx: num(saved.sfx, 0, 1, DEFAULTS.sfx),
+    ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient),
     sens: num(saved.sens, 0.2, 3, DEFAULTS.sens),
+    invertY: typeof saved.invertY === 'boolean' ? saved.invertY : DEFAULTS.invertY,
     ads: ['toggle', 'hold'].includes(saved.ads) ? saved.ads : DEFAULTS.ads,
     voice: ['ptt', 'open', 'off'].includes(saved.voice) ? saved.voice : DEFAULTS.voice,
     voiceVol: num(saved.voiceVol, 0, 1, DEFAULTS.voiceVol),
@@ -120,11 +131,18 @@ export function captureKey(e) {
 function render() {
   $('fpsCap').value = settings.fps;
   $('showFps').checked = settings.showFps;
+  $('fov').value = settings.fov;
+  $('crosshair').value = settings.crosshair;
+  $('showMinimap').checked = settings.showMinimap;
+  $('showFeed').checked = settings.showFeed;
   $('sens').value = settings.sens;
+  $('invertY').checked = settings.invertY;
   $('ads').value = settings.ads;
   $('voiceMode').value = settings.voice;
-  for (const k of ['volume', 'ambient', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
+  for (const k of ['volume', 'sfx', 'ambient', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
   $('sensVal').textContent = settings.sens.toFixed(2) + '×';
+  $('fovVal').textContent = Math.round(settings.fov * 100) + '%';
+  $('crosshairVal').textContent = settings.crosshair.toFixed(1) + '×';
   $('fsBtn').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Go fullscreen';
   $('binds').replaceChildren(...Object.entries(ACTIONS).map(([a, [label]]) => {
     const row = document.createElement('li'), name = document.createElement('span'), key = document.createElement('button');
@@ -141,7 +159,7 @@ function render() {
 function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
   $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} chat | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} nade | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {
@@ -151,11 +169,16 @@ export function initSettings() {
     settings.voice = e.target.value; save(); syncVoice();
     if (settings.voice === 'open') askMic(); // this change is a click: the browser may ask now
   });
-  for (const k of ['volume', 'ambient', 'voiceVol'])
+  for (const k of ['volume', 'sfx', 'ambient', 'voiceVol'])
     $(k).addEventListener('input', e => { settings[k] = +e.target.value; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; save(); });
   $('fpsCap').addEventListener('change', e => { settings.fps = +e.target.value; save(); });
   $('showFps').addEventListener('change', e => { settings.showFps = e.target.checked; save(); });
+  $('showMinimap').addEventListener('change', e => { settings.showMinimap = e.target.checked; save(); });
+  $('showFeed').addEventListener('change', e => { settings.showFeed = e.target.checked; save(); });
+  $('invertY').addEventListener('change', e => { settings.invertY = e.target.checked; save(); });
   $('sens').addEventListener('input', e => { settings.sens = +e.target.value; $('sensVal').textContent = settings.sens.toFixed(2) + '×'; save(); });
+  $('fov').addEventListener('input', e => { settings.fov = +e.target.value; $('fovVal').textContent = Math.round(settings.fov * 100) + '%'; save(); });
+  $('crosshair').addEventListener('input', e => { settings.crosshair = +e.target.value; $('crosshairVal').textContent = settings.crosshair.toFixed(1) + '×'; save(); });
   document.querySelectorAll('#fsBtn, .fsToggle').forEach(b => b.addEventListener('click', toggleFullscreen));
   $('resetBinds').addEventListener('click', () => { settings.keys = { ...DEFAULTS.keys }; save(); render(); });
   $('closeSettings').addEventListener('click', closeSettings);
@@ -163,7 +186,7 @@ export function initSettings() {
   document.querySelectorAll('.gear').forEach(b => b.addEventListener('click', openSettings));
   document.addEventListener('fullscreenchange', () => {
     document.body.classList.toggle('fs', !!document.fullscreenElement);
-    document.querySelectorAll('.fsToggle').forEach(b => b.textContent = document.fullscreenElement ? '⛶ Exit fullscreen' : '⛶ Fullscreen');
+    document.querySelectorAll('.fsToggle').forEach(b => b.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen');
     if (settingsOpen()) render();
   });
   showControlsHint();

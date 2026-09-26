@@ -17,15 +17,16 @@ export const S = {
   // weapons + input
   // mag: rounds loaded per gun you own; inv: spare rounds per gun (the server sends the real
   // loadout on spawn)
-  mag: { pistol: 12 }, inv: { pistol: 24 }, weapon: 'pistol', lastWeapon: 'blade', scoped: false, switchUntil: 0, mouseHeld: false,
+  mag: { pistol: 12 }, inv: { pistol: 24 }, nades: 0, weapon: 'pistol', lastWeapon: 'blade', scoped: false, switchUntil: 0, mouseHeld: false,
   reloading: null, // { w, start, until } while a reload runs
-  nextFire: { pistol: 0, rifle: 0, sniper: 0, shotgun: 0, smg: 0, blade: 0 },
+  nextFire: { pistol: 0, deagle: 0, revolver: 0, rifle: 0, burst: 0, carbine: 0, sniper: 0, crossbow: 0, shotgun: 0, smg: 0, uzi: 0, lmg: 0, blade: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
 
   // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick
   // behind, interpolated from prev to cur (`now` is this frame's position)
   others: {},
   feed: [], // kill feed: { killer, victim, weapon, head, backstab, mine, t }
+  thrown: [], // grenades in flight from the server: { id, x, y, z }
 
   // current level (see level.js)
   level: null, MAP: null, T: null, theme: null, pickupSpots: [], pickupActive: [],

@@ -1,11 +1,11 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
-import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE } from './bot.js';
+import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, randomBotName } from './bot.js';
 import { log } from './log.js';
 import { VERSION } from './version.js';
 
@@ -32,6 +32,8 @@ export class Room {
     this.gameOn = false;
     this.boxes = [];          // loot boxes: { id, x, y, z, items: [{ w, mag, spare }], until }
     this.boxId = 0;
+    this.nades = [];          // thrown grenades in flight
+    this.nadeId = 0;
     this.setLevel('hell');
   }
 
@@ -48,9 +50,12 @@ export class Room {
   }
   // who's here, teams and ready state: sent whenever any of it changes
   roster() {
+    const votes = {};
+    for (const p of this.humans) if (p.vote && LEVELS[p.vote]) votes[p.vote] = (votes[p.vote] || 0) + 1;
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS,
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, skin: p.skin || 'demon', ready: p.ready, bot: !!p.bot, level: p.level })) });
+      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes,
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, skin: p.skin || 'demon',
+        ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
   }
 
   // --- level / pickups ---
@@ -60,24 +65,42 @@ export class Room {
     this.T = TERRAINS[name];
     this.resetPickups();
   }
-  // the level's pads (gun pads roll a random gun every time they come back; health stays health)
-  // plus small ammo crates at random open spots, new ones each match
+  // the level's pads (gun pads roll a random gun every time they come back; health / nades stay)
+  // plus ammo crates, spare guns and grenades at random open spots each match
   resetPickups() {
-    this.pickups = findPickups(this.map).map(p => Object.assign(p, { gun: p.weapon !== 'health' }));
+    this.pickups = findPickups(this.map).map(p => Object.assign(p, {
+      gun: p.weapon !== 'health' && p.weapon !== 'nade',
+      nade: p.weapon === 'nade',
+    }));
     const taken = [...this.pickups];
-    for (let i = 0; i < AMMO_CRATES; i++) {
-      const s = this.spawnPos(taken); // far from the pads and the other crates
-      if (!s) break;
-      taken.push(s);
-      this.pickups.push({ x: s.x, y: s.y, weapon: 'ammo', gun: false });
-    }
+    const scatter = (n, weapon, gun, nade, crate) => {
+      for (let i = 0; i < n; i++) {
+        const s = this.spawnPos(taken);
+        if (!s) break;
+        taken.push(s);
+        this.pickups.push({ x: s.x, y: s.y, weapon, gun: !!gun, nade: !!nade, crate: !!crate });
+      }
+    };
+    scatter(AMMO_CRATES, 'ammo', false, false, false);
+    scatter(GUN_CRATES, 'rifle', true, false, true); // weapon re-rolled in rollPad; walk-over crates
+    scatter(NADE_CRATES, 'nade', false, true, false);
     for (const pu of this.pickups) { pu.active = true; pu.respawnAt = 0; this.rollPad(pu); }
     this.boxes = [];
+    this.nades = [];
   }
   rollPad(pu) { if (pu.gun) pu.weapon = PAD_GUNS[Math.floor(Math.random() * PAD_GUNS.length)]; }
-  pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon })), active: this.pickups.map(p => p.active) }; }
+  pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon, crate: !!p.crate })), active: this.pickups.map(p => p.active) }; }
   broadcastPickups() { this.broadcast(this.pickupList()); }
   boxList() { return { type: 'boxes', boxes: this.boxes.map(b => ({ id: b.id, x: b.x, y: b.y, z: b.z, items: b.items.map(it => it.w) })) }; }
+  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, nades: p.nades || 0 }); }
+
+  voteWinner() {
+    const counts = {};
+    for (const p of this.humans) if (p.vote && LEVELS[p.vote]) counts[p.vote] = (counts[p.vote] || 0) + 1;
+    let best = this.level, n = 0;
+    for (const [k, v] of Object.entries(counts)) if (v > n) { n = v; best = k; }
+    return best;
+  }
 
   // a loot box on the ground at (x, y); nothing if it would land in lava / acid / bog
   addBox(x, y, items) {
@@ -116,8 +139,6 @@ export class Room {
     p.inv[w] = have + add;
     return add;
   }
-  // full ammo state, when the client's own count can't be trusted (respawn, rejected shot/reload)
-  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv }); }
 
   // a random open spot, preferring ones far from everyone in `avoid`
   spawnPos(avoid) {
@@ -160,6 +181,7 @@ export class Room {
     p.hp = MAX_HP;
     p.mag = { [START_GUN]: WEAPONS[START_GUN].mag }; // rounds loaded; you own the guns listed here
     p.inv = { [START_GUN]: AMMO[START_GUN] };         // spare rounds per gun
+    p.nades = 0;
     p.lastShot = {};
     if (p.brain) p.brain = newBrain();
     p.seq++;    // client snaps to the new spawn; stale inputs from the old life are ignored
@@ -168,7 +190,7 @@ export class Room {
 
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
-    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false });
+    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
     p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     this.resetPlayer(p);
@@ -196,14 +218,17 @@ export class Room {
     return true;
   }
 
-  // level: 'easy' | 'medium' | 'hard' (bot.js BOT_LEVELS); each bot gets a random character
+  // level: 'easy' | 'medium' | 'hard' (bot.js BOT_LEVELS); each bot gets a random character + name
   addBot(level = 'medium') {
-    if (this.list.length >= MAX_PLAYERS || !BOT_LEVELS[level]) return;
+    if (this.list.length >= MAX_PLAYERS || !BOT_LEVELS[level]) return false;
     const id = this.hub.nextId++;
     const skin = PLAYER_SKINS[Math.floor(Math.random() * PLAYER_SKINS.length)];
-    const bot = { id, bot: true, level, skin, knife: Math.random() < KNIFE_CHANCE, brain: newBrain(), a: 0, p: 0, seq: 0 };
+    const taken = new Set(this.list.map(p => (p.name || '').toLowerCase()));
+    const name = randomBotName(taken);
+    const bot = { id, bot: true, name, level, skin, knife: Math.random() < KNIFE_CHANCE, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
+    return true;
   }
 
   // take out the newest bot; false if there are none
@@ -213,6 +238,22 @@ export class Room {
     delete this.players[bot.id];
     log(`${this.hub.name(bot)} left room ${this.code}`);
     return true;
+  }
+
+  addBots(level, count = 1) {
+    let n = 0;
+    for (let i = 0; i < count; i++) { if (!this.addBot(level)) break; n++; }
+    return n;
+  }
+  fillBots(level) {
+    let n = 0;
+    while (this.list.length < MAX_PLAYERS) { if (!this.addBot(level)) break; n++; }
+    return n;
+  }
+  clearBots() {
+    let n = 0;
+    while (this.dropBot()) n++;
+    return n;
   }
 
   killPlayer(victim, killer, info) {
@@ -235,6 +276,8 @@ export class Room {
   startGame() {
     if (this.mode === 'teams' && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
+    const map = this.voteWinner();
+    if (map !== this.level) this.setLevel(map);
     const placed = [];
     for (const p of this.list) {
       p.kills = 0; p.ready = !!p.bot;
@@ -267,11 +310,12 @@ export class Room {
     log(`[${this.code}] Match ended: ${reason}`);
   }
 
-  // --- per-tick: bots, pits, pickups, state broadcast ---
+  // --- per-tick: bots, pits, pickups, grenades, state broadcast ---
   tick() {
     for (const p of this.list) if (p.bot) botTick(this, p);
     if (this.gameOn) {
-      const now = Date.now();
+      const now = Date.now(), dt = TICK / 1000;
+      this.stepNades(dt, now);
       for (const p of this.list) {
         if (kindAt(this.T, p.x, p.y) === 2 && p.z < -0.15) {
           p.hp -= PIT_DPS * TICK / 1000;
@@ -288,17 +332,68 @@ export class Room {
     }
     if (this.list.length < 2) return;
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
-    this.broadcast({ type: 'state', players });
+    this.broadcast({ type: 'state', players, nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
   }
 
-  // health and ammo crates are taken by walking over them, only when you need them (guns need
-  // the use key, see handlers.use). An ammo crate is a mag for each gun you carry
+  stepNades(dt, now) {
+    const still = [];
+    for (const n of this.nades) {
+      n.vz -= NADE.gravity * dt;
+      n.x += n.vx * dt; n.y += n.vy * dt; n.z += n.vz * dt;
+      const g = groundAt(this.T, n.x, n.y);
+      if (n.z < g) {
+        n.z = g; n.vz *= -NADE.bounce;
+        n.vx *= 0.7; n.vy *= 0.7;
+        if (Math.abs(n.vz) < 1.2) n.vz = 0;
+      }
+      if (hitsWall(this.T, n.x, n.y, 0.12)) {
+        n.vx *= -0.5; n.vy *= -0.5;
+        n.x += n.vx * dt; n.y += n.vy * dt;
+      }
+      if (now >= n.until) this.explodeNade(n);
+      else still.push(n);
+    }
+    this.nades = still;
+  }
+
+  explodeNade(n) {
+    const killer = this.players[n.by] || null;
+    this.broadcast({ type: 'nadeBoom', x: n.x, y: n.y, z: n.z, id: n.id });
+    if (!this.gameOn) return;
+    for (const o of this.list) {
+      if (!this.players[o.id]) continue;
+      if (killer && this.mode === 'teams' && o.team === killer.team && o !== killer) continue; // no team damage except self
+      const d = Math.hypot(o.x - n.x, o.y - n.y, (o.z + BODY_H / 2) - n.z);
+      if (d > NADE.radius) continue;
+      const dmg = Math.round(NADE.dmg * (1 - d / NADE.radius));
+      if (dmg <= 0) continue;
+      o.hp -= dmg;
+      this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z });
+      if (o.hp <= 0) {
+        this.killPlayer(o, killer && killer !== o ? killer : null, { weapon: 'nade', head: false, dist: d, a: Math.atan2(o.y - n.y, o.x - n.x) });
+        if (!this.gameOn) break;
+      }
+    }
+  }
+
+  // health, ammo, nades and gun crates are taken by walking over them when you need them
   tryWalkOver(p, pu, now) {
-    if (pu.gun || !pu.active || Math.hypot(p.x - pu.x, p.y - pu.y) > 0.8 || p.z > 1) return;
+    if (pu.gun && !pu.crate) return; // map gun pads need the use key; random gun crates are walk-over
+    if (!pu.active || Math.hypot(p.x - pu.x, p.y - pu.y) > 0.8 || p.z > 1) return;
     if (pu.weapon === 'health') {
       if (p.hp >= MAX_HP) return;
       p.hp = Math.min(MAX_HP, p.hp + HEAL);
       pu.respawnAt = now + HEAL_RESPAWN;
+    } else if (pu.nade || pu.weapon === 'nade') {
+      if ((p.nades || 0) >= NADE.maxCarry) return;
+      p.nades = (p.nades || 0) + 1;
+      pu.respawnAt = now + NADE_RESPAWN;
+      this.syncAmmo(p);
+    } else if (pu.gun) {
+      const r = this.takeGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon], null);
+      if (!r) return;
+      pu.respawnAt = now + GUN_CRATE_RESPAWN;
+      this.syncAmmo(p);
     } else {
       let got = 0;
       for (const w in p.mag) got += this.addSpare(p, w, WEAPONS[w].mag);
@@ -322,11 +417,22 @@ Room.prototype.handlers = {
   },
 
   level(p, msg) {
+    // lobby map clicks are votes now (see vote); keep level for backwards compat as a vote
+    this.handlers.vote.call(this, p, msg);
+  },
+
+  vote(p, msg) {
     if (this.gameOn || !LEVELS[msg.level]) return;
-    this.setLevel(msg.level);
-    log(`[${this.code}] ${this.hub.who(p)} picked ${LEVEL_NAMES[this.level]}`);
-    this.list.forEach(pl => pl.ready = !!pl.bot); // everyone re-confirms on the new map
-    this.broadcast({ type: 'level', level: this.level });
+    p.vote = msg.level;
+    p.ready = !!p.bot;
+    const winner = this.voteWinner();
+    if (winner !== this.level) {
+      this.setLevel(winner);
+      this.broadcast({ type: 'level', level: this.level });
+      log(`[${this.code}] ${this.hub.who(p)} voted ${LEVEL_NAMES[msg.level]} → leading ${LEVEL_NAMES[this.level]}`);
+    } else {
+      log(`[${this.code}] ${this.hub.who(p)} voted ${LEVEL_NAMES[msg.level]}`);
+    }
     this.roster();
   },
 
@@ -351,9 +457,21 @@ Room.prototype.handlers = {
     if (!this.maybeStart()) this.roster();
   },
 
-  addBot(p, msg) { this.addBot(msg.level); this.maybeStart(); }, // you may have readied up before adding it
-  removeBot() {
-    if (!this.dropBot()) return;
+  addBot(p, msg) {
+    const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+    this.addBots(msg.level, n);
+    this.maybeStart();
+    this.roster();
+  },
+  fillBots(p, msg) { this.fillBots(msg.level); this.maybeStart(); this.roster(); },
+  clearBots() {
+    this.clearBots();
+    if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
+    this.roster();
+  },
+  removeBot(p, msg) {
+    const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+    for (let i = 0; i < n; i++) if (!this.dropBot()) break;
     if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
   },
@@ -385,7 +503,7 @@ Room.prototype.handlers = {
     let got = null, where = null;
     if (Number.isInteger(msg.pad)) {
       const pu = this.pickups[msg.pad];
-      if (!pu || !pu.gun || !pu.active || !near(pu)) return;
+      if (!pu || !pu.gun || pu.crate || !pu.active || !near(pu)) return;
       const r = this.takeGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon], msg.drop);
       if (!r) return;
       pu.active = false;
@@ -413,6 +531,21 @@ Room.prototype.handlers = {
     }
     this.syncAmmo(p);
     this.broadcast({ type: 'pickup', id: p.id, weapon: got, x: where.x, y: where.y, z: where.z });
+  },
+
+  nade(p) {
+    if (!this.gameOn || !(p.nades > 0)) return;
+    p.nades--;
+    this.syncAmmo(p);
+    const cos = Math.cos(p.a), sin = Math.sin(p.a), cp = Math.cos(p.p), sp = Math.sin(p.p);
+    const eye = p.z + EYE - (p.sl ? 0.25 : 0);
+    const n = {
+      id: ++this.nadeId, by: p.id, until: Date.now() + NADE.fuse,
+      x: p.x + cos * 0.35, y: p.y + sin * 0.35, z: eye,
+      vx: cos * cp * NADE.speed, vy: sin * cp * NADE.speed, vz: sp * NADE.speed + 3.2,
+    };
+    this.nades.push(n);
+    this.broadcast({ type: 'nadeThrow', id: n.id, by: p.id, x: n.x, y: n.y, z: n.z });
   },
 
   // sent when the client finishes a reload; it can't have fired that gun for the whole reload

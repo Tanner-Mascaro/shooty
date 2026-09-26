@@ -121,18 +121,43 @@ const MODELS = {
     sym(0.0035, 0.014, 0.022, 0.06, 0.135, 'g'),                      // glowing spine
   ],
 };
+// variants reuse a close model; colors alone tell them apart
+MODELS.deagle = MODELS.pistol;
+MODELS.revolver = MODELS.pistol;
+MODELS.burst = MODELS.rifle;
+MODELS.carbine = MODELS.rifle;
+MODELS.uzi = MODELS.smg;
+MODELS.crossbow = MODELS.sniper;
+MODELS.lmg = [
+  ...MODELS.smg,
+  sym(0.03, -0.09, -0.02, -0.08, 0.18, 'd'),                          // heavier receiver
+  sym(0.014, -0.24, -0.09, 0.05, 0.12, 'd'),                          // box mag
+  sym(0.0145, -0.24, -0.23, 0.048, 0.122, 'g'),
+];
 
 // where each gun sits: hip (x, y, z, yaw, cant) and aimed (z only: x = y = 0 lines the sights up)
 const HIP = {
-  pistol:  [0.08, -0.06, 0.24, -0.06, 0.12],
-  rifle:   [0.1, -0.068, 0.22, -0.08, 0.18],
-  smg:     [0.1, -0.066, 0.22, -0.08, 0.18],
-  shotgun: [0.1, -0.068, 0.22, -0.08, 0.18],
-  sniper:  [0.1, -0.07, 0.23, -0.08, 0.18],
-  blade:   [0.11, -0.085, 0.24, -0.25, 0],
+  pistol:   [0.08, -0.06, 0.24, -0.06, 0.12],
+  deagle:   [0.085, -0.062, 0.24, -0.06, 0.12],
+  revolver: [0.088, -0.064, 0.24, -0.06, 0.14],
+  rifle:    [0.1, -0.068, 0.22, -0.08, 0.18],
+  burst:    [0.1, -0.068, 0.22, -0.08, 0.18],
+  carbine:  [0.098, -0.066, 0.22, -0.08, 0.16],
+  smg:      [0.1, -0.066, 0.22, -0.08, 0.18],
+  uzi:      [0.095, -0.062, 0.22, -0.07, 0.14],
+  lmg:      [0.105, -0.07, 0.22, -0.08, 0.2],
+  shotgun:  [0.1, -0.068, 0.22, -0.08, 0.18],
+  sniper:   [0.1, -0.07, 0.23, -0.08, 0.18],
+  crossbow: [0.1, -0.072, 0.23, -0.08, 0.16],
+  blade:    [0.11, -0.085, 0.24, -0.25, 0],
 };
-const ADS_Z = { pistol: 0.34, rifle: 0.3, smg: 0.3 };
-const MUZZLE = { pistol: [0, -0.018, 0.2], rifle: [0, -0.037, 0.67], smg: [0, -0.038, 0.37], shotgun: [0, -0.018, 0.62], sniper: [0, -0.047, 0.84] };
+const ADS_Z = { pistol: 0.34, deagle: 0.34, revolver: 0.34, rifle: 0.3, burst: 0.3, carbine: 0.3, smg: 0.3, uzi: 0.32, lmg: 0.28, crossbow: 0.32 };
+const MUZZLE = {
+  pistol: [0, -0.018, 0.2], deagle: [0, -0.018, 0.2], revolver: [0, -0.018, 0.2],
+  rifle: [0, -0.037, 0.67], burst: [0, -0.037, 0.67], carbine: [0, -0.037, 0.62],
+  smg: [0, -0.038, 0.37], uzi: [0, -0.036, 0.34], lmg: [0, -0.04, 0.37],
+  shotgun: [0, -0.018, 0.62], sniper: [0, -0.047, 0.84], crossbow: [0, -0.04, 0.7],
+};
 
 // light comes from above and a little to the left; lit per face, in the gun's own frame
 const LIGHT = { py: 1.25, ny: 0.45, px: 0.72, nx: 0.95, pz: 0.6, nz: 0.85 };

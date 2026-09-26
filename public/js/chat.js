@@ -1,6 +1,6 @@
-// Text chat for everyone in the room. In the lobby it's a card with the box always there; in a
-// match it moves to the bottom left, the chat key (Enter) opens the box, Enter sends and Esc
-// closes, and messages fade after a while (they come back while you're typing).
+// Text chat for everyone in the room. In the lobby it's the Messages card with the box always
+// there; in a match it moves to the bottom left, the chat key (Enter) opens the box, Enter sends
+// and Esc closes, and messages fade after a while (they come back while you're typing).
 import { S } from './state.js';
 import { send } from './net.js';
 import { settings, keyName } from './settings.js';
@@ -29,11 +29,19 @@ function closeChat() {
 
 function showHint() {
   const input = $('chatInput'), chat = $('chat');
-  input.placeholder = S.started ? `Press ${keyName(settings.keys.chat)} to chat` : 'Say something…';
+  input.placeholder = S.started ? `Press ${keyName(settings.keys.chat)} to message` : 'Type a message…';
   input.hidden = S.started && !chatOpen(); // in a match the box only shows while you type
   const home = S.started ? document.body : $('chatCard');
   if (chat.parentNode !== home && !chatOpen()) home.append(chat);
   $('chatLog').scrollTop = $('chatLog').scrollHeight;
+}
+
+function pushLine(line) {
+  line.dataset.t = performance.now();
+  const log = $('chatLog');
+  log.append(line);
+  while (log.children.length > KEEP) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
 }
 
 // a message from the server: { id, name, team, text }
@@ -45,11 +53,16 @@ export function addChat(msg) {
   who.className = msg.id === S.myId ? 'me' : !teams ? 'other' : msg.team === S.myTeam ? 'ally' : 'foe';
   text.textContent = msg.text;
   line.append(who, text);
-  line.dataset.t = performance.now();
-  const log = $('chatLog');
-  log.append(line);
-  while (log.children.length > KEEP) log.firstChild.remove();
-  log.scrollTop = log.scrollHeight;
+  pushLine(line);
+}
+
+// room events (join, leave, vote, match start…) — no speaker name
+export function addSystem(text) {
+  if (!text) return;
+  const line = document.createElement('div');
+  line.className = 'sys';
+  line.textContent = text;
+  pushLine(line);
 }
 
 // every frame: in a match, old lines fade unless the box is open

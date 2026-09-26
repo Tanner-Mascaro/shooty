@@ -122,6 +122,27 @@ export function buildTerrain(MAP, RES, style) {
   }
 
   for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
+
+  // scatter extra cover / ruins on open ground so maps feel denser without clogging lanes
+  for (let cy = 2; cy < MH - 2; cy++) for (let cx = 2; cx < MW - 2; cx++) {
+    if (at(cx, cy) !== '.') continue;
+    const n = hash2(cx * 3 + 11, cy * 5 + 7);
+    if (n > 0.965) { // sparse rubble piles
+      const x = cx + 0.5, y = cy + 0.5;
+      if (style === 'witch') dome(x, y, 0.55, 0.5, MAT.LEAVES, 0.2);
+      else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.25, cy + 0.25, cx + 0.75, cy + 0.75, 0.45, MAT.CRATE);
+      else dome(x, y, 0.45, 0.48, MAT.ROCK, 0.25);
+    } else if (n > 0.992 && (style === 'witch')) { // extra lonely trees
+      const x = cx + 0.5 + (hash2(cy, cx) - 0.5) * 0.2, y = cy + 0.5;
+      raise(x - 0.5, y - 0.5, x + 0.5, y + 0.5, (px, py) => Math.hypot(px - x, py - y) < 0.22 ? [2.2, MAT.BARK] : null);
+      props.push({ type: 'tree', x, y, h: 2.2, r: 0.85 + 0.3 * n });
+    } else if (n > 0.988 && (style === 'haunt' || style === 'castle') && at(cx + 1, cy) === '#' && at(cx, cy + 1) === '#') {
+      // corner buttress against walls
+      box(cx + 0.15, cy + 0.15, cx + 0.85, cy + 0.85, CEILING_H * 0.85, MAT.WALL);
+    }
+  }
+
+  for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
   return { hgt, kind, mat, props, TW, TH, RES };
 }
 
@@ -159,7 +180,7 @@ export function hitsWall(T, x, y, r) {
 
 // pickup pads in map order; the server and client index them identically
 export function findPickups(MAP) {
-  const kinds = { S: 'sniper', G: 'shotgun', M: 'smg', H: 'health' }, out = [];
+  const kinds = { S: 'sniper', G: 'shotgun', M: 'smg', H: 'health', N: 'nade' }, out = [];
   for (let y = 0; y < MAP.length; y++)
     for (let x = 0; x < MAP[y].length; x++)
       if (kinds[MAP[y][x]]) out.push({ x: x + 0.5, y: y + 0.5, weapon: kinds[MAP[y][x]] });

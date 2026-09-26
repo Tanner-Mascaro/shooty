@@ -1,15 +1,18 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
 import { TEAMS } from '/shared/config.js';
 import { S, nameOf, teamOf } from './state.js';
+import { settings } from './settings.js';
 import { initRoom, showRoom, scrollToMap } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
+import { initHome } from './home.js';
 import { refreshChat } from './chat.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait');
 
 export function initLobby() {
+  initHome();
   initRoom();
   initAccount();
   initFriends();
@@ -85,7 +88,9 @@ function nameSpan(id) {
 }
 
 function drawFeed() {
-  $('feed').replaceChildren(...S.feed.map(k => {
+  const el = $('feed');
+  if (!settings.showFeed) { el.replaceChildren(); return; }
+  el.replaceChildren(...S.feed.map(k => {
     const row = document.createElement('div');
     if (k.killer !== null && k.killer !== undefined) row.append(nameSpan(k.killer));
     const w = document.createElement('span');
@@ -134,5 +139,6 @@ export function updateHud() {
   $('myhp').style.width = Math.max(0, S.me.hp) + '%';
   $('sk').textContent = S.myKills;
   drawScores();
+  $('feed').hidden = !settings.showFeed;
   if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
 }

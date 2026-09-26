@@ -3,7 +3,7 @@
 import { S } from './state.js';
 import { canvas } from './render/canvas.js';
 import { initAudio } from './audio.js';
-import { fire, melee, switchSlot, cycleWeapon, swapWeapon, reload, aim, use } from './weapons.js';
+import { fire, melee, switchSlot, cycleWeapon, swapWeapon, reload, aim, use, throwNade } from './weapons.js';
 import { actionFor, captureKey, settingsOpen, openSettings, toggleFullscreen } from './settings.js';
 import { openChat } from './chat.js';
 import { askMic } from './voice.js';
@@ -32,6 +32,7 @@ export function initInput() {
     if (act === 'use') use();
     if (act === 'reload') reload();
     if (act === 'melee') melee(true);
+    if (act === 'nade') throwNade();
   });
   window.addEventListener('keyup', e => { S.keys[e.code] = false; });
   window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; }); // don't keep running after alt-tab

@@ -155,16 +155,16 @@ function drawScope(now) {
 
 // crosshair per weapon; the rifle/SMG gap opens in the air and on recoil
 function drawCrosshair() {
-  const cx = view.W / 2, cy = view.H / 2, w = S.weapon;
+  const cx = view.W / 2, cy = view.H / 2, w = S.weapon, sc = settings.crosshair;
   if (w === 'blade') {
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 6 * sc, 0, Math.PI * 2); ctx.stroke();
   } else if (w === 'shotgun') {
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 22 + S.recoil * 10, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, (22 + S.recoil * 10) * sc, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.fillRect(cx - 1, cy - 1, 2, 2);
   } else if (w === 'sniper') { // no crosshair unscoped, like CS
     ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(cx - 1, cy - 1, 2, 2);
   } else {
-    const g = 4 + (S.onGround ? 0 : 8) + S.recoil * 10, l = 8;
+    const g = (4 + (S.onGround ? 0 : 8) + S.recoil * 10) * sc, l = 8 * sc;
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath();
     ctx.moveTo(cx - g - l, cy); ctx.lineTo(cx - g, cy); ctx.moveTo(cx + g, cy); ctx.lineTo(cx + g + l, cy);
     ctx.moveTo(cx, cy - g - l); ctx.lineTo(cx, cy - g); ctx.moveTo(cx, cy + g); ctx.lineTo(cx, cy + g + l); ctx.stroke();
@@ -230,44 +230,52 @@ export function drawSpeed() {
 export function drawMinimap(now) {
   const { W, H } = view, me = S.me;
   const size = Math.min(230, Math.round(Math.min(W, H) * 0.3)), mx = W - size - 12, my = 12, cx = mx + size / 2, cy = my + size / 2, ms = size / 14;
-  ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(mx, my, size, size);
-  ctx.beginPath(); ctx.rect(mx, my, size, size); ctx.clip();
-  ctx.translate(cx, cy);
-  ctx.rotate(-me.a - Math.PI / 2);
-  ctx.scale(ms, ms);
-  ctx.translate(-me.x, -me.y);
-  ctx.imageSmoothingEnabled = false;
-  ctx.globalAlpha = 0.9;
-  ctx.drawImage(mini, 0, 0, MW, MH);
-  ctx.globalAlpha = 1;
-  S.pickupSpots.forEach((p, i) => {
-    if (!S.pickupActive[i]) return;
-    ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
-  });
-  ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
-  for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
-  for (const [id, o] of Object.entries(S.others)) {
-    if (!o.now) continue;
-    ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';
-    ctx.beginPath(); ctx.arc(o.now.x, o.now.y, 0.3, 0, Math.PI * 2); ctx.fill();
+  if (settings.showMinimap) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(mx, my, size, size);
+    ctx.beginPath(); ctx.rect(mx, my, size, size); ctx.clip();
+    ctx.translate(cx, cy);
+    ctx.rotate(-me.a - Math.PI / 2);
+    ctx.scale(ms, ms);
+    ctx.translate(-me.x, -me.y);
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(mini, 0, 0, MW, MH);
+    ctx.globalAlpha = 1;
+    S.pickupSpots.forEach((p, i) => {
+      if (!S.pickupActive[i]) return;
+      ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
+    });
+    ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
+    for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
+    for (const n of S.thrown) { ctx.fillStyle = '#4c4'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.22, 0, Math.PI * 2); ctx.fill(); }
+    for (const [id, o] of Object.entries(S.others)) {
+      if (!o.now) continue;
+      ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';
+      ctx.beginPath(); ctx.arc(o.now.x, o.now.y, 0.3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#fa4'; // you: arrow pointing up
+    ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 5, cy + 6); ctx.lineTo(cx - 5, cy + 6); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.6)'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, size, size);
   }
-  ctx.restore();
-  ctx.fillStyle = '#fa4'; // you: arrow pointing up
-  ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 5, cy + 6); ctx.lineTo(cx - 5, cy + 6); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.6)'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, size, size);
 
   ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';
   const slots = GUN_SLOTS + 1; // two guns, then the blade
+  const listY = settings.showMinimap ? my + size : my;
   for (let i = 1; i <= slots; i++) {
     const w = slotWeapon(i), ammo = w && w !== 'blade' ? ' ' + S.mag[w] + '/' + spare(w) : '';
     ctx.fillStyle = w && w === S.weapon ? '#fc6' : w ? '#aaa' : '#444';
-    ctx.fillText((w && w === S.weapon ? '> ' : '') + key('slot' + i) + ' ' + (w ? w.toUpperCase() : 'EMPTY') + ammo, mx + size, my + size + 22 * i);
+    ctx.fillText((w && w === S.weapon ? '> ' : '') + key('slot' + i) + ' ' + (w ? w.toUpperCase() : 'EMPTY') + ammo, mx + size, listY + 22 * i);
   }
   ctx.font = '12px Courier New'; ctx.fillStyle = '#777';
-  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' switch', mx + size, my + size + 22 * (slots + 1));
+  ctx.fillText(key('melee') + ' melee · ' + key('reload') + ' reload · ' + key('swap') + ' switch · ' + key('nade') + ' nade', mx + size, listY + 22 * (slots + 1));
+  if (S.nades > 0) {
+    ctx.font = 'bold 14px Courier New'; ctx.fillStyle = '#6c6';
+    ctx.fillText('GRENADES ' + S.nades, mx + size, listY + 22 * (slots + 2));
+  }
   const cd = WEAPONS[S.weapon].cd, left = S.nextFire[S.weapon] - now; // chamber bar for slow guns
-  if (cd > 400 && left > 0 && !S.reloading) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
+  if (settings.showMinimap && cd > 400 && left > 0 && !S.reloading) { ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(mx, my + size + 6, size * (1 - left / cd), 3); }
   ctx.textAlign = 'left';
 }
 

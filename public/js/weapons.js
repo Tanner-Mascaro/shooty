@@ -33,6 +33,14 @@ export function swapWeapon() {
   else cycleWeapon(1);
 }
 
+export function throwNade() {
+  if (!S.started || !(S.nades > 0) || performance.now() < S.switchUntil) return;
+  S.nades--;
+  S.switchUntil = performance.now() + 400;
+  send({ type: 'nade' });
+  play('swing');
+}
+
 export function reload() {
   const w = S.weapon, def = WEAPONS[w];
   if (def.melee || S.reloading || !(S.mag[w] < def.mag) || !(spare(w) > 0)) return;
@@ -86,7 +94,10 @@ export function findUseTarget() {
     const d = Math.hypot(me.x - o.x, me.y - o.y);
     if (d <= bestD && Math.abs(me.z - (o.z || 0)) < 1.2) { best = t; bestD = d; }
   };
-  S.pickupSpots.forEach((p, i) => { if (S.pickupActive[i] && p.weapon !== 'health' && p.weapon !== 'ammo') consider(p, { pad: i, items: [p.weapon] }); });
+  S.pickupSpots.forEach((p, i) => {
+    if (!S.pickupActive[i] || p.crate || p.weapon === 'health' || p.weapon === 'ammo' || p.weapon === 'nade') return;
+    consider(p, { pad: i, items: [p.weapon] });
+  });
   for (const b of S.boxes) consider(b, { box: b.id, items: b.items });
   return best;
 }
@@ -120,11 +131,18 @@ export function melee(quick) {
 
 // per-weapon feel when you fire
 const KICK = {
-  pistol:  { recoil: 0.5,  punch: 0.04,  shake: 2.5 },
-  rifle:   { recoil: 0.35, punch: 0.03,  shake: 2 },
-  smg:     { recoil: 0.25, punch: 0.015, shake: 1.5 },
-  shotgun: { recoil: 1,    punch: 0.12,  shake: 9,  fovKick: 0.05 },
-  sniper:  { recoil: 1,    punch: 0.28,  shake: 14, fovKick: 0.12 },
+  pistol:   { recoil: 0.5,  punch: 0.04,  shake: 2.5 },
+  deagle:   { recoil: 0.85, punch: 0.1,   shake: 6 },
+  revolver: { recoil: 1.0,  punch: 0.12,  shake: 7 },
+  rifle:    { recoil: 0.35, punch: 0.03,  shake: 2 },
+  burst:    { recoil: 0.45, punch: 0.04,  shake: 3 },
+  carbine:  { recoil: 0.38, punch: 0.032, shake: 2.2 },
+  smg:      { recoil: 0.25, punch: 0.015, shake: 1.5 },
+  uzi:      { recoil: 0.22, punch: 0.012, shake: 1.2 },
+  lmg:      { recoil: 0.4,  punch: 0.035, shake: 3 },
+  shotgun:  { recoil: 1,    punch: 0.12,  shake: 9,  fovKick: 0.05 },
+  sniper:   { recoil: 1,    punch: 0.28,  shake: 14, fovKick: 0.12 },
+  crossbow: { recoil: 0.7,  punch: 0.08,  shake: 4 },
 };
 
 export function fire() {
@@ -140,9 +158,9 @@ export function fire() {
     setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
   }
   send({ type: 'shoot', weapon: w, scoped: S.scoped });
-  play(w);
+  play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt' }[w] || w);
   S.muzzle = 6; S.fireT = now;
-  const k = KICK[w];
+  const k = KICK[w] || KICK.pistol;
   S.recoil = k.recoil;
   S.punch = Math.max(S.punch, k.punch);
   S.shake = Math.max(S.shake, k.shake);

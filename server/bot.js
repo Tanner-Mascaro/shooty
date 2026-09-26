@@ -17,6 +17,20 @@ export const BOT_LEVELS = {
 
 export const KNIFE_CHANCE = 0.25;
 
+// random human-looking names for bots (not "Bot 3")
+const FIRST = ['Ash', 'Blake', 'Casey', 'Drew', 'Eden', 'Finn', 'Gray', 'Harper', 'Indie', 'Jules',
+  'Kai', 'Lane', 'Morgan', 'Nova', 'Oak', 'Parker', 'Quinn', 'Remy', 'Sage', 'Tate',
+  'Vale', 'Wren', 'York', 'Zane', 'Ari', 'Beau', 'Cruz', 'Dale', 'Echo', 'Fox'];
+const LAST = ['Cole', 'Voss', 'Reed', 'Shaw', 'Pike', 'Cross', 'Stone', 'Frost', 'Drake', 'Hayes',
+  'Kane', 'Lane', 'Moss', 'Nash', 'Page', 'Quinn', 'Rook', 'Steel', 'Vance', 'West'];
+export function randomBotName(taken = new Set()) {
+  for (let i = 0; i < 40; i++) {
+    const n = FIRST[Math.floor(Math.random() * FIRST.length)] + ' ' + LAST[Math.floor(Math.random() * LAST.length)];
+    if (!taken.has(n.toLowerCase())) return n.slice(0, 16);
+  }
+  return FIRST[Math.floor(Math.random() * FIRST.length)].slice(0, 16);
+}
+
 // true if feet can stand at (x, y) coming from height z: no walls, no pits
 function walkable(T, x, y, z) {
   return kindAt(T, x, y) === 0 && groundAt(T, x, y) <= z + 0.3;

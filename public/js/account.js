@@ -2,6 +2,7 @@
 // The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
 import { token, setToken, clearToken, savedName, saveName, savedSkin } from './profile.js';
+import { homeProfile, homeAuth } from './home.js';
 
 const $ = id => document.getElementById(id);
 let me = {}; // latest profile message, merged (stat-only updates arrive after every kill)
@@ -51,10 +52,12 @@ export function showProfile(msg) {
   $('signedOut').hidden = !!me.username;
   $('acctName').textContent = me.username || '';
   drawBoard(); // your highlighted row may have changed
+  homeProfile(me);
 }
 
 // reply to register / login / logout
 export function onAuth(msg) {
+  homeAuth(msg);
   if (msg.error) { $('authErr').textContent = msg.error; return; }
   $('authPass').value = '';
   $('authForm').hidden = true; // the next profile message shows signed in / signed out

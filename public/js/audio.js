@@ -92,6 +92,7 @@ function tone(out, o) {
 // --- sounds: (volume, stereo pan) ---
 const SFX = {
   pistol(v, p) { const o = bus(v * 0.85, p, 0.15); noise(o, { filter:'bandpass', freq:2200, q:0.9, dur:0.08, vol:0.9 }); noise(o, { freq:700, dur:0.12, vol:0.6 }); tone(o, { type:'square', freq:240, to:80, dur:0.05, vol:0.2 }); },
+  deagle(v, p) { const o = bus(v, p, 0.25); noise(o, { filter:'bandpass', freq:1800, q:0.8, dur:0.12, vol:1 }); noise(o, { freq:400, dur:0.22, vol:0.9 }); tone(o, { type:'square', freq:140, to:45, dur:0.1, vol:0.35 }); },
   rifle(v, p) { const o = bus(v, p, 0.15); noise(o, { filter:'bandpass', freq:1800, q:0.8, dur:0.12, vol:0.9 }); noise(o, { freq:500, dur:0.18, vol:0.8 }); tone(o, { type:'square', freq:160, to:50, dur:0.08, vol:0.25 }); },
   smg(v, p) { const o = bus(v * 0.8, p, 0.1); noise(o, { filter:'bandpass', freq:2600, q:0.9, dur:0.07, vol:0.8 }); noise(o, { freq:800, dur:0.1, vol:0.6 }); tone(o, { type:'square', freq:220, to:90, dur:0.05, vol:0.18 }); },
   shotgun(v, p) { const o = bus(v, p, 0.4); noise(o, { freq:1400, to:300, dur:0.4, vol:1.3 }); tone(o, { freq:95, to:32, dur:0.45, vol:1.1 }); noise(o, { filter:'bandpass', freq:700, q:1, dur:0.2, vol:0.7 }); },
@@ -130,11 +131,18 @@ const SFX = {
   thud(v, p) { const o = bus(v, p); tone(o, { freq:70, to:35, dur:0.25, vol:0.8 }); noise(o, { freq:300, dur:0.2, vol:0.6 }); },
   win() { const o = bus(0.5, 0, 0.3); [523, 659, 784, 1047].forEach((f, i) => tone(o, { type:'triangle', freq:f, dur:0.3, vol:0.3, delay:i * 0.12 })); },
   lose() { const o = bus(0.5, 0, 0.3); [392, 330, 262, 196].forEach((f, i) => tone(o, { type:'triangle', freq:f, dur:0.35, vol:0.3, delay:i * 0.15 })); },
+  nade(v, p) {
+    const o = bus(v, p, 0.5);
+    noise(o, { filter:'highpass', freq:2500, dur:0.08, vol:1.2 });
+    noise(o, { freq:1800, to:200, dur:0.55, vol:1.4 });
+    tone(o, { freq:70, to:28, dur:0.7, vol:1.2 });
+    noise(o, { freq:500, dur:0.9, vol:0.4, delay:0.1, attack:0.05 });
+  },
 };
 
 export function play(name, vol, pan) {
-  if (!actx) return;
-  try { SFX[name](vol === undefined ? 1 : vol, pan || 0); } catch (e) {}
+  if (!actx || !SFX[name]) return;
+  try { SFX[name]((vol === undefined ? 1 : vol) * settings.sfx, pan || 0); } catch (e) {}
 }
 
 // volume/pan for a sound coming from a world position

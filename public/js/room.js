@@ -111,7 +111,7 @@ function initMapCarousel() {
 }
 
 export const inviteLink = code => location.origin + location.pathname + '?room=' + code;
-const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+export const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 export const goToRoom = code => { location.href = code ? '?room=' + code : location.pathname; };
 
 export function initRoom() {
@@ -133,7 +133,7 @@ export function initRoom() {
   $('readyBtn').addEventListener('click', () => { initAudio(); send({ type: 'ready' }); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
     initAudio();
-    send({ type: 'level', level: b.dataset.level });
+    send({ type: 'vote', level: b.dataset.level });
   }));
   initMapCarousel();
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => send({ type: 'mode', mode: b.dataset.mode })));
@@ -147,8 +147,12 @@ export function initRoom() {
     try { localStorage.setItem('botLevel', botLevel); } catch {}
   }));
   showBotLevel();
-  $('addBot').addEventListener('click', () => send({ type: 'addBot', level: botLevel }));
-  $('removeBot').addEventListener('click', () => send({ type: 'removeBot' }));
+  $('addBot').addEventListener('click', () => send({ type: 'addBot', level: botLevel, count: 1 }));
+  $('addBots3').addEventListener('click', () => send({ type: 'addBot', level: botLevel, count: 3 }));
+  $('fillBots').addEventListener('click', () => send({ type: 'fillBots', level: botLevel }));
+  $('removeBot').addEventListener('click', () => send({ type: 'removeBot', count: 1 }));
+  $('removeBots3').addEventListener('click', () => send({ type: 'removeBot', count: 3 }));
+  $('clearBots').addEventListener('click', () => send({ type: 'clearBots' }));
 
   $('copyLink').addEventListener('click', async () => {
     if (!S.room) return;
@@ -165,6 +169,18 @@ export function initRoom() {
 export function showRoom() {
   const r = S.room;
   if (!r) return;
+  // one-shot from the home "Play vs bots" button: fill the private room and ready up
+  try {
+    const fill = sessionStorage.getItem('shooty.fillBots');
+    if (fill && !r.gameOn) {
+      sessionStorage.removeItem('shooty.fillBots');
+      send({ type: 'fillBots', level: fill });
+      if (sessionStorage.getItem('shooty.autoReady')) {
+        sessionStorage.removeItem('shooty.autoReady');
+        setTimeout(() => send({ type: 'ready' }), 120);
+      }
+    }
+  } catch {}
   $('roomCode').textContent = r.code;
   $('roomKind').textContent = r.private ? 'private' : 'public';
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('sel', b.dataset.mode === r.mode));
@@ -198,8 +214,20 @@ export function showRoom() {
   $('teamPick').hidden = !teams || r.gameOn;
   document.querySelectorAll('#teamPick button').forEach(b => b.classList.toggle('sel', +b.dataset.team === S.myTeam));
   $('botCtl').hidden = false;
-  $('addBot').disabled = r.players.length >= r.max;
-  $('removeBot').disabled = !r.players.some(p => p.bot);
+  const full = r.players.length >= r.max, hasBot = r.players.some(p => p.bot);
+  for (const id of ['addBot', 'addBots3', 'fillBots']) $(id).disabled = full || r.gameOn;
+  for (const id of ['removeBot', 'removeBots3', 'clearBots']) $(id).disabled = !hasBot || r.gameOn;
+
+  // map vote counts on each card
+  const votes = r.votes || {};
+  const myVote = me && me.vote;
+  document.querySelectorAll('#levels button').forEach(b => {
+    const n = votes[b.dataset.level] || 0;
+    b.classList.toggle('voted', myVote === b.dataset.level);
+    let badge = b.querySelector('.votes');
+    if (!badge) { badge = document.createElement('span'); badge.className = 'votes'; b.appendChild(badge); }
+    badge.textContent = n ? n + ' vote' + (n === 1 ? '' : 's') : '';
+  });
 
   // what's needed before the match can start
   const ready = r.players.filter(p => p.ready).length, n = r.players.length;
@@ -209,7 +237,7 @@ export function showRoom() {
   if (S.disconnected) return;
   $('waitMsg').textContent =
     r.gameOn ? 'Match in progress — joining...'
-    : n < 2 ? 'Waiting for players — send friends the invite link, or add a bot'
-    : me && me.ready ? `Waiting for everyone to ready up (${ready}/${n})`
-    : `Pick a level, then click "I'm Here" (${ready}/${n} ready)`;
+    : n < 2 ? 'Waiting for players — send friends the invite link, or fill with bots'
+    : me && me.ready ? `Waiting for everyone (${ready}/${n}) · map votes decide the arena`
+    : `Vote a map, then click "I'm Here" (${ready}/${n} ready)`;
 }

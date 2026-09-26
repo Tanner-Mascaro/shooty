@@ -185,7 +185,7 @@ export function updatePlayer(dt) {
 
   const sens = SENS * settings.sens * (!S.scoped ? 1 : S.weapon === 'sniper' ? 0.3 : 0.8);
   me.a += S.mouseDX * sens;
-  S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens));
+  S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens * (settings.invertY ? -1 : 1)));
   // the gun trails fast mouse movement a little, then settles (see drawViewmodel)
   const k = Math.min(1, dt * 10), lim = v => Math.max(-4, Math.min(4, v));
   S.swayX += (lim(-S.mouseDX / Math.max(dt, 1e-3) * 0.004) - S.swayX) * k;

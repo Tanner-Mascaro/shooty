@@ -2,6 +2,7 @@
 import { TICK, EYE, SLIDE } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
+import { settings } from '../settings.js';
 import { BASE_FOV, SCOPE_FOV, ADS_ZOOM, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
@@ -48,7 +49,7 @@ function updateCorpses(now, dt) {
 }
 
 function setupCamera() {
-  const target = !S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1);
+  const target = (!S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1)) * settings.fov;
   S.fov += (target - S.fov) * 0.3;
   const tanH = Math.tan(S.fov / 2) * (1 + S.fovKick), focal = (view.RW / 2) / tanH;
   const ox = S.shake ? (Math.random() - 0.5) * S.shake : 0, oy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
@@ -85,6 +86,11 @@ export function render(dt) {
   });
   const box = boxSprite(S.theme.accent);
   for (const b of S.boxes) drawSprite(b.x, b.y, b.z, box.w, box.h, box.px, box.pal, box.emit);
+  const nadeSp = pickupSprite('nade', GUN_COLOR.nade);
+  for (const n of S.thrown) {
+    const bob = 0.02 * Math.sin(now / 80 + n.id);
+    drawSprite(n.x, n.y, n.z + bob, nadeSp.w, nadeSp.h, nadeSp.px, nadeSp.pal, nadeSp.emit);
+  }
   for (const p of S.T.props) { // swamp tree canopies (the trunks are terrain)
     if (p.type !== 'tree' || Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;
     const sp = canopySprite((p.x * 7 + p.y * 3 | 0) % 4);

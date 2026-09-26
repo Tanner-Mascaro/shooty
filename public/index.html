@@ -20,7 +20,52 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="on-home">
+<div id="home">
+  <div id="homeInner">
+    <div id="homeBrand">SHOOTY</div>
+    <p id="homeTag">Sign in, then jump into a match — or just play vs bots.</p>
+
+    <div id="homePanel">
+      <div id="homeSigned" hidden>
+        <div class="label" id="homeWelcome">Signed in</div>
+        <button type="button" id="homeLogout" class="link">Sign out</button>
+      </div>
+
+      <form id="homeAuth">
+        <div class="label">Sign in</div>
+        <input id="homeUser" placeholder="Username" maxlength="16" autocomplete="username" spellcheck="false">
+        <input id="homePass" type="password" placeholder="Password" maxlength="72" autocomplete="current-password">
+        <div id="homeAuthBtns">
+          <button type="submit">Sign in</button>
+          <button type="button" id="homeRegister">Create account</button>
+        </div>
+        <div id="homeAuthErr"></div>
+        <button type="button" id="homeSkipAuth" class="link">Continue as guest</button>
+      </form>
+
+      <div id="homeGuest" hidden>
+        <button type="button" id="homeShowAuth" class="link">Have an account? Sign in</button>
+      </div>
+
+      <div id="homeActions">
+        <div class="label">Your name</div>
+        <input id="homeName" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
+        <div class="label">Bot difficulty</div>
+        <div id="homeBotLevel" class="choice seg">
+          <button type="button" data-level="easy">Easy</button>
+          <button type="button" data-level="medium" class="sel">Medium</button>
+          <button type="button" data-level="hard">Hard</button>
+        </div>
+        <button type="button" id="homeVsBots" class="homePrimary">Play vs bots</button>
+        <div id="homeAlt">
+          <button type="button" id="homeQuick" class="ghost">Quick play</button>
+          <button type="button" id="homePrivate" class="ghost">Private room</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="corner"><button class="fsToggle ghost">Fullscreen</button><button class="gear ghost">Settings</button></div>
 <div id="wait">
   <header id="lobbyHead">
@@ -44,7 +89,7 @@
         </div>
       </div>
       <div class="field">
-        <div class="label">MAP</div>
+        <div class="label">MAP <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">click to vote</small></div>
         <div class="map-stage">
           <button id="mapPrev" class="skin-arrow" type="button" aria-label="Previous map">&#x2039;</button>
           <div id="levels" class="choice maps">
@@ -76,7 +121,8 @@
         </div>
         <div id="botCtl">
           <div id="botLevel" class="choice seg"><button data-level="easy">EASY</button><button data-level="medium">MEDIUM</button><button data-level="hard">HARD</button></div>
-          <button id="addBot">+ BOT</button> <button id="removeBot">− BOT</button>
+          <button id="addBot">+1</button><button id="addBots3">+3</button><button id="fillBots">FILL</button>
+          <button id="removeBot">−1</button><button id="removeBots3">−3</button><button id="clearBots">CLEAR</button>
         </div>
       </div>
       <div id="result"></div>
@@ -111,8 +157,8 @@
         <ul id="friendList"></ul>
       </div>
       <div class="card" id="chatCard">
-        <div class="label">CHAT</div>
-        <div id="chat"><div id="chatLog"></div><input id="chatInput" type="text" autocomplete="off" spellcheck="false"></div>
+        <div class="label">MESSAGES</div>
+        <div id="chat"><div id="chatLog"></div><input id="chatInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type a message…"></div>
       </div>
       <div class="card" id="boardCard" hidden>
         <div class="label">LEADERBOARD</div>
@@ -151,15 +197,21 @@
     <div class="label">DISPLAY</div>
     <div class="setRow"><span>Frame rate limit</span><select id="fpsCap"></select></div>
     <label class="setRow"><span>Show FPS counter</span><input type="checkbox" id="showFps"></label>
+    <div class="setRow"><span>Field of view <small id="fovVal"></small></span><input type="range" id="fov" min="0.75" max="1.35" step="0.05"></div>
+    <div class="setRow"><span>Crosshair size <small id="crosshairVal"></small></span><input type="range" id="crosshair" min="0.6" max="1.8" step="0.1"></div>
+    <label class="setRow"><span>Show minimap</span><input type="checkbox" id="showMinimap"></label>
+    <label class="setRow"><span>Show kill feed</span><input type="checkbox" id="showFeed"></label>
     <div class="setRow"><span>Fullscreen <small>(no tabs or browser bars)</small></span><button id="fsBtn" class="ghost">Go fullscreen</button></div>
     <div class="label">SOUND</div>
     <div class="setRow"><span>Master volume <small id="volumeVal"></small></span><input type="range" id="volume" min="0" max="1" step="0.05"></div>
+    <div class="setRow"><span>Gun &amp; hit sounds <small id="sfxVal"></small></span><input type="range" id="sfx" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Background hum <small id="ambientVal"></small></span><input type="range" id="ambient" min="0" max="1" step="0.05"></div>
     <div class="label">VOICE CHAT</div>
     <div class="setRow"><span>Voice</span><select id="voiceMode"><option value="ptt">Push to talk</option><option value="open">Open mic</option><option value="off">Off</option></select></div>
     <div class="setRow"><span>Voice volume <small id="voiceVolVal"></small></span><input type="range" id="voiceVol" min="0" max="1" step="0.05"></div>
     <div class="label">MOUSE</div>
     <div class="setRow"><span>Sensitivity <small id="sensVal"></small></span><input type="range" id="sens" min="0.2" max="3" step="0.05"></div>
+    <label class="setRow"><span>Invert look (Y)</span><input type="checkbox" id="invertY"></label>
     <div class="setRow"><span>Scope (right click)</span><select id="ads"><option value="toggle">Click to toggle</option><option value="hold">Hold to aim</option></select></div>
     <div class="label">KEYS <small>click a key, then press the new one · Esc cancels</small></div>
     <ul id="binds"></ul>
