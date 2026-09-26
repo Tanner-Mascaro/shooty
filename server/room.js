@@ -480,6 +480,7 @@ export class Room {
     } else if (pu.gun) {
       const r = this.takeGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon], null);
       if (!r) return;
+      if (p.bot && p.brain) p.brain.weapon = pu.weapon;
       pu.respawnAt = now + GUN_CRATE_RESPAWN;
       this.syncAmmo(p);
     } else {
