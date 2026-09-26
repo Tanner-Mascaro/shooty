@@ -7,10 +7,23 @@ import { send } from './net.js';
 import { play, setWind, setSizzle } from './audio.js';
 import { burst } from './particles.js';
 
-// highest ground under the player's footprint
+// highest walkable ground under the player's footprint; walls are solid blockers, not ramps
 export function footGround(x, y) {
   const T = S.T, r = 0.2;
-  return Math.max(groundAt(T, x, y), groundAt(T, x + r, y + r), groundAt(T, x - r, y - r), groundAt(T, x + r, y - r), groundAt(T, x - r, y + r));
+  const samples = [
+    [x, y],
+    [x + r, y + r],
+    [x - r, y - r],
+    [x + r, y - r],
+    [x - r, y + r],
+  ];
+
+  let highest = -Infinity;
+  for (const [sx, sy] of samples) {
+    if (kindAt(T, sx, sy) === 1) return -Infinity;
+    highest = Math.max(highest, groundAt(T, sx, sy));
+  }
+  return highest;
 }
 
 export const inPit = () => S.me && S.T && kindAt(S.T, S.me.x, S.me.y) === 2 && S.me.z < -0.15;
@@ -74,8 +87,8 @@ export function updatePlayer(dt) {
 
   const g = footGround(me.x, me.y);
   if (S.onGround) {
-    if (g >= me.z - 0.12) me.z = g;
-    else { S.onGround = false; S.vz = 0; } // walked off a ledge into a pit
+    if (Number.isFinite(g) && g >= me.z - 0.12) me.z = g;
+    else { S.onGround = false; S.vz = 0; } // walked off a ledge into a pit or hit a wall
   }
   if (!S.onGround) {
     S.vz -= GRAVITY * dt;
