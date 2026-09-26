@@ -5,6 +5,7 @@ import { S } from './state.js';
 import { canvas } from './render/canvas.js';
 import { initAudio } from './audio.js';
 import { fire, melee, switchWeapon, cycleWeapon, swapWeapon, reload, toggleScope } from './weapons.js';
+import { dash } from './physics.js';
 import { actionFor, captureKey, settingsOpen, toggleFullscreen } from './settings.js';
 
 const locked = () => document.pointerLockElement === canvas;
@@ -27,6 +28,7 @@ export function initInput() {
     if (act === 'next') cycleWeapon(1);
     if (act === 'reload') reload();
     if (act === 'melee') melee(true);
+    if (act === 'dash' && locked()) dash();
   });
   window.addEventListener('keyup', e => { S.keys[e.code] = false; });
   window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; }); // don't keep running after alt-tab

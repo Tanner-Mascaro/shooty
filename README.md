@@ -28,6 +28,23 @@ For remote play run `ngrok http 3000` and share the URL.
 
 Win scores and room size are in `shared/config.js`.
 
+## Plague
+
+Choose **PLAGUE** in the lobby and ready up with at least two players (bots work too). Under **STARTING INFECTION**, choose **1 RANDOM PLAYER / BOT** to pick exactly one starting monster each round, or **CHOOSE PLAYERS** to set each player and bot to **Infected** or **Healthy** in the player list. Manual setup requires at least one of each. Any player can change the setup before the round; changes reset everyone's ready status.
+
+- A plague player's kill infects the victim: they respawn as a monster and hunt the remaining healthy players.
+- Healthy players use normal weapons and have 100 health. Infected players and bots have 300 health, move 2 times as fast, and get a double jump (release and press jump again in the air). Infected spawn and respawn at full health, and health pickups heal up to their 300-health cap.
+- Press **Left Shift** to dash in your movement direction, or forward when standing still. The burst lasts 0.2 seconds with a 2-second cooldown, works in the air, and stops at walls. The HUD shows when the dash is ready; its key can be changed in Settings.
+- Infected players only use claws: the main shoot button (left click) attacks, and holding it repeats attacks, with no on-screen claw sprite. Each hit deals 50 damage, so a full-health survivor takes two hits. Claws have no headshot or backstab bonus. Infected players cannot equip, fire, reload, or pick up guns; health pickups still work.
+- Infected bots chase survivors at the increased speed, dash to close the distance, and attack with claws. Teammates cannot hurt each other. Killing a monster does not cure it; pit deaths do not infect healthy players.
+- The plague wins when nobody is healthy. The healthy team wins if anyone survives for three minutes. The HUD shows your side, survivors and time remaining.
+- Players and bots joining a round in progress join the plague. If the last monster leaves, the healthy team wins; if the last healthy player leaves, the plague wins.
+- Random setup picks again each rematch. Manual setup remembers your starting roles, independently of infections during a round. New arrivals in the lobby default to Healthy and can be reassigned. Your selected character returns in the lobby and whenever you are healthy.
+
+Change `PLAGUE_DURATION`, `PLAGUE_SPEED_MULTIPLIER`, `PLAGUE_MAX_HP`, `PLAGUE_JUMPS`, `PLAGUE_DASH_SPEED`, `PLAGUE_DASH_DURATION`, `PLAGUE_DASH_COOLDOWN`, or `WEAPONS.claws` in `shared/config.js` to tune the mode.
+
+Run `npm test` for server checks covering infection, friendly fire, round endings, late joins, rematches, and the original game modes.
+
 ## Bots
 
 Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.

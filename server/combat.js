@@ -45,8 +45,8 @@ export function doShoot(T, shooter, targets, weapon, scoped) {
 }
 
 // stabs the nearest target in front of you; same result shape as doShoot
-export function doMelee(T, p, targets) {
-  const w = WEAPONS.blade;
+export function doMelee(T, p, targets, weapon = 'blade') {
+  const w = WEAPONS[weapon];
   const ray = { a: p.a, p: p.p, dist: w.range, hit: null, head: false };
   let best = null;
   for (const o of targets) {
@@ -63,7 +63,7 @@ export function doMelee(T, p, targets) {
   }
   if (!best) return { rays: [ray], hits: [] };
   const { o, d, dx, dy } = best;
-  const backstab = (Math.cos(o.a) * dx + Math.sin(o.a) * dy) / (d || 1) > 0.5;
+  const backstab = weapon === 'blade' && (Math.cos(o.a) * dx + Math.sin(o.a) * dy) / (d || 1) > 0.5;
   ray.hit = o; ray.dist = d; ray.a = Math.atan2(dy, dx);
   return { rays: [ray], hits: [{ target: o, dmg: backstab ? w.backstab : w.dmg, head: false, backstab, ray }] };
 }

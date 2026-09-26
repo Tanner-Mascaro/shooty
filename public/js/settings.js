@@ -9,6 +9,7 @@ const $ = id => document.getElementById(id);
 export const ACTIONS = {
   forward: ['Move forward', 'KeyW'], back: ['Move back', 'KeyS'], left: ['Strafe left', 'KeyA'], right: ['Strafe right', 'KeyD'],
   jump: ['Jump', 'Space'], reload: ['Reload', 'KeyR'], swap: ['Swap to last gun', 'KeyQ'], next: ['Next gun', 'KeyE'],
+  dash: ['Infected dash', 'ShiftLeft'],
   melee: ['Quick melee', 'KeyF'], slot1: ['Rifle', 'Digit1'], slot2: ['Sniper', 'Digit2'], slot3: ['Shotgun', 'Digit3'],
   slot4: ['SMG', 'Digit4'], slot5: ['Blade', 'Digit5'], fullscreen: ['Fullscreen', 'KeyO'],
 };
@@ -92,8 +93,12 @@ function render() {
 }
 
 // the hint line at the bottom of the screen, using your keys
-function showControlsHint() {
+export function showControlsHint() {
   const k = a => keyName(settings.keys[a]);
+  if (S.clawsOnly) {
+    $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump, press again for double jump | ${k('dash')} dash | hold left click attack | ${k('fullscreen')} fullscreen`;
+    return;
+  }
   $('controls').textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | click shoot | right click scope | ` +
     `${k('reload')} reload | ${k('swap')} last gun | ${k('next')}/wheel next gun | ${k('slot1')}-${k('slot5')} slots | ${k('melee')} melee | ${k('fullscreen')} fullscreen`;
 }

@@ -2,7 +2,9 @@
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt } from '/shared/terrain.js';
 import { S } from './state.js';
-import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, JUMP_V, SPEED_LIMIT, STEP } from './constants.js';
+import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
+import { PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED } from '/shared/config.js';
+import { tryJump, tryDash } from '/shared/movement.js';
 import { send } from './net.js';
 import { play, setWind, setSizzle } from './audio.js';
 import { burst } from './particles.js';
@@ -162,6 +164,17 @@ function applyFriction(dt) {
   S.vx *= k; S.vy *= k;
 }
 
+export function dash() {
+  if (!S.started || !S.me || !S.clawsOnly) return;
+  const forward = Number(held('forward')) - Number(held('back'));
+  const side = Number(held('right')) - Number(held('left'));
+  const cos = Math.cos(S.me.a), sin = Math.sin(S.me.a);
+  const dx = forward || side ? cos * forward - sin * side : cos;
+  const dy = forward || side ? sin * forward + cos * side : sin;
+  if (!tryDash(S, dx, dy, performance.now())) return;
+  send({ type: 'dash', dx, dy, seq: S.mySeq });
+}
+
 export function updatePlayer(dt) {
   if (!S.started || !S.me) { setWind(0); setSizzle(0); return; }
   const me = S.me;
@@ -180,14 +193,24 @@ export function updatePlayer(dt) {
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
-  const wishSpeed = wl > 0 ? MAX_SPEED * (S.scoped ? 0.55 : S.weapon === 'blade' ? 1.15 : 1) : 0;
+  const movementScale = S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1;
+  const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? 0.55 : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
-  if (S.onGround && held('jump')) { S.vz = JUMP_V; S.onGround = false; play('jump'); }
-  if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
+  const now = performance.now();
+  if (S.dashUntil && (!S.clawsOnly || now >= S.dashUntil)) {
+    S.dashUntil = 0;
+    const speed = Math.hypot(S.vx, S.vy), limit = MAX_SPEED * movementScale;
+    if (speed > limit) { S.vx *= limit / speed; S.vy *= limit / speed; }
+  }
+  if (tryJump(S, held('jump'), S.clawsOnly ? PLAGUE_JUMPS : 1)) play('jump');
+  if (S.clawsOnly && now < S.dashUntil) {
+    S.vx = S.dashX * PLAGUE_DASH_SPEED; S.vy = S.dashY * PLAGUE_DASH_SPEED;
+  } else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
 
   let speed = Math.hypot(S.vx, S.vy);
-  if (speed > SPEED_LIMIT) { S.vx *= SPEED_LIMIT / speed; S.vy *= SPEED_LIMIT / speed; speed = SPEED_LIMIT; }
+  const speedLimit = SPEED_LIMIT * movementScale;
+  if (speed > speedLimit) { S.vx *= speedLimit / speed; S.vy *= speedLimit / speed; speed = speedLimit; }
   S.speed = speed;
 
   const prevX = me.x, prevY = me.y;

@@ -1,9 +1,11 @@
 // All mutable client state lives on this one object so every module sees the same values.
 import { BASE_FOV } from './constants.js';
+import { isTeamMode } from '/shared/config.js';
 
 export const S = {
   // connection / match
   myId: null, started: false, myKills: 0, myTeam: 0,
+  plagueEndsAt: 0, // estimated local deadline from the server's remaining time
   // the room from the server: { code, private, mode, level, gameOn, bots, max, players: [{ id, name, team, ready, bot }] }
   room: null,
 
@@ -14,8 +16,10 @@ export const S = {
   // weapons + input
   // mag: rounds loaded per gun you own; inv: spare rounds per picked-up gun (the rifle's are unlimited)
   mag: { rifle: 30 }, inv: {}, weapon: 'rifle', lastWeapon: 'blade', scoped: false, switchUntil: 0, mouseHeld: false,
+  clawsOnly: false, jumpsUsed: 0, jumpHeld: false,
+  dashX: 0, dashY: 0, dashUntil: 0, nextDash: 0,
   reloading: null, // { w, start, until } while a reload runs
-  nextFire: { rifle: 0, sniper: 0, shotgun: 0, smg: 0, blade: 0 },
+  nextFire: { rifle: 0, sniper: 0, shotgun: 0, smg: 0, blade: 0, claws: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
 
   // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick
@@ -37,11 +41,11 @@ export const S = {
   cam: null, // camera for the current frame, set by render/index.js
 };
 
-export const owned = w => w === 'blade' || S.mag[w] !== undefined;
+export const owned = w => S.clawsOnly ? w === 'claws' : w === 'blade' || S.mag[w] !== undefined;
 export const spare = w => w === 'rifle' ? Infinity : S.inv[w] || 0;
 
 // roster lookups
 export const playerInfo = id => (S.room && S.room.players.find(p => p.id === id)) || null;
 export const nameOf = id => id === S.myId ? 'You' : (playerInfo(id) || { name: '?' }).name;
 export const teamOf = id => id === S.myId ? S.myTeam : (playerInfo(id) || { team: 0 }).team;
-export const isEnemy = id => !S.room || S.room.mode !== 'teams' || teamOf(id) !== S.myTeam;
+export const isEnemy = id => !S.room || !isTeamMode(S.room.mode) || teamOf(id) !== S.myTeam;

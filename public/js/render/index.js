@@ -1,5 +1,5 @@
 // One frame: set up the camera, simulate effects, draw the world, then the HUD on top.
-import { TICK, EYE } from '/shared/config.js';
+import { TICK, EYE, PLAGUE_TEAM } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
@@ -23,6 +23,7 @@ function interpolateOthers(now) {
 
 // teams mode tints bodies: red / blue (free-for-all keeps the level's own colors)
 const TEAM_TINT = { 1: [230, 50, 40], 2: [40, 110, 255] };
+const PLAGUE_TINT = [100, 225, 45];
 
 // bodies fly in the shot direction, thud on landing, sink after 4s
 function updateCorpses(now, dt) {
@@ -91,7 +92,9 @@ export function render(dt) {
   for (const o of Object.values(S.others))
     if (o.now) {
       const player = S.room && S.room.players.find(p => p.id === o.now.id);
-      drawPlayer(o.now.x, o.now.y, o.now.z, 1, 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null, player && player.skin);
+      const team = player ? player.team : o.now.team;
+      const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM ? PLAGUE_TINT : teams ? TEAM_TINT[team] : null;
+      drawPlayer(o.now.x, o.now.y, o.now.z, 1, 1, now - o.hitT < 90, o.now.sc, tint, player && player.skin);
     }
   drawParticles(S.embers);
   drawParticles(S.particles);

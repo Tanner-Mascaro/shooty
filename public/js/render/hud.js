@@ -110,7 +110,7 @@ function drawScope() {
 // crosshair per weapon; the rifle/SMG gap opens in the air and on recoil
 function drawCrosshair() {
   const cx = view.W / 2, cy = view.H / 2, w = S.weapon;
-  if (w === 'blade') {
+  if (w === 'blade' || w === 'claws') {
     ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.stroke();
   } else if (w === 'shotgun') {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 22 + S.recoil * 10, 0, Math.PI * 2); ctx.stroke();
@@ -214,7 +214,8 @@ function drawViewmodel(now) {
 }
 
 export function drawWeaponView(now) {
-  if (S.scoped && S.fov < BASE_FOV * 0.6) drawScope();
+  if (S.clawsOnly) drawCrosshair();
+  else if (S.scoped && S.fov < BASE_FOV * 0.6) drawScope();
   else { drawCrosshair(); drawViewmodel(now); }
   if (S.muzzle > 0) S.muzzle--;
 }
@@ -299,6 +300,18 @@ export function drawMinimap(now) {
   ctx.strokeStyle = 'rgba(' + S.theme.accent + ',0.6)'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, size, size);
 
   ctx.font = 'bold 15px Courier New'; ctx.textAlign = 'right';
+  if (S.clawsOnly) {
+    ctx.fillStyle = '#a9e66c';
+    ctx.fillText('CLAWS', mx + size, my + size + 22);
+    ctx.font = '12px Courier New'; ctx.fillStyle = '#ddd';
+    ctx.fillText('Hold left click: attack', mx + size, my + size + 44);
+    ctx.fillText(key('jump') + ' twice: double jump', mx + size, my + size + 62);
+    const cooldown = Math.max(0, S.nextDash - now);
+    ctx.fillStyle = cooldown ? '#aaa' : '#a9e66c';
+    ctx.fillText(key('dash') + ' dash: ' + (cooldown ? (cooldown / 1000).toFixed(1) + 's' : 'READY'), mx + size, my + size + 80);
+    ctx.textAlign = 'left';
+    return;
+  }
   WEAPON_ORDER.forEach((w, i) => {
     const has = owned(w), ammo = has && w !== 'blade' ? ' ' + S.mag[w] + (w === 'rifle' ? '' : '/' + spare(w)) : '';
     ctx.fillStyle = w === S.weapon ? '#fc6' : has ? '#aaa' : '#444';
@@ -314,7 +327,7 @@ export function drawMinimap(now) {
 // big ammo count, bottom right, and the reload bar under the crosshair
 export function drawAmmo(now) {
   const { W, H } = view, w = S.weapon;
-  if (w === 'blade') return;
+  if (w === 'blade' || w === 'claws') return;
   const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w), tail = ' / ' + (left === Infinity ? '∞' : left);
   ctx.textAlign = 'right'; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
   ctx.font = 'bold 20px Courier New'; ctx.fillStyle = '#aaa';

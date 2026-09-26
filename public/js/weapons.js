@@ -30,6 +30,7 @@ export function swapWeapon() {
 }
 
 export function reload() {
+  if (S.clawsOnly) return;
   const w = S.weapon, def = WEAPONS[w];
   if (def.melee || S.reloading || !(S.mag[w] < def.mag) || !(spare(w) > 0)) return;
   S.reloading = { w, start: performance.now(), until: performance.now() + def.reload };
@@ -39,6 +40,7 @@ export function reload() {
 
 // called every frame: finish a reload, or start one when the mag runs dry
 export function updateReload() {
+  if (S.clawsOnly) { S.reloading = null; return; }
   const now = performance.now(), r = S.reloading;
   if (r && now >= r.until) {
     const n = Math.min(WEAPONS[r.w].mag - S.mag[r.w], spare(r.w));
@@ -52,6 +54,7 @@ export function updateReload() {
 }
 
 export function toggleScope() {
+  if (S.clawsOnly) return;
   if (S.weapon !== 'sniper' || S.reloading) return;
   if (!S.scoped && performance.now() < S.nextFire.sniper) return; // still chambering
   S.scoped = !S.scoped;
@@ -60,14 +63,17 @@ export function toggleScope() {
 
 // quick = F key: stab without switching away from your gun
 export function melee(quick) {
+  if (!S.started || !S.me) return;
+  const weapon = S.clawsOnly ? 'claws' : 'blade';
   const now = performance.now();
-  if (now < S.nextFire.blade) return;
-  S.nextFire.blade = now + WEAPONS.blade.cd;
+  if (now < S.nextFire[weapon]) return;
+  S.nextFire[weapon] = now + WEAPONS[weapon].cd;
   S.swingT = now;
-  if (quick && S.weapon !== 'blade') { S.quickUntil = now + 320; S.switchUntil = Math.max(S.switchUntil, now + 320); }
+  if (!S.clawsOnly && quick && S.weapon !== 'blade') { S.quickUntil = now + 320; S.switchUntil = Math.max(S.switchUntil, now + 320); }
   S.scoped = false;
-  send({ type: 'shoot', weapon: 'blade' });
+  send({ type: 'shoot', weapon });
   play('swing');
+  if (S.clawsOnly) return;
   const lunge = S.onGround ? 1.6 : 0.8; // lunge forward, stacks with bhop
   S.vx += Math.cos(S.me.a) * lunge; S.vy += Math.sin(S.me.a) * lunge;
 }
@@ -81,8 +87,9 @@ const KICK = {
 };
 
 export function fire() {
+  if (!S.started || !S.me) return;
   const w = S.weapon;
-  if (w === 'blade') { melee(false); return; }
+  if (S.clawsOnly || w === 'blade') { melee(false); return; }
   const now = performance.now();
   if (now < S.switchUntil || now < S.nextFire[w] || S.reloading) return;
   S.nextFire[w] = now + WEAPONS[w].cd;
@@ -107,5 +114,5 @@ export function fire() {
 // called every frame: auto weapons keep firing while the button is held
 export function autoFire() {
   updateReload();
-  if (S.mouseHeld && S.started && WEAPONS[S.weapon].auto) fire();
+  if (S.mouseHeld && S.started && (S.clawsOnly || WEAPONS[S.weapon].auto)) fire();
 }

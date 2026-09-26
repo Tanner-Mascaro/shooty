@@ -1,6 +1,7 @@
 // Server-side bot for local testing (--bots). It wanders between random reachable spots and
 // shoots the rifle at the nearest enemy it can see.
-import { TICK, EYE, BODY_H, WEAPONS } from '../shared/config.js';
+import { TICK, EYE, BODY_H, WEAPONS, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_GRAVITY } from '../shared/config.js';
+import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
 import { groundAt, kindAt } from '../shared/terrain.js';
 
@@ -57,19 +58,39 @@ function pickGoal(game, p) {
 // one server tick of thinking, moving and shooting
 export function botTick(game, p) {
   const T = game.T, b = p.brain, dt = TICK / 1000, now = Date.now();
+  const infected = game.isInfected(p), speed = infected ? MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER : SPEED;
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
   const foe = game.enemies(p).filter(o => canSee(T, p, o)).sort((x, y) => dist(x) - dist(y))[0];
+  const chasing = infected && foe && clearPath(T, p, foe);
+  if (chasing)
+    b.goal = { x: foe.x, y: foe.y }; // infected bots actively pursue reachable survivors
+  if (chasing && b.target === foe.id && b.seenAt && now - b.seenAt >= REACTION && dist(foe) > 3 && dist(foe) < 6)
+    game.dash(p, foe.x - p.x, foe.y - p.y, now);
 
   // move toward the current goal, picking a new one on arrival or when blocked
-  if (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10) {
+  if (!chasing && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10)) {
     b.goal = pickGoal(game, p); b.stuck = 0;
   }
   let heading = p.a;
-  if (b.goal) {
+  if (b.goal && !(chasing && dist(foe) < WEAPONS.claws.range * 0.65)) {
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
-    const nx = p.x + Math.cos(heading) * SPEED * dt, ny = p.y + Math.sin(heading) * SPEED * dt;
-    if (walkable(T, nx, ny, p.z)) { p.x = nx; p.y = ny; p.z = groundAt(T, nx, ny); }
-    else b.stuck++;
+    const dashing = infected && game.gameOn && now < p.dashUntil;
+    const dx = dashing ? p.dashX : Math.cos(heading), dy = dashing ? p.dashY : Math.sin(heading);
+    const travel = Math.min((dashing ? PLAGUE_DASH_SPEED : speed) * dt, chasing ? Math.max(0, dist(foe) - WEAPONS.claws.range * 0.65) : Infinity);
+    const steps = Math.max(1, Math.ceil(travel / 0.1)); // dash movement must still stop at walls
+    for (let i = 0; i < steps; i++) {
+      const nx = p.x + dx * travel / steps, ny = p.y + dy * travel / steps;
+      if (!walkable(T, nx, ny, p.z)) { b.stuck++; p.dashUntil = 0; break; }
+      p.x = nx; p.y = ny;
+      if (p.onGround) p.z = groundAt(T, nx, ny);
+    }
+  }
+  const jump = !!(infected && game.gameOn && foe && dist(foe) < 6 && foe.z > p.z + 0.15 && (p.onGround || p.vz <= 0));
+  tryJump(p, jump, infected ? PLAGUE_JUMPS : 1);
+  if (!p.onGround) {
+    p.vz -= MOVE_GRAVITY * dt; p.z += p.vz * dt;
+    const floor = groundAt(T, p.x, p.y);
+    if (p.z <= floor) { p.z = floor; p.vz = 0; p.onGround = true; }
   }
 
   // turn toward the target and shoot once it has had time to react
@@ -86,6 +107,13 @@ export function botTick(game, p) {
   p.a = turnToward(p.a, Math.atan2(foe.y - p.y, foe.x - p.x), TURN * dt);
   p.p = (foe.z + BODY_H * 0.55 - (p.z + EYE)) / (d || 1); // bullet pitch is a slope
   if (!game.gameOn || now - b.seenAt < REACTION || now < b.nextShot) return;
+  if (infected) {
+    if (d <= WEAPONS.claws.range) {
+      b.nextShot = now + WEAPONS.claws.cd;
+      game.handlers.shoot.call(game, p, { weapon: 'claws' });
+    }
+    return;
+  }
   if (!(p.mag.rifle > 0)) { // out: reload, a little after the last shot like a player would
     if (now - (p.lastShot.rifle || 0) >= WEAPONS.rifle.reload) game.handlers.reload.call(game, p, { weapon: 'rifle' });
     return;

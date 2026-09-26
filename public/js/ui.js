@@ -1,6 +1,6 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
-import { TEAMS } from '/shared/config.js';
-import { S, nameOf, teamOf } from './state.js';
+import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName } from '/shared/config.js';
+import { S, nameOf, isEnemy } from './state.js';
 import { initRoom, showRoom } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
@@ -65,7 +65,7 @@ export function banner(text, gold) { S.bannerText = text; S.bannerT = performanc
 
 const FEED_MS = 5000;
 export function pushFeed(msg) {
-  S.feed.push({ killer: msg.killer, victim: msg.victim, weapon: msg.weapon, head: msg.head, backstab: msg.backstab, t: performance.now() });
+  S.feed.push({ killer: msg.killer, victim: msg.victim, weapon: msg.weapon, head: msg.head, backstab: msg.backstab, infected: msg.infected, t: performance.now() });
   if (S.feed.length > 5) S.feed.shift();
   drawFeed();
 }
@@ -74,7 +74,7 @@ export function pushFeed(msg) {
 function nameSpan(id) {
   const el = document.createElement('span');
   el.textContent = nameOf(id);
-  el.className = id === S.myId ? 'me' : S.room && S.room.mode === 'teams' && teamOf(id) === S.myTeam ? 'ally' : 'foe';
+  el.className = id === S.myId ? 'me' : isEnemy(id) ? 'foe' : 'ally';
   return el;
 }
 
@@ -84,7 +84,7 @@ function drawFeed() {
     if (k.killer !== null && k.killer !== undefined) row.append(nameSpan(k.killer));
     const w = document.createElement('span');
     w.className = 'weapon';
-    w.textContent = ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
+    w.textContent = k.infected ? ' [INFECTED] ' : ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
     row.append(w, nameSpan(k.victim));
     return row;
   }));
@@ -101,8 +101,8 @@ function scoreRows() {
 
 let lastScores = '';
 function drawScores() {
-  const rows = scoreRows(), teams = S.room && S.room.mode === 'teams';
-  const key = JSON.stringify([rows, teams, S.myTeam, S.room && S.room.players.map(p => p.name)]);
+  const rows = scoreRows(), mode = S.room && S.room.mode, teams = isTeamMode(mode);
+  const key = JSON.stringify([rows, mode, S.myTeam, S.room && S.room.players.map(p => p.name)]);
   if (key === lastScores) return; // only touch the DOM when something changed
   lastScores = key;
   const line = r => {
@@ -117,7 +117,8 @@ function drawScores() {
     for (const t of [1, 2]) {
       const h = document.createElement('div');
       h.className = 'teamHead team' + t;
-      h.textContent = `${TEAMS[t]} ${rows.filter(r => r.team === t).reduce((n, r) => n + r.kills, 0)}`;
+      const members = rows.filter(r => r.team === t);
+      h.textContent = mode === 'plague' ? `${teamName(mode, t)} (${members.length})` : `${teamName(mode, t)} ${members.reduce((n, r) => n + r.kills, 0)}`;
       out.push(h, ...rows.filter(r => r.team === t).map(line));
     }
   } else out.push(...rows.map(line));
@@ -125,8 +126,20 @@ function drawScores() {
 }
 
 export function updateHud() {
-  $('myhp').style.width = Math.max(0, S.me.hp) + '%';
+  const maxHp = S.room?.mode === 'plague' && S.myTeam === PLAGUE_TEAM ? PLAGUE_MAX_HP : MAX_HP;
+  $('myhp').style.width = Math.max(0, Math.min(100, S.me.hp / maxHp * 100)) + '%';
   $('sk').textContent = S.myKills;
+  const plague = S.started && S.room?.mode === 'plague';
+  $('plagueStatus').hidden = !plague;
+  if (plague) {
+    const infected = S.myTeam === PLAGUE_TEAM;
+    const healthy = S.room.players.filter(p => p.team === HEALTHY_TEAM).length;
+    const seconds = Math.max(0, Math.ceil((S.plagueEndsAt - performance.now()) / 1000));
+    $('plagueStatus').classList.toggle('infected', infected);
+    $('plagueRole').textContent = infected ? 'YOU ARE PLAGUE' : 'YOU ARE HEALTHY';
+    $('plagueClock').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    $('plagueObjective').textContent = `${healthy} healthy remaining · ${infected ? 'Infect everyone' : 'Survive until time runs out'}`;
+  }
   drawScores();
   if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
 }
