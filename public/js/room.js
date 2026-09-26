@@ -44,12 +44,14 @@ export function showRoom() {
   const teams = r.mode === 'teams';
   $('roster').replaceChildren(...[...r.players].sort((a, b) => a.team - b.team).map(p => {
     const li = document.createElement('li');
-    if (teams) li.className = 'team' + p.team;
+    if (teams) li.classList.add('team' + p.team);
+    li.classList.toggle('ready', p.ready);
+    li.classList.toggle('you', p.id === S.myId);
     const name = document.createElement('span');
     name.textContent = p.name + (p.id === S.myId ? ' (you)' : '');
     const tag = document.createElement('span');
     tag.className = 'tag';
-    tag.textContent = (teams ? TEAMS[p.team] + ' · ' : '') + (p.ready ? 'READY' : '…');
+    tag.textContent = (teams ? TEAMS[p.team] + ' · ' : '') + (p.ready ? 'READY' : 'NOT READY');
     li.append(name, tag);
     return li;
   }));

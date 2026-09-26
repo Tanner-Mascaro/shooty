@@ -35,8 +35,17 @@ export function showProfile(msg) {
   else if (document.activeElement !== nameInput) nameInput.value = me.name;
 
   const kd = me.deaths ? (me.kills / me.deaths).toFixed(2) : me.kills;
-  $('stats').textContent = (me.rank ? `#${me.rank} · ` : '') +
-    `${me.kills} kills · ${me.deaths} deaths · K/D ${kd} · ${me.wins} wins · ${me.losses} losses`;
+  $('stats').replaceChildren(...[
+    ['rank', me.rank ? '#' + me.rank : '—'], ['wins', me.wins], ['losses', me.losses],
+    ['kills', me.kills], ['deaths', me.deaths], ['K/D', kd],
+  ].map(([label, value]) => {
+    const tile = document.createElement('div');
+    tile.className = 'stat' + (label === 'rank' ? ' rank' : '');
+    tile.append(document.createElement('b'), document.createElement('span'));
+    tile.firstChild.textContent = value;
+    tile.lastChild.textContent = label;
+    return tile;
+  }));
 
   $('signedIn').hidden = !me.username;
   $('signedOut').hidden = !!me.username;
@@ -68,5 +77,5 @@ function drawBoard() {
     for (const v of [i + 1, r.name, r.wins, r.losses, r.kills, kd]) tr.appendChild(document.createElement('td')).textContent = v;
     return tr;
   }));
-  $('board').hidden = board.length === 0;
+  $('boardCard').hidden = board.length === 0;
 }
