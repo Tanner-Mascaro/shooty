@@ -1,7 +1,7 @@
 :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 * { margin:0; padding:0; box-sizing:border-box; }
 [hidden] { display:none !important; }
-body { background:#000; overflow:hidden; height:100vh; font-family:'Courier New',monospace; }
+html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-family:'Courier New',monospace; }
 canvas { display:block; position:absolute; top:0; left:0; }
 
 #hud { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; align-items:center; z-index:10; pointer-events:none; }
@@ -334,6 +334,10 @@ body.ingame #corner { display:none; }
 #chatCard #chatLog:empty::before { content:'Room chat here — use Msg on a friend (or /w name) for private messages'; color:var(--muted); }
 body.ingame #chat { position:fixed; left:14px; bottom:40px; z-index:160; width:min(380px, calc(100vw - 28px)); gap:4px; }
 #chatLog { max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; color:#ddd; text-shadow:0 0 4px #000; scrollbar-width:thin; }
+body.ingame #chatLog { scrollbar-width:none; } /* no stray scroll gutter while playing */
+body.ingame #chatLog::-webkit-scrollbar { display:none; }
+body.chatting #chatLog { scrollbar-width:thin; }
+body.chatting #chatLog::-webkit-scrollbar { display:block; width:6px; }
 #chatLog > div { overflow-wrap:anywhere; transition:opacity .6s; }
 #chatLog > div.old { opacity:0; }
 #chatLog > div.sys { color:rgba(235,228,214,0.55); font-style:italic; }
