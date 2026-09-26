@@ -1,15 +1,16 @@
 // All sounds are synthesized with WebAudio, no asset files.
 // Browsers only allow audio after a user gesture, so initAudio() is called from click handlers.
 import { S } from './state.js';
+import { settings } from './settings.js';
 
-let actx = null, master = null, verb = null, noiseBuf = null, windGain = null, sizzleGain = null, droneOsc = [], droneLp = null;
+let actx = null, master = null, verb = null, noiseBuf = null, windGain = null, sizzleGain = null, droneOsc = [], droneLp = null, droneGain = null;
 
 export function initAudio() {
   if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   actx = new AC();
-  master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
+  master = actx.createGain(); master.connect(actx.destination);
   noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -28,7 +29,7 @@ export function initAudio() {
   sizzleGain = loop('highpass', 2500); // standing in a pit
   // ambient level drone
   droneLp = actx.createBiquadFilter(); droneLp.type = 'lowpass';
-  const dg = actx.createGain(); dg.gain.value = 0.05; droneLp.connect(dg); dg.connect(master);
+  droneGain = actx.createGain(); droneLp.connect(droneGain); droneGain.connect(master);
   droneOsc = [0, 1, 2].map(() => { const o = actx.createOscillator(); o.connect(droneLp); o.start(); return o; });
   const lfo = actx.createOscillator(); lfo.frequency.value = 0.07;
   const lg = actx.createGain(); lg.gain.value = 80; lfo.connect(lg); lg.connect(droneLp.frequency); lfo.start();
@@ -39,6 +40,14 @@ export function updateDrone() {
   if (!actx || !S.theme) return;
   droneOsc.forEach((o, i) => { o.type = S.theme.drone[i][0]; o.frequency.value = S.theme.drone[i][1]; });
   droneLp.frequency.value = S.theme.droneCut;
+  applyVolume();
+}
+
+// master and background (level hum) volume from settings, 0..1 each
+export function applyVolume() {
+  if (!actx) return;
+  master.gain.setTargetAtTime(0.6 * settings.volume, actx.currentTime, 0.05);
+  if (S.theme) droneGain.gain.setTargetAtTime(0.05 * (S.theme.droneVol ?? 1) * settings.ambient, actx.currentTime, 0.05);
 }
 
 function setLoop(g, v) { if (g) g.gain.setTargetAtTime(v, actx.currentTime, 0.1); }
@@ -82,6 +91,8 @@ function tone(out, o) {
 
 // --- sounds: (volume, stereo pan) ---
 const SFX = {
+  pistol(v, p) { const o = bus(v * 0.85, p, 0.15); noise(o, { filter:'bandpass', freq:2200, q:0.9, dur:0.08, vol:0.9 }); noise(o, { freq:700, dur:0.12, vol:0.6 }); tone(o, { type:'square', freq:240, to:80, dur:0.05, vol:0.2 }); },
+  deagle(v, p) { const o = bus(v, p, 0.25); noise(o, { filter:'bandpass', freq:1800, q:0.8, dur:0.12, vol:1 }); noise(o, { freq:400, dur:0.22, vol:0.9 }); tone(o, { type:'square', freq:140, to:45, dur:0.1, vol:0.35 }); },
   rifle(v, p) { const o = bus(v, p, 0.15); noise(o, { filter:'bandpass', freq:1800, q:0.8, dur:0.12, vol:0.9 }); noise(o, { freq:500, dur:0.18, vol:0.8 }); tone(o, { type:'square', freq:160, to:50, dur:0.08, vol:0.25 }); },
   smg(v, p) { const o = bus(v * 0.8, p, 0.1); noise(o, { filter:'bandpass', freq:2600, q:0.9, dur:0.07, vol:0.8 }); noise(o, { freq:800, dur:0.1, vol:0.6 }); tone(o, { type:'square', freq:220, to:90, dur:0.05, vol:0.18 }); },
   shotgun(v, p) { const o = bus(v, p, 0.4); noise(o, { freq:1400, to:300, dur:0.4, vol:1.3 }); tone(o, { freq:95, to:32, dur:0.45, vol:1.1 }); noise(o, { filter:'bandpass', freq:700, q:1, dur:0.2, vol:0.7 }); },
@@ -107,6 +118,7 @@ const SFX = {
   slash(v, p) { const o = bus(v, p, 0.2); noise(o, { filter:'highpass', freq:3000, dur:0.1, vol:0.8 }); tone(o, { freq:150, to:60, dur:0.14, vol:0.6 }); noise(o, { freq:600, dur:0.15, vol:0.7 }); },
   backstab() { const o = bus(1, 0, 0.4); noise(o, { filter:'highpass', freq:2500, dur:0.15, vol:1 }); tone(o, { type:'sawtooth', freq:110, to:35, dur:0.6, vol:0.4 }); },
   whiz(v, p) { const o = bus(v, p); noise(o, { filter:'bandpass', freq:5000, to:1500, q:2, dur:0.12, vol:1 }); },
+  slide() { const o = bus(0.6, 0); noise(o, { filter:'bandpass', freq:900, to:350, q:0.8, dur:0.6, vol:0.7, attack:0.03 }); noise(o, { filter:'highpass', freq:3000, dur:0.3, vol:0.25 }); },
   jump(v, p) { const o = bus(v * 0.5, p); noise(o, { freq:900, dur:0.12, vol:0.4, attack:0.02 }); },
   land(v, p) { const o = bus(v, p); noise(o, { freq:350, dur:0.12, vol:0.6 }); tone(o, { freq:90, to:45, dur:0.1, vol:0.3 }); },
   step(v, p) { const o = bus(v * 0.35, p); noise(o, { freq:500 + Math.random() * 300, dur:0.07, vol:0.6 }); },
@@ -119,11 +131,18 @@ const SFX = {
   thud(v, p) { const o = bus(v, p); tone(o, { freq:70, to:35, dur:0.25, vol:0.8 }); noise(o, { freq:300, dur:0.2, vol:0.6 }); },
   win() { const o = bus(0.5, 0, 0.3); [523, 659, 784, 1047].forEach((f, i) => tone(o, { type:'triangle', freq:f, dur:0.3, vol:0.3, delay:i * 0.12 })); },
   lose() { const o = bus(0.5, 0, 0.3); [392, 330, 262, 196].forEach((f, i) => tone(o, { type:'triangle', freq:f, dur:0.35, vol:0.3, delay:i * 0.15 })); },
+  nade(v, p) {
+    const o = bus(v, p, 0.5);
+    noise(o, { filter:'highpass', freq:2500, dur:0.08, vol:1.2 });
+    noise(o, { freq:1800, to:200, dur:0.55, vol:1.4 });
+    tone(o, { freq:70, to:28, dur:0.7, vol:1.2 });
+    noise(o, { freq:500, dur:0.9, vol:0.4, delay:0.1, attack:0.05 });
+  },
 };
 
 export function play(name, vol, pan) {
-  if (!actx) return;
-  try { SFX[name](vol === undefined ? 1 : vol, pan || 0); } catch (e) {}
+  if (!actx || !SFX[name]) return;
+  try { SFX[name]((vol === undefined ? 1 : vol) * settings.sfx, pan || 0); } catch (e) {}
 }
 
 // volume/pan for a sound coming from a world position

@@ -19,6 +19,29 @@ set PORT=4000&& npm start      # Windows (Command Prompt)
 
 For remote play run `ngrok http 3000` and share the URL.
 
+## Weapons and loot
+
+- **Two guns plus the blade.** Everyone spawns with a pistol. Keys 1 and 2 pick your guns, 3 the blade, Q swaps back to the last one.
+- **Nothing is unlimited.** Every gun's ammo runs out, spares are capped at three mags, and a gun you've emptied completely is gone. Only the blade needs no ammo.
+- **Ammo crates:** ten small crates at random spots each match. Walk over one for a mag for each gun you carry (skipped if you're full). They come back after 12s.
+- **Gun pads** roll a random rifle, sniper, shotgun or SMG each time they respawn. Walk up and press **E** to take it. With both slots full, the gun in your hand is swapped out and left in a box at your feet. Health pads are still taken by walking over them.
+- **Loot boxes:** when someone dies, their picked-up guns go in a box at the body with the ammo left in them. Press **E** to loot: ammo for guns you carry comes out first, then one gun per press. Boxes vanish after 30s.
+- **Reloading:** R, or automatically when the mag is empty. The server counts rounds too.
+
+- **Sliding:** Shift while running drops you low with a burst of speed and little friction; jump out of it to keep the speed, or hold it as you land from a bhop. Sliding players are shorter targets.
+
+Mags, reload times, ammo, crates, pad guns, slot count and slide tuning are in `shared/config.js`.
+
+## Settings
+
+The ⚙ button (top right, or P in a match) sets the frame rate limit, FPS counter, fullscreen, master and background volume, mouse sensitivity, scope mode (click to toggle or hold to aim) and every key binding. Settings are saved in the browser and on your profile, so signing in on another device brings them along.
+
+## Chat and voice
+
+- **Text chat:** everyone in the room. In the lobby it's a card; in a match press **Enter** to type, Enter to send, Esc to cancel, and messages fade after a few seconds. Up to 140 characters, 5 messages per 5 seconds; the server log records them.
+- **Voice chat:** push to talk on **V** by default (or open mic / off in settings). Audio goes straight between browsers (WebRTC); the server only passes the connection setup along. The browser asks for the mic the first time you talk. In a teams match only your teammates hear you. Names light up while someone talks, and the 🔈 next to a name in the lobby mutes them.
+- Voice needs https (fine on Render) or localhost; over plain http on another device the mic is blocked. It uses public STUN servers only, so on some strict networks (some school/office Wi-Fi, carrier networks) two players may not be able to connect; adding a TURN server to `ICE` in `public/js/voice.js` fixes that.
+
 ## Rooms, modes and friends
 
 - **Rooms:** every game is a room with a short code, and the address bar is its invite link (`/?room=ABCDE`). **Quick play** puts you in any public room with space; **New private room** makes one only people with the link (or an invite) can join. Up to 8 players; you can join a match in progress.
@@ -35,7 +58,7 @@ Choose **PLAGUE** in the lobby and ready up with at least two players (bots work
 - A plague player's kill infects the victim: they respawn as a monster and hunt the remaining healthy players.
 - Healthy players use normal weapons and have 100 health. Infected players and bots have 300 health, move 2 times as fast, and get a double jump (release and press jump again in the air). Infected spawn and respawn at full health, and health pickups heal up to their 300-health cap.
 - Press **Left Shift** to dash in your movement direction, or forward when standing still. The burst lasts 0.2 seconds with a 2-second cooldown, works in the air, and stops at walls. The HUD shows when the dash is ready; its key can be changed in Settings.
-- Infected players only use claws: the main shoot button (left click) attacks, and holding it repeats attacks, with no on-screen claw sprite. Each hit deals 50 damage, so a full-health survivor takes two hits. Claws have no headshot or backstab bonus. Infected players cannot equip, fire, reload, or pick up guns; health pickups still work.
+- Infected players only use claws: the main shoot button (left click) attacks, and holding it repeats attacks, with no on-screen claw sprite. Each hit deals 50 damage, so a full-health survivor takes two hits. Claws have no headshot or backstab bonus. Infected players cannot equip, fire, reload, or pick up guns, loot weapon boxes, or use grenades; health pickups still work.
 - Infected bots chase survivors at the increased speed, dash to close the distance, and attack with claws. Teammates cannot hurt each other. Killing a monster does not cure it; pit deaths do not infect healthy players.
 - The plague wins when nobody is healthy. The healthy team wins if anyone survives for three minutes. The HUD shows your side, survivors and time remaining.
 - Players and bots joining a round in progress join the plague. If the last monster leaves, the healthy team wins; if the last healthy player leaves, the plague wins.
@@ -47,7 +70,7 @@ Run `npm test` for server checks covering infection, friendly fire, round ending
 
 ## Bots
 
-Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.
+Any room can be filled out with server-side bots using the lobby's **+ BOT / − BOT** buttons, in free-for-all or teams. Pick **Easy / Medium / Hard** first; each bot also gets a random character. Bots are always ready, so a solo player can just add a few and click "I'm Here". They only take empty seats: when a person joins a full room, a bot leaves to make space. They leave when the last person does. Matches with a bot in them don't count toward saved stats.
 
 `npm run bots` (or `npm start -- --bots` without auto-restart) also starts every new room with one bot, for local testing.
 
@@ -55,11 +78,19 @@ Any room can be filled out with server-side bots using the lobby's **+ BOT / −
 - **Shoots** the rifle at the nearest enemy it can see within 25 units, after a short reaction delay and with some aim wobble
 - Fires through the same `shoot` handler as a real player, so hits, kills, tracers, sounds and scoring all work normally
 
-Speed, sight range, reaction time, fire rate and aim error are constants at the top of `server/bot.js`.
+Speed, sight range, reaction time, fire rate and aim error per difficulty are in `BOT_LEVELS` at the top of `server/bot.js`.
+
+## Haunted house
+
+The fourth map is half an old house and half the Backrooms, under a real ceiling (drawn by `drawCeiling` in `public/js/render/world.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`).
+
+## Seeing players
+
+Every player has a Minecraft-style glowing outline: white in free-for-all, red / blue in teams. Teammates show through walls, and so does any enemy for 3 seconds after you hit them.
 
 ## Profiles, accounts and leaderboard
 
-Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses) plus their leaderboard rank. Matches with a bot in them don't count.
+Players set a name in the lobby and get saved stats (kills, deaths, K/D, wins, losses) plus their leaderboard rank. Matches with a bot in them don't count. Profiles also keep each player's settings.
 
 - **Guests:** no sign-up needed. The browser keeps a random secret key that identifies the profile, so clearing site data or switching browsers starts a new one.
 - **Accounts:** "Create account" puts a username + password on your current profile (stats kept). "Sign in" on any other device switches that browser to your account. Passwords are hashed with scrypt; 5 wrong tries per minute locks out that IP for the rest of the minute. There's no password reset yet (no email on file).
@@ -70,6 +101,10 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 1. Create a free database at [neon.tech](https://neon.tech) (or Supabase) and copy its connection string (`postgresql://...`)
 2. In Render: your service → **Environment** → add `DATABASE_URL` with that string
 3. Redeploy. The log should say `Profiles: Postgres`; tables are created (and upgraded) automatically
+
+## Versions
+
+The version in `package.json` shows in the lobby's bottom-left corner and the server log. Bump it before deploying: `npm version patch` for fixes, `npm version minor` for new features, `npm version major` for big changes (each makes a commit and a git tag).
 
 ## Layout
 
@@ -93,7 +128,8 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 | `public/js/profile.js`, `account.js` | Your profile key + name in the browser; lobby name, stats, sign-in, leaderboard |
 | `public/js/net.js` | WebSocket (joins the `?room=` in the URL) + a handler per server message |
 | `public/js/input.js`, `weapons.js`, `physics.js` | Controls, firing/reloading/switching, movement (bhop) |
-| `public/js/settings.js` | Settings panel: FPS limit, sensitivity, key bindings, fullscreen (saved in the browser) |
+| `public/js/chat.js`, `voice.js` | Text chat box; WebRTC voice chat (connections, push to talk, who's talking, muting) |
+| `public/js/settings.js` | Settings panel: FPS limit, sound, sensitivity, scope mode, key bindings, fullscreen (saved in the browser and on the profile) |
 | `public/js/level.js`, `themes.js` | Level loading, per-level colors/sounds |
 | `public/js/audio.js` | Synthesized sound effects |
 | `public/js/particles.js` | Blood, sparks, embers |

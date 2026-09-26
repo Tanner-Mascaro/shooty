@@ -44,7 +44,7 @@ export class Hub {
   notice(p, text) { this.send(p, { type: 'notice', text }); }
 
   // how a player appears in-game and in the server log
-  name(p) { return p.bot ? `Bot ${p.id}` : p.name; }
+  name(p) { return p.name || (p.bot ? `Player ${p.id}` : `Player ${p.id}`); }
   who(p) { return p.bot ? this.name(p) : `${p.name} (${p.ip})`; }
 
   tick() { for (const r of Object.values(this.rooms)) r.tick(); }
@@ -135,6 +135,7 @@ export class Hub {
     this.setProfile(p, pid);
     p.name = saved.name; p.username = saved.username;
     p.stats = Object.fromEntries(STATS.map(s => [s, saved[s]]));
+    this.send(p, { type: 'settings', settings: saved.settings }); // null: the browser sends its own
     await this.sendProfile(p);
     this.sendFriends(p);
     this.presence(p);
@@ -212,6 +213,13 @@ Hub.prototype.handlers = {
       this.sendBoard(p);
     } else if (p.name !== oldName) log(`${before} renamed to ${p.name}`);
     if (p.room && p.skin !== oldSkin) p.room.roster();
+  },
+
+  // your game settings changed (FPS, keys, ...): keep them on your profile
+  async settings(p, msg) {
+    const s = msg.settings;
+    if (!p.pid || !s || typeof s !== 'object' || Array.isArray(s) || JSON.stringify(s).length > 4000) return;
+    await this.profiles.saveSettings(p.pid, s);
   },
 
   // create an account: puts a username + password on your current profile, keeping its stats

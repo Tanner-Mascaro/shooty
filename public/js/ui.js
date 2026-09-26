@@ -1,14 +1,18 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
 import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName } from '/shared/config.js';
 import { S, nameOf, isEnemy } from './state.js';
-import { initRoom, showRoom } from './room.js';
+import { settings } from './settings.js';
+import { initRoom, showRoom, scrollToMap } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
+import { initHome } from './home.js';
+import { refreshChat } from './chat.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait');
 
 export function initLobby() {
+  initHome();
   initRoom();
   initAccount();
   initFriends();
@@ -20,6 +24,7 @@ export function setWaitText(text) { $('waitMsg').textContent = text; }
 export function showWait(result) {
   wait.style.display = '';
   document.body.classList.remove('ingame');
+  refreshChat();
   $('result').textContent = result || '';
   showRoom();
   if (document.pointerLockElement) document.exitPointerLock();
@@ -27,19 +32,23 @@ export function showWait(result) {
 export function hideWait() {
   wait.style.display = 'none';
   document.body.classList.add('ingame');
+  refreshChat();
   $('result').textContent = '';
   $('msg').style.opacity = 0;
 }
 
 export function applyLevelUI(name, theme) {
   document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('sel', b.dataset.level === name));
+  scrollToMap(name); // the picked map slides to the middle of the carousel
   const title = $('waitTitle');
   title.textContent = theme.name;
   title.style.color = theme.title;
-  title.style.textShadow = '0 0 24px ' + theme.title + ', 0 0 60px rgba(' + theme.accent + ',0.4)';
-  wait.style.setProperty('--accent', theme.title);
-  wait.style.setProperty('--accent-rgb', theme.accent);
-  wait.style.background = 'radial-gradient(ellipse at 50% 0%, ' + theme.bg + ', #050507 65%)';
+  title.style.textShadow = '';
+  for (const el of [wait, $('corner')]) { // the corner buttons match the level too
+    el.style.setProperty('--accent', theme.title);
+    el.style.setProperty('--accent-rgb', theme.accent);
+    el.style.setProperty('--wash', theme.bg);
+  }
 }
 
 // center-screen text; fades after 1.5s unless persist
@@ -79,7 +88,9 @@ function nameSpan(id) {
 }
 
 function drawFeed() {
-  $('feed').replaceChildren(...S.feed.map(k => {
+  const el = $('feed');
+  if (!settings.showFeed) { el.replaceChildren(); return; }
+  el.replaceChildren(...S.feed.map(k => {
     const row = document.createElement('div');
     if (k.killer !== null && k.killer !== undefined) row.append(nameSpan(k.killer));
     const w = document.createElement('span');
@@ -141,5 +152,6 @@ export function updateHud() {
     $('plagueObjective').textContent = `${healthy} healthy remaining · ${infected ? 'Infect everyone' : 'Survive until time runs out'}`;
   }
   drawScores();
+  $('feed').hidden = !settings.showFeed;
   if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
 }

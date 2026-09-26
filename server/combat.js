@@ -1,6 +1,6 @@
 // Server-side hit detection. Everything here is authoritative.
 // `targets` is every player the shooter can hurt (no teammates).
-import { WEAPONS, MAX_DEPTH, EYE, BODY_H } from '../shared/config.js';
+import { WEAPONS, MAX_DEPTH, EYE, BODY_H, SLIDE } from '../shared/config.js';
 import { groundAt } from '../shared/terrain.js';
 
 const rnd = () => Math.random() * 2 - 1;
@@ -8,14 +8,15 @@ const rnd = () => Math.random() * 2 - 1;
 // march one bullet ray; returns where it stopped and who it hit (the first body in the way)
 function castShot(T, shooter, a, pch, targets) {
   const r = { a, p: pch, dist: MAX_DEPTH, hit: null, head: false };
-  const eye = shooter.z + EYE, cos = Math.cos(a), sin = Math.sin(a), step = 0.04;
+  const eye = shooter.z + EYE - (shooter.sl ? SLIDE.drop : 0), cos = Math.cos(a), sin = Math.sin(a), step = 0.04;
   for (let d = step; d < MAX_DEPTH; d += step) {
     const rx = shooter.x + cos * d, ry = shooter.y + sin * d, rz = eye + pch * d;
     if (rz < groundAt(T, rx, ry)) { r.dist = d; return r; }
     for (const o of targets) {
-      if (Math.hypot(rx - o.x, ry - o.y) < 0.32 && rz >= o.z && rz <= o.z + BODY_H + 0.05) {
+      const h = o.sl ? BODY_H * SLIDE.crouch : BODY_H; // sliding players are lower
+      if (Math.hypot(rx - o.x, ry - o.y) < 0.32 && rz >= o.z && rz <= o.z + h + 0.05) {
         r.dist = d; r.hit = o;
-        r.head = rz >= o.z + BODY_H - 0.2;
+        r.head = rz >= o.z + h - 0.2;
         return r;
       }
     }

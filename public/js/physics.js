@@ -1,6 +1,7 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt } from '/shared/terrain.js';
+import { SLIDE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED } from '/shared/config.js';
@@ -156,10 +157,10 @@ function airAccelerate(wx, wy, wishSpeed, dt) {
   S.vx += acc * wx; S.vy += acc * wy;
 }
 
-function applyFriction(dt) {
+function applyFriction(dt, scale = 1) {
   const sp = Math.hypot(S.vx, S.vy);
   if (sp < 0.001) { S.vx = S.vy = 0; return; }
-  const drop = Math.max(sp, STOP_SPEED) * FRICTION * dt;
+  const drop = Math.max(sp, STOP_SPEED) * FRICTION * scale * dt;
   const k = Math.max(0, sp - drop) / sp;
   S.vx *= k; S.vy *= k;
 }
@@ -175,13 +176,34 @@ export function dash() {
   send({ type: 'dash', dx, dy, seq: S.mySeq });
 }
 
+// start a slide on a fresh press of the slide key (or holding it as you land) while running;
+// it ends when you let go, jump, slow down or it runs out
+function updateSlide(wx, wy, wl) {
+  if (S.clawsOnly) { S.sliding = false; S.slideArmed = false; return; }
+  const now = performance.now(), sp = Math.hypot(S.vx, S.vy);
+  if (S.sliding && (!held('slide') || !S.onGround || now > S.slideEnd || sp < 0.8)) {
+    S.sliding = false; S.slideReady = now + SLIDE.cooldown;
+  }
+  if (S.sliding || !S.slideArmed || !held('slide') || !S.onGround || now < S.slideReady || sp < SLIDE.minSpeed) return;
+  S.sliding = true; S.slideArmed = false; S.slideEnd = now + SLIDE.time;
+  // boost along where you're moving (or where you're pressing, if that's clearer)
+  const dx = wl > 0 ? wx : S.vx / sp, dy = wl > 0 ? wy : S.vy / sp;
+  S.vx += dx * SLIDE.boost; S.vy += dy * SLIDE.boost;
+  S.fovKick = Math.max(S.fovKick, 0.04);
+  play('slide');
+}
+
 export function updatePlayer(dt) {
   if (!S.started || !S.me) { setWind(0); setSizzle(0); return; }
   const me = S.me;
 
-  const sens = SENS * settings.sens * (S.scoped ? 0.3 : 1);
+  const sens = SENS * settings.sens * (!S.scoped ? 1 : S.weapon === 'sniper' ? 0.3 : 0.8);
   me.a += S.mouseDX * sens;
-  S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens));
+  S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens * (settings.invertY ? -1 : 1)));
+  // the gun trails fast mouse movement a little, then settles (see drawViewmodel)
+  const k = Math.min(1, dt * 10), lim = v => Math.max(-4, Math.min(4, v));
+  S.swayX += (lim(-S.mouseDX / Math.max(dt, 1e-3) * 0.004) - S.swayX) * k;
+  S.swayY += (lim(-S.mouseDY / Math.max(dt, 1e-3) * 0.004) - S.swayY) * k;
   S.mouseDX = S.mouseDY = 0;
 
   const cos = Math.cos(me.a), sin = Math.sin(me.a);
@@ -194,7 +216,7 @@ export function updatePlayer(dt) {
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
   const movementScale = S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1;
-  const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? 0.55 : S.weapon === 'blade' ? 1.15 : 1) : 0;
+  const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
   const now = performance.now();
   if (S.dashUntil && (!S.clawsOnly || now >= S.dashUntil)) {
@@ -202,11 +224,14 @@ export function updatePlayer(dt) {
     const speed = Math.hypot(S.vx, S.vy), limit = MAX_SPEED * movementScale;
     if (speed > limit) { S.vx *= limit / speed; S.vy *= limit / speed; }
   }
+  updateSlide(wx, wy, wl);
   if (tryJump(S, held('jump'), S.clawsOnly ? PLAGUE_JUMPS : 1)) play('jump');
   if (S.clawsOnly && now < S.dashUntil) {
     S.vx = S.dashX * PLAGUE_DASH_SPEED; S.vy = S.dashY * PLAGUE_DASH_SPEED;
-  } else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
+  } else if (S.sliding && S.onGround) { applyFriction(dt, SLIDE.friction); accelerate(wx, wy, wishSpeed * 0.3, ACCEL * 0.3, dt); }
+  else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
+  S.slideDip += ((S.sliding ? 1 : 0) - S.slideDip) * Math.min(1, dt * 12);
 
   let speed = Math.hypot(S.vx, S.vy);
   const speedLimit = SPEED_LIMIT * movementScale;
@@ -238,7 +263,7 @@ export function updatePlayer(dt) {
     if (me.z <= g) { me.z = g; S.vz = 0; S.onGround = true; play('land'); }
   }
 
-  if (S.onGround && speed > 0.5) {
+  if (S.onGround && speed > 0.5 && !S.sliding) {
     S.bobPhase += speed * dt * 2.2;
     S.stepAcc += speed * dt;
     if (S.stepAcc > 0.85) { S.stepAcc = 0; play('step'); }
@@ -247,5 +272,5 @@ export function updatePlayer(dt) {
   setSizzle(inPit() ? 0.25 : 0);
   if (inPit() && Math.random() < 0.3) burst(me.x, me.y, me.z, 1, 'fire');
 
-  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped, seq: S.mySeq });
+  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch, sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
 }

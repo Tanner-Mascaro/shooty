@@ -3,29 +3,75 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Arena</title>
+<title>Shooty</title>
 <meta name="description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
-<meta name="theme-color" content="#0c0c10">
+<meta name="theme-color" content="#12100e">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <!-- link previews (Discord, iMessage, Slack…); the image URL must be absolute, so update it if the domain changes -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="Arena">
+<meta property="og:title" content="Shooty">
 <meta property="og:description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
 <meta property="og:image" content="https://shooty-g7pv.onrender.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Teko:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="on-home">
+<div id="home">
+  <div id="homeInner">
+    <div id="homeBrand">SHOOTY</div>
+    <p id="homeTag">Sign in, then jump into a match — or just play vs bots.</p>
+
+    <div id="homePanel">
+      <div id="homeSigned" hidden>
+        <div class="label" id="homeWelcome">Signed in</div>
+        <button type="button" id="homeLogout" class="link">Sign out</button>
+      </div>
+
+      <form id="homeAuth">
+        <div class="label">Sign in</div>
+        <input id="homeUser" placeholder="Username" maxlength="16" autocomplete="username" spellcheck="false">
+        <input id="homePass" type="password" placeholder="Password" maxlength="72" autocomplete="current-password">
+        <div id="homeAuthBtns">
+          <button type="submit">Sign in</button>
+          <button type="button" id="homeRegister">Create account</button>
+        </div>
+        <div id="homeAuthErr"></div>
+        <button type="button" id="homeSkipAuth" class="link">Continue as guest</button>
+      </form>
+
+      <div id="homeGuest" hidden>
+        <button type="button" id="homeShowAuth" class="link">Have an account? Sign in</button>
+      </div>
+
+      <div id="homeActions">
+        <div class="label">Your name</div>
+        <input id="homeName" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
+        <div class="label">Bot difficulty</div>
+        <div id="homeBotLevel" class="choice seg">
+          <button type="button" data-level="easy">Easy</button>
+          <button type="button" data-level="medium" class="sel">Medium</button>
+          <button type="button" data-level="hard">Hard</button>
+        </div>
+        <button type="button" id="homeVsBots" class="homePrimary">Play vs bots</button>
+        <div id="homeAlt">
+          <button type="button" id="homeQuick" class="ghost">Quick play</button>
+          <button type="button" id="homePrivate" class="ghost">Private room</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="corner"><button class="fsToggle ghost">Fullscreen</button><button class="gear ghost">Settings</button></div>
 <div id="wait">
   <header id="lobbyHead">
-    <div id="brand">ARENA</div>
+    <div id="brand">SHOOTY</div>
     <div id="waitTitle">HELL</div>
-    <div id="headBtns"><button class="gear ghost">⚙ Settings</button> <button class="fsToggle ghost">⛶ Fullscreen</button></div>
+    <p id="tagline">Pick a map. Load in. Don’t miss.</p>
   </header>
   <div id="lobby">
     <section id="play" class="card">
@@ -45,11 +91,18 @@
         <p id="modeHelp"></p>
       </div>
       <div class="field">
-        <div class="label">MAP</div>
-        <div id="levels" class="choice maps">
-          <button data-level="hell"><b>HELL</b><small>Lava &amp; brimstone</small></button>
-          <button data-level="robot"><b>ROBOT FACTORY</b><small>Acid &amp; steel</small></button>
-          <button data-level="witch"><b>WITCH SWAMP</b><small>Bog &amp; fireflies</small></button>
+        <div class="label">MAP <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">click to vote</small></div>
+        <div class="map-stage">
+          <button id="mapPrev" class="skin-arrow" type="button" aria-label="Previous map">&#x2039;</button>
+          <div id="levels" class="choice maps">
+            <button data-level="hell"><b>HELL</b><small>Lava &amp; brimstone</small></button>
+            <button data-level="robot"><b>ROBOT FACTORY</b><small>Acid &amp; steel</small></button>
+            <button data-level="witch"><b>WITCH SWAMP</b><small>Bog &amp; fireflies</small></button>
+            <button data-level="haunt"><b>HAUNTED HOUSE</b><small>Backrooms &amp; things that hunt</small></button>
+            <button data-level="ice"><b>ICE FIELDS</b><small>Snow &amp; black ice</small></button>
+            <button data-level="castle"><b>CASTLE KEEP</b><small>Stone halls &amp; torches</small></button>
+          </div>
+          <button id="mapNext" class="skin-arrow" type="button" aria-label="Next map">&#x203A;</button>
         </div>
       </div>
       <div class="field">
@@ -68,7 +121,11 @@
           <button data-team="1" class="team1">JOIN RED</button>
           <button data-team="2" class="team2">JOIN BLUE</button>
         </div>
-        <div id="botCtl"><button id="addBot">+ BOT</button> <button id="removeBot">− BOT</button></div>
+        <div id="botCtl">
+          <div id="botLevel" class="choice seg"><button data-level="easy">EASY</button><button data-level="medium">MEDIUM</button><button data-level="hard">HARD</button></div>
+          <button id="addBot">+1</button><button id="addBots3">+3</button><button id="fillBots">FILL</button>
+          <button id="removeBot">−1</button><button id="removeBots3">−3</button><button id="clearBots">CLEAR</button>
+        </div>
         <div id="plagueSetup" class="field" hidden>
           <div class="label">STARTING INFECTION</div>
           <div id="plagueSelection" class="choice seg">
@@ -109,6 +166,10 @@
         <div id="friendEmpty" hidden>No friends yet — add someone by their username.</div>
         <ul id="friendList"></ul>
       </div>
+      <div class="card" id="chatCard">
+        <div class="label">MESSAGES</div>
+        <div id="chat"><div id="chatLog"></div><input id="chatInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type a message…"></div>
+      </div>
       <div class="card" id="boardCard" hidden>
         <div class="label">LEADERBOARD</div>
         <table id="board">
@@ -139,17 +200,33 @@
 <canvas id="c"></canvas>
 <div id="msg"></div>
 <div id="controls"></div>
+<div id="version"></div>
+<div id="talking"></div>
 <div id="fps" hidden></div>
 <button id="gameGear" class="gear" title="Settings">⚙</button>
+<button id="gameLeave" title="Leave the match">Leave</button>
 <div id="settings" hidden>
   <div class="card" role="dialog" aria-label="Settings">
-    <div id="setHead"><b>SETTINGS</b><button id="closeSettings" class="ghost">Done</button></div>
+    <div id="setHead"><b>SETTINGS</b><span><button id="leaveGame" class="ghost">Leave game</button> <button id="closeSettings" class="ghost">Done</button></span></div>
     <div class="label">DISPLAY</div>
     <div class="setRow"><span>Frame rate limit</span><select id="fpsCap"></select></div>
     <label class="setRow"><span>Show FPS counter</span><input type="checkbox" id="showFps"></label>
+    <div class="setRow"><span>Field of view <small id="fovVal"></small></span><input type="range" id="fov" min="0.75" max="1.35" step="0.05"></div>
+    <div class="setRow"><span>Crosshair size <small id="crosshairVal"></small></span><input type="range" id="crosshair" min="0.6" max="1.8" step="0.1"></div>
+    <label class="setRow"><span>Show minimap</span><input type="checkbox" id="showMinimap"></label>
+    <label class="setRow"><span>Show kill feed</span><input type="checkbox" id="showFeed"></label>
     <div class="setRow"><span>Fullscreen <small>(no tabs or browser bars)</small></span><button id="fsBtn" class="ghost">Go fullscreen</button></div>
+    <div class="label">SOUND</div>
+    <div class="setRow"><span>Master volume <small id="volumeVal"></small></span><input type="range" id="volume" min="0" max="1" step="0.05"></div>
+    <div class="setRow"><span>Gun &amp; hit sounds <small id="sfxVal"></small></span><input type="range" id="sfx" min="0" max="1" step="0.05"></div>
+    <div class="setRow"><span>Background hum <small id="ambientVal"></small></span><input type="range" id="ambient" min="0" max="1" step="0.05"></div>
+    <div class="label">VOICE CHAT</div>
+    <div class="setRow"><span>Voice</span><select id="voiceMode"><option value="ptt">Push to talk</option><option value="open">Open mic</option><option value="off">Off</option></select></div>
+    <div class="setRow"><span>Voice volume <small id="voiceVolVal"></small></span><input type="range" id="voiceVol" min="0" max="1" step="0.05"></div>
     <div class="label">MOUSE</div>
     <div class="setRow"><span>Sensitivity <small id="sensVal"></small></span><input type="range" id="sens" min="0.2" max="3" step="0.05"></div>
+    <label class="setRow"><span>Invert look (Y)</span><input type="checkbox" id="invertY"></label>
+    <div class="setRow"><span>Scope (right click)</span><select id="ads"><option value="toggle">Click to toggle</option><option value="hold">Hold to aim</option></select></div>
     <div class="label">KEYS <small>click a key, then press the new one · Esc cancels</small></div>
     <ul id="binds"></ul>
     <button id="resetBinds" class="link">Reset keys to defaults</button>

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Room } from '../server/room.js';
 import { botTick } from '../server/bot.js';
 import { groundAt, hitsWall } from '../shared/terrain.js';
-import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, WIN_SCORE, TEAM_WIN_SCORE, WEAPONS, MOVE_SPEED, PLAGUE_SPEED_MULTIPLIER, TICK } from '../shared/config.js';
+import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, WIN_SCORE, TEAM_WIN_SCORE, WEAPONS, START_GUN, MOVE_SPEED, PLAGUE_SPEED_MULTIPLIER, TICK } from '../shared/config.js';
 
 function game(count = 4, mode = 'plague', start = true) {
   const messages = [], records = [];
@@ -162,7 +162,7 @@ test('removing the only monster bot ends the round instead of leaving survivors 
   const { room, events } = game(2);
   room.addBot();
   room.list.forEach(p => p.team = p.bot ? PLAGUE_TEAM : HEALTHY_TEAM);
-  room.handlers.removeBot.call(room);
+  room.handlers.removeBot.call(room, room.humans[0], { count: 1 });
   assert.equal(events('win').at(-1).team, HEALTHY_TEAM);
 });
 
@@ -267,7 +267,7 @@ test('setup and roster changes reset human readiness and removing the assigned b
   assert.equal(a.ready, false);
   assert.equal(room.players[20].plagueStartTeam, HEALTHY_TEAM);
   assert.equal(bot.ready, true);
-  room.handlers.removeBot.call(room);
+  room.handlers.removeBot.call(room, room.humans[0], { count: 1 });
   assert.equal(room.plagueSetupValid(), false);
   room.startGame();
   assert.equal(room.gameOn, false);
@@ -313,15 +313,16 @@ test('infected loadouts reject guns, blades, reloading, weapon pickups and dropp
   assert.equal(monster.mag.rifle, 0);
   delete monster.mag.rifle;
   monster.z = 0;
-  const pickup = { x: monster.x, y: monster.y, weapon: 'shotgun', active: true };
-  room.tryPickup(monster, pickup, 0, Date.now());
+  const pickup = { x: monster.x, y: monster.y, weapon: 'shotgun', gun: true, crate: true, active: true };
+  room.tryWalkOver(monster, pickup, Date.now());
   assert.equal(pickup.active, true);
-  assert.equal(room.tryGrab(monster, { ...pickup, z: 0, mag: 6, spare: 6 }), false);
-  room.giveGun(monster, 'shotgun', 6, 6);
+  assert.equal(room.takeGun(monster, 'shotgun', 6, 6), null);
+  room.addBox(monster.x, monster.y, [{ w: 'shotgun', mag: 6, spare: 6 }]);
+  room.handlers.use.call(room, monster, { box: room.boxes.at(-1).id });
   assert.deepEqual(monster.mag, {});
   monster.hp = 50;
   pickup.weapon = 'health';
-  room.tryPickup(monster, pickup, 0, Date.now());
+  room.tryWalkOver(monster, pickup, Date.now());
   assert.equal(monster.hp, MAX_HP);
   assert.equal(pickup.active, false);
 });
@@ -330,7 +331,7 @@ test('infection immediately removes guns and a healthy rematch restores them', (
   const { room, events } = game(3, 'plague', false);
   const [monster, victim, other] = room.list;
   setup(room, 'manual'); role(room, monster, PLAGUE_TEAM); room.startGame();
-  room.giveGun(victim, 'shotgun', 6, 6);
+  room.takeGun(victim, 'shotgun', 6, 6);
   kill(room, victim, monster);
   assert.deepEqual(victim.mag, {});
   assert.equal(events('inv', victim.id).at(-1).clawsOnly, true);
@@ -339,7 +340,7 @@ test('infection immediately removes guns and a healthy rematch restores them', (
   room.endMatch('test');
   room.startGame();
   assert.equal(victim.team, HEALTHY_TEAM);
-  assert.equal(victim.mag.rifle, WEAPONS.rifle.mag);
+  assert.equal(victim.mag[START_GUN], WEAPONS[START_GUN].mag);
   assert.equal(events('inv', victim.id).at(-1).clawsOnly, false);
 });
 

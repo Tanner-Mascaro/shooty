@@ -3,15 +3,19 @@
 //
 // Each map square becomes RES x RES samples. Obstacles are smooth shapes, styled per level:
 //   hell   # clusters -> volcano cones with a lava crater, + -> boulders, edge -> jagged cliffs
+//   ice    # clusters -> icebergs (no lava), + -> ice chunks, edge -> frozen cliffs
 //   witch  # -> trees (trunk here; the canopy is a sprite drawn by the client), + -> bushes,
 //          edge -> a thick hedge with trees
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
+//   haunt / castle  # -> full-height walls (touching # join into rooms), + -> furniture / rubble,
+//          edge -> wall, under a ceiling (the client draws it at CEILING_H)
 //
 // kind: 0 = ground (walkable, may slope), 1 = blocked (anything taller than STEP_H), 2 = pit
 // mat:  what a sample is made of, for the client's colors (MAT below)
 // props: things the client draws or animates on top: trees (canopies), volcano craters
 
 export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9 };
+export const CEILING_H = 2.8; // haunted house: walls go all the way up to the ceiling
 const STEP_H = 0.3; // taller than this can't be walked onto (matches the client's step height)
 
 // smooth value noise in 0..1, same everywhere (seeded by position only)
@@ -56,7 +60,7 @@ export function buildTerrain(MAP, RES, style) {
   const inside = (x, y) => Math.min(x - 1, y - 1, MW - 1 - x, MH - 1 - y);
   raise(0, 0, MW, MH, (x, y) => {
     const e = inside(x, y);
-    if (style === 'hell') return e < noise(x * 1.3, y * 1.3) * 0.5 - 0.1 ? [2.2 + noise(x * 0.7 + 5, y * 0.7) + Math.min(1, -e) * 0.6, MAT.ROCK] : null;
+    if (style === 'hell' || style === 'ice') return e < noise(x * 1.3, y * 1.3) * 0.5 - 0.1 ? [2.2 + noise(x * 0.7 + 5, y * 0.7) + Math.min(1, -e) * 0.6, MAT.ROCK] : null;
     if (style === 'witch') return e < noise(x * 1.1, y * 1.1) * 0.3 - 0.05 ? [1.7 + 0.7 * noise(x * 1.5, y * 1.5), MAT.LEAVES] : null;
     return e < 0 ? [2.8, MAT.WALL] : null;
   });
@@ -69,11 +73,12 @@ export function buildTerrain(MAP, RES, style) {
   for (let cy = 1; cy < MH - 1; cy++) for (let cx = 1; cx < MW - 1; cx++) {
     const c = at(cx, cy), x = cx + 0.5, y = cy + 0.5, n = hash2(cx, cy);
     if (c === '+') {
-      if (style === 'robot') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
+      if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.6, 0.65, MAT.LEAVES, 0.25);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
     if (c !== '#' || edge(cx, cy)) continue;
+    if (style === 'haunt' || style === 'castle') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; } // whole squares, so walls join flush
     if (style === 'robot') {
       // rack: inset from the square's sides unless the next square is rack too, so rows join up
       const m = 0.12;
@@ -89,7 +94,7 @@ export function buildTerrain(MAP, RES, style) {
       });
       props.push({ type: 'tree', x: tx, y: ty, h: 2.4, r: 0.95 + 0.35 * n });
     } else if (!seen.has(cx + ',' + cy)) {
-      // volcano: one cone per group of touching # squares
+      // volcano / iceberg: one cone per group of touching # squares
       const cells = [], stack = [[cx, cy]];
       seen.add(cx + ',' + cy);
       while (stack.length) {
@@ -103,14 +108,37 @@ export function buildTerrain(MAP, RES, style) {
       const vx = cells.reduce((s, c) => s + c[0] + 0.5, 0) / cells.length, vy = cells.reduce((s, c) => s + c[1] + 0.5, 0) / cells.length;
       const R = Math.max(...cells.map(c => Math.hypot(c[0] + 0.5 - vx, c[1] + 0.5 - vy))) + 1.4;
       const H = Math.min(2.8, 1.5 + 0.3 * cells.length), rc = 0.2, rim = H * (1 - rc) ** 1.5;
+      const icy = style === 'ice';
       raise(vx - R, vy - R, vx + R, vy + R, (px, py) => {
         const d = Math.hypot(px - vx, py - vy), t = d / R;
         if (t >= 1) return null;
-        if (t < rc) return [rim - (1 - t / rc) * 0.3 * H, t < rc * 0.75 ? MAT.LAVA : MAT.ROCK]; // crater
+        if (t < rc) return [rim - (1 - t / rc) * 0.3 * H, icy ? MAT.ROCK : (t < rc * 0.75 ? MAT.LAVA : MAT.ROCK)]; // crater
+        if (icy) return [H * (1 - t) ** 1.5 * (0.9 + 0.2 * noise(px * 2.5, py * 2.5)), MAT.ROCK];
         const ang = Math.atan2(py - vy, px - vx), streak = Math.sin(ang * 5 + d * 1.7 + H) > 0.94 && t < 0.6; // glowing lava runs
         return [H * (1 - t) ** 1.5 * (0.9 + 0.2 * noise(px * 2.5, py * 2.5)), streak ? MAT.LAVA : MAT.ROCK];
       });
       props.push({ type: 'volcano', x: vx, y: vy, top: rim - 0.2 * H });
+    }
+  }
+
+  for (let k = 0; k < TW * TH; k++) kind[k] = mat[k] === MAT.PIT ? 2 : hgt[k] > STEP_H ? 1 : 0;
+
+  // scatter extra cover / ruins on open ground so maps feel denser without clogging lanes
+  for (let cy = 2; cy < MH - 2; cy++) for (let cx = 2; cx < MW - 2; cx++) {
+    if (at(cx, cy) !== '.') continue;
+    const n = hash2(cx * 3 + 11, cy * 5 + 7);
+    if (n > 0.965) { // sparse rubble piles
+      const x = cx + 0.5, y = cy + 0.5;
+      if (style === 'witch') dome(x, y, 0.55, 0.5, MAT.LEAVES, 0.2);
+      else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.25, cy + 0.25, cx + 0.75, cy + 0.75, 0.45, MAT.CRATE);
+      else dome(x, y, 0.45, 0.48, MAT.ROCK, 0.25);
+    } else if (n > 0.992 && (style === 'witch')) { // extra lonely trees
+      const x = cx + 0.5 + (hash2(cy, cx) - 0.5) * 0.2, y = cy + 0.5;
+      raise(x - 0.5, y - 0.5, x + 0.5, y + 0.5, (px, py) => Math.hypot(px - x, py - y) < 0.22 ? [2.2, MAT.BARK] : null);
+      props.push({ type: 'tree', x, y, h: 2.2, r: 0.85 + 0.3 * n });
+    } else if (n > 0.988 && (style === 'haunt' || style === 'castle') && at(cx + 1, cy) === '#' && at(cx, cy + 1) === '#') {
+      // corner buttress against walls
+      box(cx + 0.15, cy + 0.15, cx + 0.85, cy + 0.85, CEILING_H * 0.85, MAT.WALL);
     }
   }
 
@@ -152,7 +180,7 @@ export function hitsWall(T, x, y, r) {
 
 // pickup pads in map order; the server and client index them identically
 export function findPickups(MAP) {
-  const kinds = { S: 'sniper', G: 'shotgun', M: 'smg', H: 'health' }, out = [];
+  const kinds = { S: 'sniper', G: 'shotgun', M: 'smg', H: 'health', N: 'nade' }, out = [];
   for (let y = 0; y < MAP.length; y++)
     for (let x = 0; x < MAP[y].length; x++)
       if (kinds[MAP[y][x]]) out.push({ x: x + 0.5, y: y + 0.5, weapon: kinds[MAP[y][x]] });

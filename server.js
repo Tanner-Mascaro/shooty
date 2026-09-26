@@ -1,4 +1,4 @@
-// Arena — Networked 3D Shooter
+// Shooty — Networked 3D Shooter
 // Run: npm start   (or npm run dev to restart on file changes)
 // Then: npx ngrok http 3000  (or ngrok http 3000)
 // Everyone opens the URL; share a room's invite link to play together.
@@ -11,6 +11,7 @@ import { staticHandler } from './server/static.js';
 import { Hub } from './server/hub.js';
 import { clientIp } from './server/log.js';
 import { openProfiles } from './server/profiles.js';
+import { VERSION } from './server/version.js';
 import { TICK, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS } from './shared/config.js';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -34,12 +35,12 @@ setInterval(() => hub.tick(), TICK);
 
 server.listen(PORT, () => {
   console.log(`
-  ARENA — 3D Shooter
+  SHOOTY v${VERSION} — 3D Shooter
   Local:  http://localhost:${PORT}
   Remote: ngrok http ${PORT}, then share the ngrok URL.
 
-  Levels: Hell / Robot Factory / Witch Swamp
-  WASD + mouse, SPACE jump (hold = bhop), 1-5/Q weapon, RMB scope, F melee
+  Levels: Hell / Robot Factory / Witch Swamp / Haunted House / Ice Fields / Castle Keep
+  WASD + mouse, SPACE jump (hold = bhop), E pick up, R reload, 1-3/Q weapon, RMB scope, F melee
   Rooms of up to ${MAX_PLAYERS}. Free-for-all: first to ${WIN_SCORE} kills. Teams: first team to ${TEAM_WIN_SCORE}.
 `);
 });

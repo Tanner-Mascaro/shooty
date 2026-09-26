@@ -1,7 +1,7 @@
 // WebSocket connection and handlers for every server -> client message.
 import { EYE, HEAL, PLAGUE_TEAM, teamName } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
-import { S, owned, nameOf } from './state.js';
+import { S, owned, nameOf, gunSlots } from './state.js';
 import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
@@ -10,7 +10,10 @@ import { showWait, hideWait, setWaitText, showMsg, banner, toast, pushFeed } fro
 import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 import { showFriends, showInvite } from './friends.js';
-import { showControlsHint } from './settings.js';
+import { fromProfile, showControlsHint } from './settings.js';
+import { addChat, addSystem, refreshChat } from './chat.js';
+import { LEVEL_NAMES } from '/shared/levels.js';
+import { syncVoice, onSignal } from './voice.js';
 
 let ws = null;
 
@@ -49,38 +52,54 @@ function otherSounds(o, prev, cur) {
   }
 }
 
+let lastRoster = null; // id -> name, to announce joins / leaves in Messages
+
 const handlers = {
   init(msg) {
     S.myId = msg.id;
+    document.getElementById('version').textContent = 'v' + msg.version;
     setLevel(msg.level);
     S.me = { x: msg.x, y: msg.y, z: msg.z, a: msg.a, hp: msg.hp };
     S.mySeq = msg.seq;
     S.others = {};
+    lastRoster = null;
     history.replaceState(null, '', '?room=' + msg.room); // the address bar is now this room's invite link
   },
 
   room(msg) {
+    const next = Object.fromEntries(msg.players.map(p => [p.id, p.name]));
+    if (lastRoster) {
+      for (const id of Object.keys(next)) if (!(id in lastRoster)) addSystem(next[id] + ' joined');
+      for (const id of Object.keys(lastRoster)) if (!(id in next)) addSystem(lastRoster[id] + ' left');
+    }
+    lastRoster = next;
     S.room = msg;
     S.plagueEndsAt = performance.now() + (msg.plagueRemainingMs || 0);
     const mine = msg.players.find(p => p.id === S.myId);
     if (mine) S.myTeam = mine.team;
     for (const id in S.others) if (!msg.players.some(p => p.id === +id)) delete S.others[id]; // left
     showRoom();
+    syncVoice();
   },
 
-  level(msg) { setLevel(msg.level); },
+  level(msg) {
+    setLevel(msg.level);
+    addSystem('Map leading: ' + (LEVEL_NAMES[msg.level] || msg.level));
+  },
 
   start(msg) {
     setLevel(msg.level);
     S.started = true;
     S.myKills = 0;
-    S.weapon = S.clawsOnly ? 'claws' : 'rifle'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
+    S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
     S.jumpsUsed = 0; S.jumpHeld = false; S.quickUntil = 0;
     S.dashUntil = 0; S.nextDash = 0;
     showControlsHint();
     S.feed = [];
     S.corpses = [];
     S.plagueEndsAt = performance.now() + (msg.plagueRemainingMs || 0);
+    S.thrown = []; S.nades = 0;
+    addSystem('Match started on ' + (LEVEL_NAMES[msg.level] || msg.level));
     hideWait();
     if (msg.mode === 'plague') banner(S.myTeam === PLAGUE_TEAM ? 'YOU ARE THE PLAGUE' : 'STAY HEALTHY', true);
   },
@@ -88,14 +107,15 @@ const handlers = {
   // full ammo state: on respawn, or when the server disagreed with our count
   inv(msg) {
     S.mag = msg.mag; S.inv = msg.inv;
+    if (msg.nades !== undefined) S.nades = msg.nades;
     if (S.clawsOnly !== !!msg.clawsOnly) { S.dashUntil = 0; S.nextDash = 0; }
     S.clawsOnly = !!msg.clawsOnly;
     if (S.clawsOnly) {
       S.weapon = S.lastWeapon = 'claws'; S.scoped = false; S.reloading = null;
-      S.quickUntil = 0; S.switchUntil = 0; S.muzzle = 0;
+      S.aimHeld = false; S.sliding = false; S.slideArmed = false; S.quickUntil = 0; S.switchUntil = 0; S.muzzle = 0;
     }
     if (S.reloading && !owned(S.reloading.w)) S.reloading = null;
-    if (!owned(S.weapon)) { S.weapon = 'rifle'; S.scoped = false; S.reloading = null; }
+    if (!owned(S.weapon)) { S.weapon = gunSlots()[0] || 'blade'; S.scoped = false; S.reloading = null; }
     showControlsHint();
   },
 
@@ -105,14 +125,12 @@ const handlers = {
     if (!msg.accepted) S.dashUntil = now; // end a rejected predicted dash on the next movement frame
   },
 
-  // you picked up a gun (fresh) or more ammo for one you have
-  ammo(msg) {
-    if (msg.fresh) { S.mag[msg.weapon] = msg.mag; S.inv[msg.weapon] = msg.add; }
-    else S.inv[msg.weapon] = (S.inv[msg.weapon] || 0) + msg.add;
+  // every pad and ammo crate this match (gun pads re-roll their gun), and which are up
+  pickups(msg) {
+    S.pickupSpots = msg.spots;
+    S.pickupActive = msg.active;
   },
-
-  pickups(msg) { S.pickupActive = msg.active; },
-  drops(msg) { S.drops = msg.drops; },
+  boxes(msg) { S.boxes = msg.boxes; },
 
   pickup(msg) {
     const sp = msg;
@@ -121,11 +139,14 @@ const handlers = {
     if (msg.id !== S.myId) { playAt(heal ? 'heal' : 'pickup', sp.x, sp.y); return; }
     play(heal ? 'heal' : 'pickup');
     if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
+    else if (msg.weapon === 'ammo') banner('+ AMMO', true);
+    else if (msg.weapon === 'nade') banner('+ GRENADE', true);
     else { banner('+ ' + msg.weapon.toUpperCase(), true); switchWeapon(msg.weapon); }
   },
 
   state(msg, now) {
     S.plagueEndsAt = now + (msg.plagueRemainingMs || 0);
+    S.thrown = msg.nades || [];
     for (const p of msg.players) {
       if (p.id === S.myId) {
         S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team;
@@ -133,7 +154,7 @@ const handlers = {
         if (p.seq !== S.mySeq) {
           S.mySeq = p.seq;
           Object.assign(S.me, { x: p.x, y: p.y, z: p.z, a: p.a });
-          S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false;
+          S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false; S.sliding = false; S.slideDip = 0;
           S.jumpsUsed = 0; S.jumpHeld = false;
           S.dashUntil = 0; S.nextDash = 0;
         }
@@ -148,10 +169,11 @@ const handlers = {
 
   shot(msg, now) {
     const me = S.me, mine = msg.id === S.myId;
+    const gunSound = { revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt' }[msg.weapon] || msg.weapon;
     if (msg.weapon === 'blade' || msg.weapon === 'claws') { if (!mine) playAt('swing', msg.x, msg.y); return; }
     if (!mine) {
       if (S.others[msg.id]) S.others[msg.id].flashT = now;
-      playAt(msg.weapon, msg.x, msg.y, msg.weapon === 'sniper' ? 2 : 1);
+      playAt(gunSound, msg.x, msg.y, msg.weapon === 'sniper' ? 2 : 1);
       if (msg.weapon === 'shotgun') setTimeout(() => playAt('pump', msg.x, msg.y), 350);
     }
     let whizzed = false;
@@ -169,12 +191,28 @@ const handlers = {
     }
   },
 
+  nadeThrow(msg) {
+    if (!S.thrown.find(n => n.id === msg.id)) S.thrown.push({ id: msg.id, x: msg.x, y: msg.y, z: msg.z });
+    if (msg.by !== S.myId) playAt('swing', msg.x, msg.y);
+  },
+  nadeBoom(msg) {
+    S.thrown = (S.thrown || []).filter(n => n.id !== msg.id);
+    burst(msg.x, msg.y, msg.z, 50, 'fire');
+    burst(msg.x, msg.y, msg.z, 30, 'spark');
+    playAt('nade', msg.x, msg.y, 2);
+    if (S.me) {
+      const d = Math.hypot(msg.x - S.me.x, msg.y - S.me.y);
+      if (d < 8) S.shake = Math.max(S.shake, 12 * (1 - d / 8));
+    }
+  },
+
   hit(msg, now) {
     burst(msg.x, msg.y, msg.z, msg.weapon === 'sniper' ? 40 : msg.weapon === 'shotgun' ? 30 : msg.head ? 20 : 12, 'blood');
     if (msg.weapon === 'blade' || msg.weapon === 'claws') playAt('slash', msg.x, msg.y);
     if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); }
     else if (S.others[msg.who]) S.others[msg.who].hitT = now;
     if (msg.by === S.myId) {
+      if (S.others[msg.who]) S.others[msg.who].markT = now; // they glow through walls for a bit (render/index.js)
       S.hitMarker = 14; S.hitHead = msg.head;
       play(msg.head ? 'headshot' : 'hitmarker');
     }
@@ -190,6 +228,10 @@ const handlers = {
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');
     pushFeed(msg);
+    {
+      const kn = nameOf(msg.killer), vn = nameOf(msg.victim);
+      addSystem(pit ? vn + ' fell into the pit' : kn + ' killed ' + vn + (msg.head ? ' (HS)' : msg.backstab ? ' (BS)' : '') + ' [' + msg.weapon + ']');
+    }
     if (msg.killer === S.myId) {
       const label = msg.infected ? 'INFECTED' : msg.backstab ? 'BACKSTAB' : msg.head ? 'HEADSHOT' : 'KILL';
       banner(label + (msg.weapon === 'sniper' ? '  ' + msg.dist.toFixed(1) + 'm' : ''), msg.head || msg.backstab);
@@ -213,6 +255,7 @@ const handlers = {
     const who = msg.team ? teamName(msg.mode || S.room?.mode, msg.team) + ' TEAM' : nameOf(msg.winner).toUpperCase();
     showMsg(won ? (msg.team ? 'YOUR TEAM WINS!' : 'YOU WIN!') : who + ' WINS!', true);
     play(won ? 'win' : 'lose');
+    addSystem(won ? (msg.team ? 'Your team wins!' : 'You win!') : who + ' wins');
     S.started = false;
     setTimeout(() => showWait(won ? 'You won! Rematch?' : who.toLowerCase().replace(/^\w/, c => c.toUpperCase()) + ' won. Rematch?'), 2000);
   },
@@ -220,12 +263,17 @@ const handlers = {
   // the match stopped early (not enough players left)
   end(msg) {
     S.started = false;
+    addSystem(msg.reason || 'Match ended');
     showWait(msg.reason);
   },
 
   notice(msg) { toast(msg.text); },
 
+  chat(msg) { addChat(msg); },
+  rtc(msg) { onSignal(msg); },
+
   profile(msg) { showProfile(msg); },
+  settings(msg) { fromProfile(msg.settings); },
   auth(msg) { onAuth(msg); },
   leaderboard(msg) { showBoard(msg.rows); },
   friends(msg) { showFriends(msg.list); },

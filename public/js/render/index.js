@@ -1,12 +1,13 @@
 // One frame: set up the camera, simulate effects, draw the world, then the HUD on top.
-import { TICK, EYE, PLAGUE_TEAM } from '/shared/config.js';
+import { TICK, EYE, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
-import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
+import { settings } from '../settings.js';
+import { BASE_FOV, SCOPE_FOV, ADS_ZOOM, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
-import { pickupSprite, canopySprite } from './sprites.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo } from './hud.js';
+import { pickupSprite, canopySprite, boxSprite } from './sprites.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -25,6 +26,14 @@ function interpolateOthers(now) {
 const TEAM_TINT = { 1: [230, 50, 40], 2: [40, 110, 255] };
 const PLAGUE_TINT = [100, 225, 45];
 
+// Minecraft-style glowing outline: white in free-for-all, red / blue in teams. Teammates show
+// through walls; enemies do for a few seconds after you hit them (like a spectral arrow).
+const MARK_MS = 3000;
+function glowFor(o, now) {
+  const teams = S.room && isTeamMode(S.room.mode), ally = teams && o.now.team === S.myTeam;
+  return { col: !teams ? [255, 255, 255] : ally ? [90, 170, 255] : [255, 70, 55], xray: ally || now - o.markT < MARK_MS };
+}
+
 // bodies fly in the shot direction, thud on landing, sink after 4s
 function updateCorpses(now, dt) {
   for (const c of S.corpses) {
@@ -41,11 +50,12 @@ function updateCorpses(now, dt) {
 }
 
 function setupCamera() {
-  S.fov += ((S.scoped ? SCOPE_FOV : BASE_FOV) - S.fov) * 0.3;
+  const target = (!S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1)) * settings.fov;
+  S.fov += (target - S.fov) * 0.3;
   const tanH = Math.tan(S.fov / 2) * (1 + S.fovKick), focal = (view.RW / 2) / tanH;
   const ox = S.shake ? (Math.random() - 0.5) * S.shake : 0, oy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
   const a = S.me.a;
-  S.cam = { eye: S.me.z + EYE, horizon: view.RH / 2 + (S.pitch + S.punch) * focal, focal, tanH, sc: view.W / view.RW, ox, oy,
+  S.cam = { eye: S.me.z + EYE - SLIDE.drop * S.slideDip, horizon: view.RH / 2 + (S.pitch + S.punch) * focal, focal, tanH, sc: view.W / view.RW, ox, oy,
     fwdx: Math.cos(a), fwdy: Math.sin(a), rtx: -Math.sin(a), rty: Math.cos(a) };
 }
 
@@ -72,11 +82,15 @@ export function render(dt) {
   S.pickupSpots.forEach((p, i) => {
     if (!S.pickupActive[i]) return;
     const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
-    drawSprite(p.x, p.y, 0.3 + 0.07 * Math.sin(now / 400 + i), sp.w, sp.h, sp.px, sp.pal, sp.emit);
+    const z = p.weapon === 'ammo' ? groundAt(S.T, p.x, p.y) : 0.3 + 0.07 * Math.sin(now / 400 + i); // crates sit on the ground
+    drawSprite(p.x, p.y, z, sp.w, sp.h, sp.px, sp.pal, sp.emit);
   });
-  for (const d of S.drops) {
-    const sp = pickupSprite(d.weapon, GUN_COLOR[d.weapon]);
-    drawSprite(d.x, d.y, d.z + 0.2 + 0.05 * Math.sin(now / 300 + d.id), sp.w, sp.h, sp.px, sp.pal, sp.emit);
+  const box = boxSprite(S.theme.accent);
+  for (const b of S.boxes) drawSprite(b.x, b.y, b.z, box.w, box.h, box.px, box.pal, box.emit);
+  const nadeSp = pickupSprite('nade', GUN_COLOR.nade);
+  for (const n of S.thrown) {
+    const bob = 0.02 * Math.sin(now / 80 + n.id);
+    drawSprite(n.x, n.y, n.z + bob, nadeSp.w, nadeSp.h, nadeSp.px, nadeSp.pal, nadeSp.emit);
   }
   for (const p of S.T.props) { // swamp tree canopies (the trunks are terrain)
     if (p.type !== 'tree' || Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;
@@ -94,7 +108,7 @@ export function render(dt) {
       const player = S.room && S.room.players.find(p => p.id === o.now.id);
       const team = player ? player.team : o.now.team;
       const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM ? PLAGUE_TINT : teams ? TEAM_TINT[team] : null;
-      drawPlayer(o.now.x, o.now.y, o.now.z, 1, 1, now - o.hitT < 90, o.now.sc, tint, player && player.skin);
+      drawPlayer(o.now.x, o.now.y, o.now.z, o.now.sl ? SLIDE.crouch : 1, o.now.sl ? 1.15 : 1, now - o.hitT < 90, o.now.sc, tint, player && player.skin, glowFor(o, now));
     }
   drawParticles(S.embers);
   drawParticles(S.particles);
@@ -112,6 +126,7 @@ export function render(dt) {
   drawMinimap(now);
   drawSpeed();
   drawAmmo(now);
+  drawUsePrompt();
 
   decayEffects(dt);
   updateHud();

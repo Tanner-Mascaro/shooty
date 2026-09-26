@@ -1,14 +1,17 @@
 // One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
-import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, DROP_TIME } from '../shared/config.js';
-import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
+import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, START_GUN, MAX_SPARE, PAD_GUNS, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
-import { newBrain, botTick } from './bot.js';
+import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, randomBotName } from './bot.js';
+import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
+import { VERSION } from './version.js';
+
+const CHAT_MAX = 140; // as in public/js/chat.js
 
 // Anyone can add bots to a room with the lobby's + BOT / − BOT buttons; they only fill empty
 // seats, so a person joining a full room takes a bot's place. `node server.js --bots` (or
@@ -31,8 +34,10 @@ export class Room {
     this.gameOn = false;
     this.plagueEndsAt = 0;
     this.plagueSelection = 'random'; // 'random' | 'manual'; manual roles survive rematches
-    this.drops = [];          // guns dead players dropped: { id, weapon, mag, spare, x, y, z, until }
-    this.dropId = 0;
+    this.boxes = [];          // loot boxes: { id, x, y, z, items: [{ w, mag, spare }], until }
+    this.boxId = 0;
+    this.nades = [];          // thrown grenades in flight
+    this.nadeId = 0;
     this.setLevel('hell');
   }
 
@@ -62,10 +67,12 @@ export class Room {
   }
   // who's here, teams and ready state: sent whenever any of it changes
   roster() {
+    const votes = {};
+    for (const p of this.humans) if (p.vote && LEVELS[p.vote]) votes[p.vote] = (votes[p.vote] || 0) + 1;
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, plagueRemainingMs: this.plagueRemainingMs,
+      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
   }
 
   // --- level / pickups ---
@@ -75,36 +82,82 @@ export class Room {
     this.T = TERRAINS[name];
     this.resetPickups();
   }
+  // the level's pads (gun pads roll a random gun every time they come back; health / nades stay)
+  // plus ammo crates, spare guns and grenades at random open spots each match
   resetPickups() {
-    this.pickups = findPickups(this.map).map(p => Object.assign(p, { active: true, respawnAt: 0 }));
-    this.drops = [];
+    this.pickups = findPickups(this.map).map(p => Object.assign(p, {
+      gun: p.weapon !== 'health' && p.weapon !== 'nade',
+      nade: p.weapon === 'nade',
+    }));
+    const taken = [...this.pickups];
+    const scatter = (n, weapon, gun, nade, crate) => {
+      for (let i = 0; i < n; i++) {
+        const s = this.spawnPos(taken);
+        if (!s) break;
+        taken.push(s);
+        this.pickups.push({ x: s.x, y: s.y, weapon, gun: !!gun, nade: !!nade, crate: !!crate });
+      }
+    };
+    scatter(AMMO_CRATES, 'ammo', false, false, false);
+    scatter(GUN_CRATES, 'rifle', true, false, true); // weapon re-rolled in rollPad; walk-over crates
+    scatter(NADE_CRATES, 'nade', false, true, false);
+    for (const pu of this.pickups) { pu.active = true; pu.respawnAt = 0; this.rollPad(pu); }
+    this.boxes = [];
+    this.nades = [];
   }
-  broadcastPickups() { this.broadcast({ type: 'pickups', active: this.pickups.map(p => p.active) }); }
-  dropList() { return { type: 'drops', drops: this.drops.map(d => ({ id: d.id, weapon: d.weapon, x: d.x, y: d.y, z: d.z })) }; }
+  rollPad(pu) { if (pu.gun) pu.weapon = PAD_GUNS[Math.floor(Math.random() * PAD_GUNS.length)]; }
+  pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon, crate: !!p.crate })), active: this.pickups.map(p => p.active) }; }
+  broadcastPickups() { this.broadcast(this.pickupList()); }
+  boxList() { return { type: 'boxes', boxes: this.boxes.map(b => ({ id: b.id, x: b.x, y: b.y, z: b.z, items: b.items.map(it => it.w) })) }; }
+  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, nades: p.nades || 0, clawsOnly: this.isInfected(p) }); }
 
-  // a dying player's picked-up guns fall around the body with whatever ammo was left in them
-  dropGuns(p) {
-    const until = Date.now() + DROP_TIME;
-    for (const w in p.mag) {
-      if (w === 'rifle' || !(p.mag[w] + (p.inv[w] || 0) > 0)) continue;
-      const a = Math.random() * Math.PI * 2, r = 0.2 + Math.random() * 0.3;
-      let x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
-      if (hitsWall(this.T, x, y, 0.1)) { x = p.x; y = p.y; }
-      if (kindAt(this.T, x, y) === 2) continue; // lost in the lava / acid / bog
-      this.drops.push({ id: ++this.dropId, weapon: w, mag: p.mag[w], spare: p.inv[w] || 0, x, y, z: groundAt(this.T, x, y), until });
+  voteWinner() {
+    const counts = {};
+    for (const p of this.humans) if (p.vote && LEVELS[p.vote]) counts[p.vote] = (counts[p.vote] || 0) + 1;
+    let best = this.level, n = 0;
+    for (const [k, v] of Object.entries(counts)) if (v > n) { n = v; best = k; }
+    return best;
+  }
+
+  // a loot box on the ground at (x, y); nothing if it would land in lava / acid / bog
+  addBox(x, y, items) {
+    if (!items.length || kindAt(this.T, x, y) === 2) return;
+    this.boxes.push({ id: ++this.boxId, x, y, z: groundAt(this.T, x, y), items, until: Date.now() + BOX_TIME });
+  }
+
+  // a dying player's guns go in a box at the body, with the ammo left in them
+  dropLoot(p) {
+    const items = Object.keys(p.mag).filter(w => p.mag[w] + (p.inv[w] || 0) > 0)
+      .map(w => ({ w, mag: p.mag[w], spare: p.inv[w] || 0 }));
+    this.addBox(p.x, p.y, items);
+  }
+
+  // give `p` gun w: its ammo if they have one, else a free slot, else it replaces `drop` (the gun
+  // in their hand) in the same slot. Returns { dropped } (the replaced gun, if any), or null if
+  // it can't be done
+  takeGun(p, w, mag, spare, drop) {
+    if (this.isInfected(p)) return null;
+    if (p.mag[w] !== undefined) { this.addSpare(p, w, mag + spare); return { dropped: null }; }
+    const guns = Object.keys(p.mag);
+    if (guns.length < GUN_SLOTS) { p.mag[w] = mag; p.inv[w] = spare; return { dropped: null }; }
+    if (!guns.includes(drop)) return null;
+    const dropped = { w: drop, mag: p.mag[drop], spare: p.inv[drop] || 0 };
+    const mags = {}, invs = {};
+    for (const g of guns) { // rebuild so the new gun keeps the old one's slot
+      const k = g === drop ? w : g;
+      mags[k] = g === drop ? mag : p.mag[g];
+      if (g === drop) invs[k] = spare; else if (p.inv[g] !== undefined) invs[k] = p.inv[g];
     }
+    p.mag = mags; p.inv = invs;
+    return { dropped };
   }
-
-  // hand `p` a gun (or its ammo if they already have one) and tell them what changed
-  giveGun(p, w, mag, spare) {
-    if (this.isInfected(p)) return;
-    const fresh = p.mag[w] === undefined;
-    if (fresh) { p.mag[w] = mag; p.inv[w] = spare; }
-    else p.inv[w] = (p.inv[w] || 0) + mag + spare;
-    this.send(p, { type: 'ammo', weapon: w, fresh, mag, add: fresh ? spare : mag + spare });
+  // spare rounds for gun w, up to what you can carry (the rest is left behind); how many fit
+  addSpare(p, w, n) {
+    if (this.isInfected(p)) return 0;
+    const have = p.inv[w] || 0, add = Math.max(0, Math.min(n, MAX_SPARE(w) - have));
+    p.inv[w] = have + add;
+    return add;
   }
-  // full ammo state, when the client's own count can't be trusted (respawn, rejected shot/reload)
-  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, clawsOnly: this.isInfected(p) }); }
 
   // a random open spot, preferring ones far from everyone in `avoid`
   spawnPos(avoid) {
@@ -146,10 +199,11 @@ export class Room {
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
     p.p = 0;
     p.hp = this.maxHp(p);
-    p.mag = this.isInfected(p) ? {} : { rifle: WEAPONS.rifle.mag }; // infected only have claws
-    p.inv = {};  // spare rounds per picked-up gun (the rifle's are unlimited)
+    p.mag = this.isInfected(p) ? {} : { [START_GUN]: WEAPONS[START_GUN].mag }; // rounds loaded; you own the guns listed here
+    p.inv = this.isInfected(p) ? {} : { [START_GUN]: AMMO[START_GUN] };         // spare rounds per gun
+    p.nades = 0;
     p.lastShot = {};
-    p.sc = false;
+    p.sc = false; p.sl = false;
     p.vz = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
     p.dashUntil = 0; p.nextDash = 0; p.dashX = 0; p.dashY = 0;
     if (p.brain) p.brain = newBrain();
@@ -159,16 +213,16 @@ export class Room {
 
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
-    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false });
+    Object.assign(p, { room: this, kills: 0, ready: !!p.bot, skin: p.skin || 'demon', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
     p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     this.resetPlayer(p);
-    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: p.hp, seq: p.seq });
-    this.send(p, { type: 'pickups', active: this.pickups.map(pu => pu.active) });
-    this.send(p, this.dropList());
+    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: p.hp, seq: p.seq, version: VERSION });
+    this.send(p, this.pickupList());
+    this.send(p, this.boxList());
     if (BOTS && !p.bot && this.humans.length === 1 && !this.hasBots) this.addBot();
     if (this.gameOn) this.checkPlagueWin();
     this.roster();
@@ -182,15 +236,27 @@ export class Room {
     if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     if (!this.humans.length) { this.hub.closeRoom(this); return; } // bots go with it
     if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
-    this.roster();
+    if (!this.maybeStart()) this.roster(); // the one who wasn't ready left
   }
 
-  addBot() {
-    if (this.list.length >= MAX_PLAYERS) return;
+  // start the match once there are two or more players and all of them are ready; true if it did
+  maybeStart() {
+    if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid() || !this.list.every(pl => pl.ready)) return false;
+    this.startGame();
+    return true;
+  }
+
+  // level: 'easy' | 'medium' | 'hard' (bot.js BOT_LEVELS); each bot gets a random character + name
+  addBot(level = 'medium') {
+    if (this.list.length >= MAX_PLAYERS || !BOT_LEVELS[level]) return false;
     const id = this.hub.nextId++;
-    const bot = { id, bot: true, brain: newBrain(), a: 0, p: 0, seq: 0 };
+    const skin = PLAYER_SKINS[Math.floor(Math.random() * PLAYER_SKINS.length)];
+    const taken = new Set(this.list.map(p => (p.name || '').toLowerCase()));
+    const name = randomBotName(taken);
+    const bot = { id, bot: true, name, level, skin, knife: Math.random() < KNIFE_CHANCE, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
+    return true;
   }
 
   // take out the newest bot; false if there are none
@@ -203,6 +269,22 @@ export class Room {
     return true;
   }
 
+  addBots(level, count = 1) {
+    let n = 0;
+    for (let i = 0; i < count; i++) { if (!this.addBot(level)) break; n++; }
+    return n;
+  }
+  fillBots(level) {
+    let n = 0;
+    while (this.list.length < MAX_PLAYERS) { if (!this.addBot(level)) break; n++; }
+    return n;
+  }
+  clearBots() {
+    let n = 0;
+    while (this.dropBot()) n++;
+    return n;
+  }
+
   killPlayer(victim, killer, info) {
     if (!this.gameOn) return;
     const at = { x: victim.x, y: victim.y, z: victim.z };
@@ -211,10 +293,10 @@ export class Room {
     if (killer) killer.kills++;
     this.hub.record(killer, { kills: 1 });
     this.hub.record(victim, { deaths: 1 });
-    this.dropGuns(victim);
+    this.dropLoot(victim);
     if (infected) victim.team = PLAGUE_TEAM;
     this.resetPlayer(victim);
-    this.broadcast(this.dropList());
+    this.broadcast(this.boxList());
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin }, info, at));
     const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}` : 'died in the pit';
     log(`[${this.code}] ${this.hub.name(killer || victim)} ${how} — ${this.score()}`);
@@ -233,6 +315,8 @@ export class Room {
     if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid()) return;
     if (this.mode === 'teams' && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
+    const map = this.voteWinner();
+    if (map !== this.level) this.setLevel(map);
     if (this.mode === 'plague') {
       this.list.forEach(p => p.team = this.plagueSelection === 'manual' ? p.plagueStartTeam : HEALTHY_TEAM);
       if (this.plagueSelection === 'random') this.list[Math.floor(Math.random() * this.list.length)].team = PLAGUE_TEAM;
@@ -249,7 +333,7 @@ export class Room {
     this.roster();
     this.broadcast(this.startMessage());
     this.broadcastPickups();
-    this.broadcast(this.dropList());
+    this.broadcast(this.boxList());
     log(`[${this.code}] Match started on ${LEVEL_NAMES[this.level]} (${MODE_NAMES[this.mode]}): ${this.list.map(p => this.hub.who(p)).join(', ')}`);
   }
 
@@ -283,52 +367,103 @@ export class Room {
     log(`[${this.code}] Match ended: ${reason}`);
   }
 
-  // --- per-tick: bots, pits, pickups, state broadcast ---
+  // --- per-tick: bots, pits, pickups, grenades, state broadcast ---
   tick() {
     this.checkPlagueWin(); // the timer expires before another bot or player can infect anyone
     for (const p of this.list) if (p.bot) botTick(this, p);
     if (this.gameOn) {
-      const now = Date.now();
+      const now = Date.now(), dt = TICK / 1000;
+      this.stepNades(dt, now);
       for (const p of this.list) {
         if (kindAt(this.T, p.x, p.y) === 2 && p.z < -0.15) {
           p.hp -= PIT_DPS * TICK / 1000;
           if (p.hp <= 0) { this.killPlayer(p, null, { weapon: 'pit' }); continue; }
         }
-        this.pickups.forEach((pu, idx) => this.tryPickup(p, pu, idx, now));
+        this.pickups.forEach(pu => this.tryWalkOver(p, pu, now));
       }
       let respawned = false;
-      for (const pu of this.pickups) if (!pu.active && now >= pu.respawnAt) { pu.active = true; respawned = true; }
+      for (const pu of this.pickups) if (!pu.active && now >= pu.respawnAt) { pu.active = true; this.rollPad(pu); respawned = true; }
       if (respawned) this.broadcastPickups();
-      const drops = this.drops.length;
-      this.drops = this.drops.filter(d => now < d.until && !this.list.some(p => this.tryGrab(p, d)));
-      if (this.drops.length !== drops) this.broadcast(this.dropList());
+      const boxes = this.boxes.length;
+      this.boxes = this.boxes.filter(b => now < b.until);
+      if (this.boxes.length !== boxes) this.broadcast(this.boxList());
     }
     if (this.list.length < 2) return;
-    const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
-    this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs });
+    const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team }));
+    this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs, nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
   }
 
-  tryPickup(p, pu, idx, now) {
+  stepNades(dt, now) {
+    const still = [];
+    for (const n of this.nades) {
+      n.vz -= NADE.gravity * dt;
+      n.x += n.vx * dt; n.y += n.vy * dt; n.z += n.vz * dt;
+      const g = groundAt(this.T, n.x, n.y);
+      if (n.z < g) {
+        n.z = g; n.vz *= -NADE.bounce;
+        n.vx *= 0.7; n.vy *= 0.7;
+        if (Math.abs(n.vz) < 1.2) n.vz = 0;
+      }
+      if (hitsWall(this.T, n.x, n.y, 0.12)) {
+        n.vx *= -0.5; n.vy *= -0.5;
+        n.x += n.vx * dt; n.y += n.vy * dt;
+      }
+      if (now >= n.until) this.explodeNade(n);
+      else still.push(n);
+    }
+    this.nades = still;
+  }
+
+  explodeNade(n) {
+    const killer = this.players[n.by] || null;
+    this.broadcast({ type: 'nadeBoom', x: n.x, y: n.y, z: n.z, id: n.id });
+    if (!this.gameOn || (killer && this.isInfected(killer))) return;
+    for (const o of this.list) {
+      if (!this.players[o.id]) continue;
+      if (killer && isTeamMode(this.mode) && o.team === killer.team && o !== killer) continue; // no team damage except self
+      const d = Math.hypot(o.x - n.x, o.y - n.y, (o.z + BODY_H / 2) - n.z);
+      if (d > NADE.radius) continue;
+      const dmg = Math.round(NADE.dmg * (1 - d / NADE.radius));
+      if (dmg <= 0) continue;
+      o.hp -= dmg;
+      this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z });
+      if (o.hp <= 0) {
+        this.killPlayer(o, killer && killer !== o ? killer : null, { weapon: 'nade', head: false, dist: d, a: Math.atan2(o.y - n.y, o.x - n.x) });
+        if (!this.gameOn) break;
+      }
+    }
+  }
+
+  // health, ammo, nades and gun crates are taken by walking over them when you need them
+  tryWalkOver(p, pu, now) {
+    if (pu.gun && !pu.crate) return; // map gun pads need the use key; random gun crates are walk-over
     if (!pu.active || Math.hypot(p.x - pu.x, p.y - pu.y) > 0.8 || p.z > 1) return;
-    const heal = pu.weapon === 'health';
-    if (this.isInfected(p) && !heal) return;
+    if (this.isInfected(p) && pu.weapon !== 'health') return;
     const maxHp = this.maxHp(p);
-    if (heal && p.hp >= maxHp) return; // leave it for when you need it
+    if (pu.weapon === 'health') {
+      if (p.hp >= maxHp) return;
+      p.hp = Math.min(maxHp, p.hp + HEAL);
+      pu.respawnAt = now + HEAL_RESPAWN;
+    } else if (pu.nade || pu.weapon === 'nade') {
+      if ((p.nades || 0) >= NADE.maxCarry) return;
+      p.nades = (p.nades || 0) + 1;
+      pu.respawnAt = now + NADE_RESPAWN;
+      this.syncAmmo(p);
+    } else if (pu.gun) {
+      const r = this.takeGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon], null);
+      if (!r) return;
+      pu.respawnAt = now + GUN_CRATE_RESPAWN;
+      this.syncAmmo(p);
+    } else {
+      let got = 0;
+      for (const w in p.mag) got += this.addSpare(p, w, WEAPONS[w].mag);
+      if (!got) return;
+      pu.respawnAt = now + AMMO_RESPAWN;
+      this.syncAmmo(p);
+    }
     pu.active = false;
-    pu.respawnAt = now + (heal ? HEAL_RESPAWN : PICKUP_RESPAWN);
-    if (heal) p.hp = Math.min(maxHp, p.hp + HEAL);
-    else this.giveGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon]);
     this.broadcast({ type: 'pickup', id: p.id, weapon: pu.weapon, x: pu.x, y: pu.y, z: 0 });
     this.broadcastPickups();
-  }
-
-  // walk over a dropped gun to take it; true if `p` took it
-  tryGrab(p, d) {
-    if (this.isInfected(p)) return false;
-    if (Math.hypot(p.x - d.x, p.y - d.y) > 0.8 || Math.abs(p.z - d.z) > 1) return false;
-    this.giveGun(p, d.weapon, d.mag, d.spare);
-    this.broadcast({ type: 'pickup', id: p.id, weapon: d.weapon, x: d.x, y: d.y, z: d.z });
-    return true;
   }
 }
 
@@ -342,11 +477,22 @@ Room.prototype.handlers = {
   },
 
   level(p, msg) {
+    // lobby map clicks are votes now (see vote); keep level for backwards compat as a vote
+    this.handlers.vote.call(this, p, msg);
+  },
+
+  vote(p, msg) {
     if (this.gameOn || !LEVELS[msg.level]) return;
-    this.setLevel(msg.level);
-    log(`[${this.code}] ${this.hub.who(p)} picked ${LEVEL_NAMES[this.level]}`);
-    this.list.forEach(pl => pl.ready = !!pl.bot); // everyone re-confirms on the new map
-    this.broadcast({ type: 'level', level: this.level });
+    p.vote = msg.level;
+    p.ready = !!p.bot;
+    const winner = this.voteWinner();
+    if (winner !== this.level) {
+      this.setLevel(winner);
+      this.broadcast({ type: 'level', level: this.level });
+      log(`[${this.code}] ${this.hub.who(p)} voted ${LEVEL_NAMES[msg.level]} → leading ${LEVEL_NAMES[this.level]}`);
+    } else {
+      log(`[${this.code}] ${this.hub.who(p)} voted ${LEVEL_NAMES[msg.level]}`);
+    }
     this.roster();
   },
 
@@ -391,15 +537,99 @@ Room.prototype.handlers = {
     }
     p.ready = true;
     log(`[${this.code}] ${this.hub.who(p)} is ready`);
-    if (this.list.length >= 2 && this.list.every(pl => pl.ready)) this.startGame();
-    else this.roster();
+    if (!this.maybeStart()) this.roster();
   },
 
-  addBot() { this.addBot(); },
-  removeBot() {
-    if (!this.dropBot()) return;
+  addBot(p, msg) {
+    const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+    this.addBots(msg.level, n);
+    this.maybeStart();
+    this.roster();
+  },
+  fillBots(p, msg) { this.fillBots(msg.level); this.maybeStart(); this.roster(); },
+  clearBots() {
+    this.clearBots();
     if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
+  },
+  removeBot(p, msg) {
+    const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+    for (let i = 0; i < n; i++) if (!this.dropBot()) break;
+    if (this.gameOn && !this.checkPlagueWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');
+    this.roster();
+  },
+
+  // text chat to everyone in the room: trimmed, at most CHAT_MAX characters, 5 per 5 seconds
+  chat(p, msg) {
+    const text = String(msg.text ?? '').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX);
+    if (!text) return;
+    const now = Date.now();
+    p.chatTimes = (p.chatTimes || []).filter(t => now - t < 5000);
+    if (p.chatTimes.length >= 5) return this.hub.notice(p, 'Slow down — too many messages');
+    p.chatTimes.push(now);
+    this.broadcast({ type: 'chat', id: p.id, name: this.hub.name(p), team: p.team, text });
+    log(`[${this.code}] ${this.hub.who(p)}: ${text}`);
+  },
+
+  // voice chat connection setup (public/js/voice.js): passed on to one other person in the room
+  rtc(p, msg) {
+    const to = this.players[msg.to];
+    if (!to || to === p || to.bot || (!msg.sdp && !msg.candidate) || JSON.stringify(msg).length > 20000) return;
+    this.send(to, { type: 'rtc', from: p.id, sdp: msg.sdp, candidate: msg.candidate });
+  },
+
+  // use key: pick up the gun on pad `pad`, or loot box `box`. `drop` is the gun in your hand,
+  // swapped out if both slots are full (from a pad it's left in a new box at your feet)
+  use(p, msg) {
+    if (this.isInfected(p)) return;
+    if (!this.gameOn) return;
+    const near = o => Math.hypot(p.x - o.x, p.y - o.y) <= USE_RANGE && Math.abs(p.z - (o.z || 0)) < 1.2;
+    let got = null, where = null;
+    if (Number.isInteger(msg.pad)) {
+      const pu = this.pickups[msg.pad];
+      if (!pu || !pu.gun || pu.crate || !pu.active || !near(pu)) return;
+      const r = this.takeGun(p, pu.weapon, WEAPONS[pu.weapon].mag, AMMO[pu.weapon], msg.drop);
+      if (!r) return;
+      pu.active = false;
+      pu.respawnAt = Date.now() + PICKUP_RESPAWN;
+      if (r.dropped) { this.addBox(p.x, p.y, [r.dropped]); this.broadcast(this.boxList()); }
+      got = pu.weapon; where = { x: pu.x, y: pu.y, z: 0 };
+      this.broadcastPickups();
+    } else {
+      const b = this.boxes.find(b => b.id === msg.box);
+      if (!b || !near(b)) return;
+      // ammo for guns you already carry comes out first, then the first gun you don't have
+      const ammo = b.items.filter(it => p.mag[it.w] !== undefined);
+      for (const it of ammo) this.takeGun(p, it.w, it.mag, it.spare);
+      b.items = b.items.filter(it => !ammo.includes(it));
+      if (ammo.length) got = 'ammo';
+      const i = b.items.findIndex(it => p.mag[it.w] === undefined);
+      if (i >= 0) {
+        const it = b.items[i], r = this.takeGun(p, it.w, it.mag, it.spare, msg.drop);
+        if (r) { b.items.splice(i, 1); if (r.dropped) b.items.push(r.dropped); got = it.w; }
+      }
+      if (!got) return;
+      if (!b.items.length) this.boxes = this.boxes.filter(o => o !== b);
+      where = b;
+      this.broadcast(this.boxList());
+    }
+    this.syncAmmo(p);
+    this.broadcast({ type: 'pickup', id: p.id, weapon: got, x: where.x, y: where.y, z: where.z });
+  },
+
+  nade(p) {
+    if (!this.gameOn || this.isInfected(p) || !(p.nades > 0)) return;
+    p.nades--;
+    this.syncAmmo(p);
+    const cos = Math.cos(p.a), sin = Math.sin(p.a), cp = Math.cos(p.p), sp = Math.sin(p.p);
+    const eye = p.z + EYE - (p.sl ? 0.25 : 0);
+    const n = {
+      id: ++this.nadeId, by: p.id, until: Date.now() + NADE.fuse,
+      x: p.x + cos * 0.35, y: p.y + sin * 0.35, z: eye,
+      vx: cos * cp * NADE.speed, vy: sin * cp * NADE.speed, vz: sp * NADE.speed + 3.2,
+    };
+    this.nades.push(n);
+    this.broadcast({ type: 'nadeThrow', id: n.id, by: p.id, x: n.x, y: n.y, z: n.z });
   },
 
   // sent when the client finishes a reload; it can't have fired that gun for the whole reload
@@ -407,11 +637,11 @@ Room.prototype.handlers = {
     if (this.isInfected(p)) return;
     const w = WEAPONS[msg.weapon], now = Date.now();
     if (!w || w.melee || p.mag[msg.weapon] === undefined) return;
-    const spare = msg.weapon === 'rifle' ? Infinity : p.inv[msg.weapon] || 0;
+    const spare = p.inv[msg.weapon] || 0;
     const n = Math.min(w.mag - p.mag[msg.weapon], spare);
     if (n <= 0 || now - (p.lastShot[msg.weapon] || 0) < w.reload * 0.85) { this.syncAmmo(p); return; } // slack for network jitter
     p.mag[msg.weapon] += n;
-    if (spare !== Infinity) p.inv[msg.weapon] -= n;
+    p.inv[msg.weapon] -= n;
   },
 
   dash(p, msg) {
@@ -431,6 +661,7 @@ Room.prototype.handlers = {
     p.a = msg.a;
     p.p = Math.max(-1.2, Math.min(1.2, msg.p));
     p.sc = !this.isInfected(p) && !!msg.sc;
+    p.sl = !this.isInfected(p) && !!msg.sl;
   },
 
   shoot(p, msg) {
@@ -445,7 +676,7 @@ Room.prototype.handlers = {
       if (!(p.mag[msg.weapon] > 0)) { this.syncAmmo(p); return; }
       p.mag[msg.weapon]--;
       p.lastShot[msg.weapon] = now;
-      if (msg.weapon !== 'rifle' && !p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
+      if (!p.mag[msg.weapon] && !p.inv[msg.weapon]) { delete p.mag[msg.weapon]; delete p.inv[msg.weapon]; } // used up
     }
     p.nextFire[msg.weapon] = now + w.cd * (msg.weapon === 'claws' ? 1 : 0.85); // guns keep their network slack
     const targets = this.enemies(p);
