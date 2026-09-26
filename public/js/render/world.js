@@ -5,6 +5,10 @@ import { S } from '../state.js';
 import { view, pk } from './canvas.js';
 import { colors } from '../level.js';
 import { PLAYER_SPRITES } from './sprites.js';
+import { MAT } from '/shared/terrain.js';
+
+const hash = (i, j) => { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+const LED = [[60, 255, 120], [60, 160, 255], [255, 170, 40]]; // server rack status lights
 
 // ray-march depths along each screen column, shared by every frame
 const ZS = [];
@@ -25,7 +29,7 @@ export function drawTerrain(now) {
     else { const k = Math.min(1, Math.sqrt(el / 0.8)); skyRow[y] = pk(lo[0] + (hi[0] - lo[0]) * k, lo[1] + (hi[1] - lo[1]) * k, lo[2] + (hi[2] - lo[2]) * k); }
   }
 
-  const TW = T.TW, TH = T.TH, hg = T.hgt, kd = T.kind, fr = th.fog[0], fg = th.fog[1], fb = th.fog[2];
+  const TW = T.TW, TH = T.TH, hg = T.hgt, kd = T.kind, mt = T.mat, fr = th.fog[0], fg = th.fog[1], fb = th.fog[2];
   const wc = th.wall, bc = th.band, pulse = 0.7 + 0.3 * Math.sin(t * 3);
   const fogF = ZS.map(z => 1 - Math.exp(-z * th.fogK));
 
@@ -41,8 +45,37 @@ export function drawTerrain(now) {
       const k = j * TW + i, h = hg[k], sy = horizon - (h - eye) * focal / z;
       const xFace = i !== prevI; prevI = i;
       if (sy >= ybot) continue;
-      const ytop = sy < 0 ? 0 : sy | 0, f = fogF[s], kind = kd[k];
-      if (kind === 1) {
+      const ytop = sy < 0 ? 0 : sy | 0, f = fogF[s], kind = kd[k], m = mt[k];
+      if (m === MAT.RACK || m === MAT.CRATE) {
+        // flat-sided props get textured faces; `along` is the position across the face
+        const along = xFace ? wy : wx, sh = xFace ? 0.8 : 1;
+        for (let y = ytop; y < ybot; y++) {
+          const hh = eye + (horizon - y - 0.5) * z / focal;
+          let r, g, b, ff = f;
+          if (hh > h - 0.04) { r = CR[k]; g = CG[k]; b = CB[k]; }
+          else if (m === MAT.RACK) {
+            // server rack: 1U rows, drive bays and blinking status lights
+            const row = Math.floor(hh / 0.1), fr1 = hh / 0.1 - row, q = Math.floor(along * 8), fq = along * 8 - q;
+            r = 30 * sh; g = 33 * sh; b = 40 * sh;
+            if (fr1 < 0.1) { r = 16; g = 17; b = 22; }
+            else if (hh > 0.12 && hh < h - 0.12) {
+              const hs = hash(row * 131 + q, q * 7 + (along * 0.5 | 0));
+              if (fq > 0.12 && fq < 0.32 && fr1 > 0.35 && fr1 < 0.7 && hs > 0.4) {
+                const led = LED[hs > 0.88 ? 2 : hs > 0.68 ? 1 : 0], on = Math.sin(t * (1.5 + hs * 9) + hs * 50) > -0.4;
+                if (on) { r = led[0]; g = led[1]; b = led[2]; ff = f * 0.2; } else { r = led[0] * 0.2; g = led[1] * 0.2; b = led[2] * 0.2; }
+              } else if (fq > 0.5 && fq < 0.92 && fr1 > 0.25 && fr1 < 0.8) { r = 46 * sh; g = 50 * sh; b = 60 * sh; }
+            }
+          } else {
+            // crate: frame, planks and a diagonal brace
+            const u = (along * 1.67) % 1, v = hh / h;
+            const frame = hh < 0.05 || hh > h - 0.09 || u < 0.08 || u > 0.92 || Math.abs(u - v) < 0.07;
+            const tone = frame ? 0.62 : (hh * 12 | 0) & 1 ? 0.92 : 1;
+            r = CR[k] * tone * sh; g = CG[k] * tone * sh; b = CB[k] * tone * sh;
+          }
+          const idx = y * RW + c;
+          pix[idx] = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff); zbuf[idx] = z;
+        }
+      } else if (m === MAT.WALL) {
         // wall faces are textured by world height (hell: rune bands; robot: panels + light strip; witch: moss + runes)
         const sh = xFace ? 0.75 : 1, seam = ((wx + wy) * (robot ? 1 : 2)) % 1 < 0.05 ? 0.6 : 1;
         for (let y = ytop; y < ybot; y++) {
@@ -66,6 +99,9 @@ export function drawTerrain(now) {
           else if (witch) { const bub = Math.sin(wx * 11 + t * 3) * Math.sin(wy * 9 - t * 2) > 0.9; r = bub ? 200 : 50 + v * 50; g = bub ? 255 : 150 + v * 90; b = bub ? 140 : 30 + v * 30; }
           else { r = 255; g = 60 + v * 130; b = 10 + v * 40; }
           ff = f * 0.4;
+        } else if (EM[k] === 3) { // lava in a volcano crater / running down its side
+          const v = 0.5 + 0.5 * Math.sin(wx * 4.1 + t * 2.3) * Math.sin(wy * 3.7 - t * 1.9);
+          r = 255; g = 70 + v * 130; b = 10 + v * 30; ff = f * 0.3;
         } else { r = CR[k]; g = CG[k]; b = CB[k]; if (EM[k]) { ff = f * 0.5; g *= 0.8 + 0.2 * Math.sin(t * 2 + wx); } }
         const col = pk(r + (fr - r) * ff, g + (fg - g) * ff, b + (fb - b) * ff);
         for (let y = ytop; y < ybot; y++) { const idx = y * RW + c; pix[idx] = col; zbuf[idx] = z; }

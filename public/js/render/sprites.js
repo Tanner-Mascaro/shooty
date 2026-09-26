@@ -77,3 +77,23 @@ export function pickupSprite(weapon, color) {
   if (weapon === 'health') return { w: 0.4, h: 0.4, px: healthPx, pal: [null, [235, 235, 235], null, [230, 30, 30]], emit: [1, 3] };
   return { w: 0.7, h: 0.35, px: gunPx(weapon), pal: [null, [70, 70, 78], [30, 30, 34], color], emit: [3] };
 }
+
+// --- swamp tree canopies: a lumpy blob of leaves with moss hanging off the bottom ---
+const canopyCache = [];
+export function canopySprite(variant) {
+  return canopyCache[variant] || (canopyCache[variant] = {
+    w: 1, h: 1, emit: [],
+    pal: [null, [22, 48, 20], [34, 70, 28], [58, 104, 40], [80, 96, 64]],
+    px(u, v) {
+      const dx = (u - 0.5) * 2, dy = (v - 0.45) * 2.3, a = Math.atan2(dy, dx), d = Math.hypot(dx, dy);
+      const edge = 0.82 + 0.1 * Math.sin(a * 5 + variant * 2.1) + 0.06 * Math.sin(a * 11 + variant);
+      if (d < edge) {
+        const lump = Math.sin(u * 23 + variant) * Math.sin(v * 19 - variant * 3);
+        return lump > 0.55 ? 3 : dy > 0.35 || lump < -0.6 ? 1 : 2; // light tops, shaded underside
+      }
+      // Spanish moss strands hanging below
+      if (v > 0.55 && Math.abs(dx) < 0.7 && Math.sin(u * 60 + variant * 4) > 0.82 && v < 0.62 + 0.35 * Math.abs(Math.sin(u * 17 + variant))) return 4;
+      return 0;
+    },
+  });
+}

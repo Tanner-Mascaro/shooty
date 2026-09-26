@@ -50,14 +50,15 @@ export function footGround(x, y) {
   ]) {
     const fx = sx * T.RES - 0.5, fy = sy * T.RES - 0.5;
     const i = Math.floor(fx), j = Math.floor(fy);
-    let valid = false;
+    // blend the 4 samples around this point, unless one is a wall: then use the highest non-wall one
+    let wall = false, top = -Infinity;
     for (let jj = j; jj <= j + 1; jj++) for (let ii = i; ii <= i + 1; ii++) {
       if (ii < 0 || jj < 0 || ii >= T.TW || jj >= T.TH) continue;
-      if (T.kind[jj * T.TW + ii] === 1) { valid = false; break; }
-      valid = true;
+      const k = jj * T.TW + ii;
+      if (T.kind[k] === 1) wall = true; else top = Math.max(top, T.hgt[k]);
     }
-    if (!valid) continue;
-    highest = Math.max(highest, groundAt(T, sx, sy));
+    if (top === -Infinity) continue; // nothing but wall here
+    highest = Math.max(highest, wall ? top : groundAt(T, sx, sy));
   }
   return highest;
 }
@@ -90,6 +91,49 @@ function resolveWallOverlap(me) {
   for (const [ox, oy] of [[0.2, 0], [-0.2, 0], [0, 0.2], [0, -0.2], [0.2, 0.2], [0.2, -0.2], [-0.2, 0.2], [-0.2, -0.2]]) {
     const x = me.x + ox, y = me.y + oy;
     if (!wallHitbox(x, y)) { me.x = x; me.y = y; return; }
+  }
+}
+
+// can you stand at (x, y) with feet at z? walls block, and so does ground more than `tol` above your feet
+const blocked = (x, y, z, tol) => wallHitbox(x, y) || footGround(x, y) > z + tol;
+
+// which way is "out" of whatever is at (x, y): away from the nearby wall samples, weighted by how
+// deep they overlap you, or downhill for a rise too steep to step onto; null if there's no clear way
+function wallNormal(x, y) {
+  const T = S.T, r = PLAYER_R + 0.05;
+  let nx = 0, ny = 0;
+  const minI = Math.floor((x - r) * T.RES), maxI = Math.floor((x + r) * T.RES);
+  const minJ = Math.floor((y - r) * T.RES), maxJ = Math.floor((y + r) * T.RES);
+  for (let j = minJ; j <= maxJ; j++) for (let i = minI; i <= maxI; i++) {
+    const out = i < 0 || j < 0 || i >= T.TW || j >= T.TH;
+    if (!out && T.kind[j * T.TW + i] !== 1) continue;
+    const cx = Math.min(Math.max(x, i / T.RES), (i + 1) / T.RES), cy = Math.min(Math.max(y, j / T.RES), (j + 1) / T.RES);
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < r && d > 1e-6) { nx += (x - cx) / d * (r - d); ny += (y - cy) / d * (r - d); }
+  }
+  if (!nx && !ny) { const e = 0.1; nx = footGround(x - e, y) - footGround(x + e, y); ny = footGround(x, y - e) - footGround(x, y + e); }
+  const l = Math.hypot(nx, ny);
+  return l > 1e-6 && Number.isFinite(l) ? { x: nx / l, y: ny / l } : null;
+}
+
+// move by the velocity in small steps; on bumping into something, drop the part of the velocity
+// going into its surface and keep the rest, so you slide around trunks, cones and rough cliffs
+function slideMove(me, dt, tol) {
+  const n = Math.max(1, Math.ceil(Math.hypot(S.vx, S.vy) * dt / 0.04));
+  for (let i = 0; i < n; i++) {
+    let dx = S.vx * dt / n, dy = S.vy * dt / n;
+    if (!blocked(me.x + dx, me.y + dy, me.z, tol)) { me.x += dx; me.y += dy; continue; }
+    const nrm = wallNormal(me.x + dx, me.y + dy);
+    if (nrm) {
+      const into = S.vx * nrm.x + S.vy * nrm.y;
+      if (into < 0) { S.vx -= into * nrm.x; S.vy -= into * nrm.y; }
+      dx = S.vx * dt / n; dy = S.vy * dt / n;
+      if (!blocked(me.x + dx, me.y + dy, me.z, tol)) { me.x += dx; me.y += dy; continue; }
+    }
+    // wedged in a corner: try each axis on its own, else stop
+    if (!blocked(me.x + dx, me.y, me.z, tol)) { me.x += dx; S.vy = 0; }
+    else if (!blocked(me.x, me.y + dy, me.z, tol)) { me.y += dy; S.vx = 0; }
+    else { S.vx = S.vy = 0; return; }
   }
 }
 
@@ -148,30 +192,10 @@ export function updatePlayer(dt) {
   const prevX = me.x, prevY = me.y;
   resolveWallOverlap(me);
 
-  // walls and pit edges block unless you jump over/out; sweep in small steps so we never clip through a wall
-  const tol = S.onGround ? STEP : 0.12;
-  const moveAxis = (axis, value) => {
-    const step = 0.05; const n = Math.max(1, Math.ceil(Math.abs(value) / step));
-    const dv = value / n;
-    for (let i = 0; i < n; i++) {
-      const next = (axis === 'x' ? me.x : me.y) + dv;
-      const x = axis === 'x' ? next : me.x;
-      const y = axis === 'y' ? next : me.y;
-      if (wallHitbox(x, y)) {
-        if (axis === 'x') S.vx = 0; else S.vy = 0;
-        return;
-      }
-      if (footGround(x, y) <= me.z + tol) {
-        if (axis === 'x') me.x = next; else me.y = next;
-      } else {
-        if (axis === 'x') S.vx = 0; else S.vy = 0;
-        return;
-      }
-    }
-  };
-
-  if (S.vx) moveAxis('x', S.vx * dt);
-  if (S.vy) moveAxis('y', S.vy * dt);
+  // walls and pit edges block unless you jump over/out (in the air you can still land on a low
+  // rise, but not climb out of a pit); slide along whatever you hit instead of stopping dead
+  const tol = S.onGround || me.z > -0.1 ? STEP : 0.12;
+  slideMove(me, dt, tol);
 
   if (wallHitbox(me.x, me.y)) {
     me.x = prevX; me.y = prevY;

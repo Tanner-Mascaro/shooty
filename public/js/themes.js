@@ -17,7 +17,7 @@ export const THEMES = {
     minimap: [[40, 16, 14], [110, 40, 40], [255, 110, 20]],
   },
   robot: {
-    id: 'robot', name: 'ROBOT FACTORY', fog: [14, 20, 30], fogK: 0.05, skyLo: [50, 70, 95], skyHi: [4, 6, 12],
+    id: 'robot', name: 'ROBOT FACTORY', fog: [14, 20, 30], fogK: 0.05, skyLo: [30, 38, 50], skyHi: [10, 12, 16], // dim ceiling over the server room
     orb: [150, 170, 200], orbGlow: [25, 40, 70], orbA: -2.2, orbE: 0.35, orbR: 0.14,
     wall: [70, 76, 88], wallTop: [95, 100, 112], band: [40, 220, 255],
     ambient: [80, 220, 255], ambientVz: 0.15, blood: [35, 35, 40], fire: [140, 230, 255],

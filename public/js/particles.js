@@ -24,6 +24,25 @@ export function updateEmbers() {
   }
 }
 
+// smoke and sparks rising out of nearby volcano craters (hell)
+export function volcanoPlumes(dt) {
+  for (const v of S.T.props) {
+    if (v.type !== 'volcano' || Math.hypot(v.x - S.me.x, v.y - S.me.y) > 28) continue;
+    if (Math.random() < 10 * dt) { // spark
+      const life = 1 + Math.random() * 1.5;
+      S.particles.push({ x: v.x + (Math.random() - 0.5) * 0.4, y: v.y + (Math.random() - 0.5) * 0.4, z: v.top + 0.1,
+        vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.8, vz: 1.5 + Math.random() * 2, g: 1.2,
+        life, max: life, col: [255, 120 + Math.random() * 100, 20], size: 0.04, emit: true });
+    }
+    if (Math.random() < 5 * dt) { // smoke
+      const life = 2.5 + Math.random() * 2;
+      S.particles.push({ x: v.x + (Math.random() - 0.5) * 0.5, y: v.y + (Math.random() - 0.5) * 0.5, z: v.top + 0.2,
+        vx: (Math.random() - 0.5) * 0.3 + 0.2, vy: (Math.random() - 0.5) * 0.3, vz: 0.6 + Math.random() * 0.5, g: -0.05,
+        life, max: life, col: [70, 50, 48], size: 0.14, emit: false });
+    }
+  }
+}
+
 export function stepParticles(list, dt) {
   for (const p of list) {
     p.vz -= p.g * dt;

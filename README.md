@@ -65,8 +65,8 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 | `server/combat.js` | Hitscan, shotgun pellets, melee against many targets (authoritative) |
 | `server/static.js` | Serves `public/` and `shared/` |
 | `shared/config.js` | Weapons, ammo, HP, tick rate (used by server **and** browser) |
-| `shared/levels.js` | Map layouts |
-| `shared/terrain.js` | Heightmap + collision helpers |
+| `shared/levels.js` | Map layouts (40x40; legend at the top of the file) |
+| `shared/terrain.js` | Turns a map into a heightmap with smooth per-level shapes (volcanoes, trees, server racks), plus collision helpers |
 | `public/index.html`, `style.css` | Page + lobby |
 | `public/js/main.js` | Client entry + frame loop |
 | `public/js/state.js` | All mutable client state (`S`) |
@@ -83,7 +83,8 @@ Locally, profiles are saved to `data/profiles.json` (git-ignored). On Render tha
 ## Common changes
 
 - **Balance a weapon:** `shared/config.js`
-- **New level:** map in `shared/levels.js` + theme in `public/js/themes.js` + floor in `FLOORS` (`public/js/level.js`) + sprite in `render/sprites.js` + button in `index.html`
+- **New level:** map in `shared/levels.js` + theme in `public/js/themes.js` + floor in `FLOORS` (`public/js/level.js`) + sprite in `render/sprites.js` + button in `index.html`; its obstacle shapes are picked by level name in `buildTerrain` (`shared/terrain.js`)
+- **Obstacle looks:** shapes and heights in `buildTerrain` (`shared/terrain.js`), colors in `SHAPE_COLORS` (`public/js/level.js`), rack/crate faces in `drawTerrain` (`public/js/render/world.js`), tree canopies in `canopySprite` (`render/sprites.js`)
 - **New sound:** add to `SFX` in `public/js/audio.js`, call `play('name')`
 - **New server message:** add a handler in `Room.prototype.handlers` (match) or `Hub.prototype.handlers` (everything else) on the server, or `handlers` in `public/js/net.js` on the client
 

@@ -49,7 +49,7 @@ function buildColors() {
       else {
         // slope shading from the surface normal
         const dx = (h(i + 1, j) - h(i - 1, j)) * RES / 2, dy = (h(i, j + 1) - h(i, j - 1)) * RES / 2;
-        const shade = 0.45 + 0.75 * Math.max(0, (-dx * lx - dy * ly + lz) / Math.hypot(dx, dy, 1));
+        const shade = 0.55 + 0.7 * Math.max(0, (-dx * lx - dy * ly + lz) / Math.hypot(dx, dy, 1));
         r *= shade; g *= shade; b *= shade;
       }
     }
@@ -61,7 +61,7 @@ function buildColors() {
 const SHAPE_COLORS = {
   [MAT.ROCK](x, y, h, n) { // volcanic rock with darker strata
     const v = 0.75 + 0.35 * noise(x * 3, y * 3) + n * 0.1, band = Math.sin(h * 11 + noise(x, y) * 4) > 0.6 ? 0.7 : 1;
-    return [82 * v * band, 38 * v * band, 32 * v * band];
+    return [118 * v * band, 54 * v * band, 40 * v * band];
   },
   [MAT.LAVA]() { return [255, 90, 10]; },
   [MAT.BARK](x, y, h, n) { const v = 0.8 + 0.3 * n; return [64 * v, 46 * v, 32 * v]; },

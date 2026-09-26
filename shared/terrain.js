@@ -41,9 +41,10 @@ export function buildTerrain(MAP, RES, style) {
       if (r && r[0] > hgt[k]) { hgt[k] = r[0]; mat[k] = r[1]; }
     }
   }
+  // low cover: a dome cut off where it's lower than a step, so it has no rim you'd pop up onto
   const dome = (cx, cy, rad, h, m, bump) => raise(cx - rad, cy - rad, cx + rad, cy + rad, (x, y) => {
-    const d = Math.hypot(x - cx, y - cy) / rad;
-    return d < 1 ? [h * Math.sqrt(1 - d * d) * (1 - bump + bump * 2 * noise(x * 4, y * 4)), m] : null;
+    const d = Math.hypot(x - cx, y - cy) / rad, z = d < 1 ? h * Math.sqrt(1 - d * d) * (1 - bump + bump * 2 * noise(x * 4, y * 4)) : 0;
+    return z > STEP_H ? [z, m] : null;
   });
   const box = (x0, y0, x1, y1, h, m) => raise(x0, y0, x1, y1, (x, y) => x >= x0 && x < x1 && y >= y0 && y < y1 ? [h, m] : null);
 
@@ -56,7 +57,7 @@ export function buildTerrain(MAP, RES, style) {
   raise(0, 0, MW, MH, (x, y) => {
     const e = inside(x, y);
     if (style === 'hell') return e < noise(x * 1.3, y * 1.3) * 0.5 - 0.1 ? [2.2 + noise(x * 0.7 + 5, y * 0.7) + Math.min(1, -e) * 0.6, MAT.ROCK] : null;
-    if (style === 'witch') return e < noise(x * 2, y * 2) * 0.35 - 0.05 ? [1.7 + 0.7 * noise(x * 1.5, y * 1.5), MAT.LEAVES] : null;
+    if (style === 'witch') return e < noise(x * 1.1, y * 1.1) * 0.3 - 0.05 ? [1.7 + 0.7 * noise(x * 1.5, y * 1.5), MAT.LEAVES] : null;
     return e < 0 ? [2.8, MAT.WALL] : null;
   });
   if (style === 'witch') // trees poking out of the hedge
@@ -83,7 +84,7 @@ export function buildTerrain(MAP, RES, style) {
       raise(tx - 0.7, ty - 0.7, tx + 0.7, ty + 0.7, (px, py) => {
         const d = Math.hypot(px - tx, py - ty);
         if (d < tr) return [2.4, MAT.BARK];
-        if (d < 0.65) return [0.28 * (1 - (d - tr) / (0.65 - tr)) ** 2 * (0.6 + 0.8 * noise(px * 6, py * 6)), MAT.ROOTS]; // root flare
+        if (d < 0.65) return [0.08 * (1 - (d - tr) / (0.65 - tr)) ** 2 * (0.6 + 0.8 * noise(px * 6, py * 6)), MAT.ROOTS]; // root flare: low enough not to trip on
         return null;
       });
       props.push({ type: 'tree', x: tx, y: ty, h: 2.4, r: 0.95 + 0.35 * n });

@@ -5,9 +5,9 @@ import { S } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
-import { pickupSprite } from './sprites.js';
+import { pickupSprite, canopySprite } from './sprites.js';
 import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap } from './hud.js';
-import { updateEmbers, stepParticles } from '../particles.js';
+import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
 
@@ -61,7 +61,7 @@ export function render(dt) {
   interpolateOthers(now);
   setupCamera();
 
-  if (S.started) updateEmbers();
+  if (S.started) { updateEmbers(); volcanoPlumes(dt); }
   S.embers = stepParticles(S.embers, dt);
   S.particles = stepParticles(S.particles, dt);
   updateCorpses(now, dt);
@@ -73,6 +73,11 @@ export function render(dt) {
     const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
     drawSprite(p.x, p.y, 0.3 + 0.07 * Math.sin(now / 400 + i), sp.w, sp.h, sp.px, sp.pal, sp.emit);
   });
+  for (const p of S.T.props) { // swamp tree canopies (the trunks are terrain)
+    if (p.type !== 'tree' || Math.abs(p.x - S.me.x) > 30 || Math.abs(p.y - S.me.y) > 30) continue;
+    const sp = canopySprite((p.x * 7 + p.y * 3 | 0) % 4);
+    drawSprite(p.x, p.y, p.h - 1.0, p.r * 2, 1.7, sp.px, sp.pal, sp.emit);
+  }
   for (const c of S.corpses) {
     if (c.mine) continue;
     const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0;
