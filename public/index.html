@@ -99,6 +99,10 @@
         <div id="friendEmpty" hidden>No friends yet — add someone by their username.</div>
         <ul id="friendList"></ul>
       </div>
+      <div class="card" id="chatCard">
+        <div class="label">CHAT</div>
+        <div id="chat"><div id="chatLog"></div><input id="chatInput" type="text" autocomplete="off" spellcheck="false"></div>
+      </div>
       <div class="card" id="boardCard" hidden>
         <div class="label">LEADERBOARD</div>
         <table id="board">
@@ -125,6 +129,8 @@
 <canvas id="c"></canvas>
 <div id="msg"></div>
 <div id="controls"></div>
+<div id="version"></div>
+<div id="talking"></div>
 <div id="fps" hidden></div>
 <button id="gameGear" class="gear" title="Settings">⚙</button>
 <div id="settings" hidden>
@@ -137,6 +143,9 @@
     <div class="label">SOUND</div>
     <div class="setRow"><span>Master volume <small id="volumeVal"></small></span><input type="range" id="volume" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Background hum <small id="ambientVal"></small></span><input type="range" id="ambient" min="0" max="1" step="0.05"></div>
+    <div class="label">VOICE CHAT</div>
+    <div class="setRow"><span>Voice</span><select id="voiceMode"><option value="ptt">Push to talk</option><option value="open">Open mic</option><option value="off">Off</option></select></div>
+    <div class="setRow"><span>Voice volume <small id="voiceVolVal"></small></span><input type="range" id="voiceVol" min="0" max="1" step="0.05"></div>
     <div class="label">MOUSE</div>
     <div class="setRow"><span>Sensitivity <small id="sensVal"></small></span><input type="range" id="sens" min="0.2" max="3" step="0.05"></div>
     <div class="setRow"><span>Scope (right click)</span><select id="ads"><option value="toggle">Click to toggle</option><option value="hold">Hold to aim</option></select></div>

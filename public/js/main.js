@@ -4,6 +4,8 @@ import { connect } from './net.js';
 import { initInput } from './input.js';
 import { initLobby } from './ui.js';
 import { initSettings, settings } from './settings.js';
+import { initChat, updateChat } from './chat.js';
+import { initVoice, updateVoice } from './voice.js';
 import { updatePlayer } from './physics.js';
 import { autoFire } from './weapons.js';
 import { render } from './render/index.js';
@@ -11,6 +13,8 @@ import { render } from './render/index.js';
 setLevel('hell'); // the server's init message switches to the current level
 initLobby();
 initSettings();
+initChat();
+initVoice();
 initInput();
 connect();
 
@@ -30,6 +34,8 @@ function loop(t) {
   updatePlayer(dt);
   autoFire();
   render(dt);
+  updateChat(t);
+  updateVoice(t);
 
   frames++;
   if (t - fpsT >= 500) {

@@ -11,6 +11,7 @@ import { staticHandler } from './server/static.js';
 import { Hub } from './server/hub.js';
 import { clientIp } from './server/log.js';
 import { openProfiles } from './server/profiles.js';
+import { VERSION } from './server/version.js';
 import { TICK, WIN_SCORE, TEAM_WIN_SCORE, MAX_PLAYERS } from './shared/config.js';
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -34,7 +35,7 @@ setInterval(() => hub.tick(), TICK);
 
 server.listen(PORT, () => {
   console.log(`
-  SHOOTY — 3D Shooter
+  SHOOTY v${VERSION} — 3D Shooter
   Local:  http://localhost:${PORT}
   Remote: ngrok http ${PORT}, then share the ngrok URL.
 

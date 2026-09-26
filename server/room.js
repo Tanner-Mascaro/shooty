@@ -7,6 +7,9 @@ import { buildTerrain, groundAt, kindAt, findPickups, hitsWall } from '../shared
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick } from './bot.js';
 import { log } from './log.js';
+import { VERSION } from './version.js';
+
+const CHAT_MAX = 140; // as in public/js/chat.js
 
 // Anyone can add bots to a room with the lobby's + BOT / − BOT buttons; they only fill empty
 // seats, so a person joining a full room takes a bot's place. `node server.js --bots` (or
@@ -169,7 +172,7 @@ export class Room {
     p.team = this.mode === 'teams' ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     this.resetPlayer(p);
-    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: p.seq });
+    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: p.seq, version: VERSION });
     this.send(p, this.pickupList());
     this.send(p, this.boxList());
     if (this.gameOn) this.send(p, { type: 'start', level: this.level }); // drop straight into the running match
@@ -351,6 +354,25 @@ Room.prototype.handlers = {
     if (!this.dropBot()) return;
     if (this.gameOn && !this.enoughPlayers()) this.endMatch('Not enough players left');
     this.roster();
+  },
+
+  // text chat to everyone in the room: trimmed, at most CHAT_MAX characters, 5 per 5 seconds
+  chat(p, msg) {
+    const text = String(msg.text ?? '').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX);
+    if (!text) return;
+    const now = Date.now();
+    p.chatTimes = (p.chatTimes || []).filter(t => now - t < 5000);
+    if (p.chatTimes.length >= 5) return this.hub.notice(p, 'Slow down — too many messages');
+    p.chatTimes.push(now);
+    this.broadcast({ type: 'chat', id: p.id, name: this.hub.name(p), team: p.team, text });
+    log(`[${this.code}] ${this.hub.who(p)}: ${text}`);
+  },
+
+  // voice chat connection setup (public/js/voice.js): passed on to one other person in the room
+  rtc(p, msg) {
+    const to = this.players[msg.to];
+    if (!to || to === p || to.bot || (!msg.sdp && !msg.candidate) || JSON.stringify(msg).length > 20000) return;
+    this.send(to, { type: 'rtc', from: p.id, sdp: msg.sdp, candidate: msg.candidate });
   },
 
   // use key: pick up the gun on pad `pad`, or loot box `box`. `drop` is the gun in your hand,

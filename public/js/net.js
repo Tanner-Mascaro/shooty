@@ -11,6 +11,8 @@ import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
 import { showFriends, showInvite } from './friends.js';
 import { fromProfile } from './settings.js';
+import { addChat, refreshChat } from './chat.js';
+import { syncVoice, onSignal } from './voice.js';
 
 let ws = null;
 
@@ -52,6 +54,7 @@ function otherSounds(o, prev, cur) {
 const handlers = {
   init(msg) {
     S.myId = msg.id;
+    document.getElementById('version').textContent = 'v' + msg.version;
     setLevel(msg.level);
     S.me = { x: msg.x, y: msg.y, z: msg.z, a: msg.a, hp: msg.hp };
     S.mySeq = msg.seq;
@@ -65,6 +68,7 @@ const handlers = {
     if (mine) S.myTeam = mine.team;
     for (const id in S.others) if (!msg.players.some(p => p.id === +id)) delete S.others[id]; // left
     showRoom();
+    syncVoice();
   },
 
   level(msg) { setLevel(msg.level); },
@@ -196,6 +200,8 @@ const handlers = {
   },
 
   notice(msg) { toast(msg.text); },
+  chat(msg) { addChat(msg); },
+  rtc(msg) { onSignal(msg); },
 
   profile(msg) { showProfile(msg); },
   settings(msg) { fromProfile(msg.settings); },
