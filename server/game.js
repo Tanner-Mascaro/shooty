@@ -3,6 +3,9 @@ import { TICK, RES, MAX_HP, WIN_SCORE, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEA
 import { LEVELS, LEVEL_NAMES, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, kindAt, findPickups } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
+import { newBrain, botTick } from './bot.js';
+
+const BOTS = !!process.env.BOTS; // BOTS=1: a bot joins as your opponent (local testing)
 
 const TERRAINS = {};
 for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES);
@@ -62,6 +65,7 @@ export class Game {
     p.p = 0;
     p.hp = MAX_HP;
     p.inv = {}; // picked-up guns are lost on death
+    if (p.brain) p.brain = newBrain();
     p.seq++;    // client snaps to the new spawn; stale inputs from the old life are ignored
     this.send(p.id, { type: 'inv', inv: p.inv });
   }
@@ -73,14 +77,14 @@ export class Game {
     this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id }, info, at));
     if (killer && killer.kills >= WIN_SCORE) {
       this.gameOn = false;
-      Object.values(this.players).forEach(pl => pl.ready = false);
+      Object.values(this.players).forEach(pl => pl.ready = !!pl.bot);
       this.broadcast({ type: 'win', winner: killer.id });
     }
   }
 
   startGame() {
     const ps = Object.values(this.players);
-    ps.forEach(pl => { pl.kills = 0; pl.ready = false; });
+    ps.forEach(pl => { pl.kills = 0; pl.ready = !!pl.bot; });
     this.resetPickups();
     this.resetPlayer(ps[0], null);
     this.resetPlayer(ps[1], ps[0]);
@@ -99,6 +103,7 @@ export class Game {
       hp: MAX_HP, kills: 0, ready: false, seq: 0, nextFire: {}, inv: {} };
     this.clients.push({ id, socket });
     console.log(`Player ${id} connected (${this.clients.length}/2)`);
+    if (BOTS && this.clients.length === 1) this.addBot();
 
     this.send(id, { type: 'init', id, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: MAX_HP, seq: 0 });
     this.send(id, { type: 'pickups', active: this.pickups.map(p => p.active) });
@@ -116,12 +121,26 @@ export class Game {
     socket.on('error', leave);
   }
 
+  // a bot is a player whose socket goes nowhere; it's always ready
+  addBot() {
+    const id = this.nextId++, human = Object.values(this.players)[0];
+    const sp = this.spawnPos(human);
+    this.players[id] = { id, x: sp.x, y: sp.y, z: groundAt(this.T, sp.x, sp.y), a: 0, p: 0, sc: false,
+      hp: MAX_HP, kills: 0, ready: true, seq: 0, nextFire: {}, inv: {}, bot: true, brain: newBrain() };
+    this.clients.push({ id, socket: { send() {} } });
+    console.log(`Bot ${id} joined`);
+  }
+
   disconnect(id) {
     if (!this.players[id]) return;
     this.clients = this.clients.filter(c => c.id !== id);
     delete this.players[id];
     this.gameOn = false;
     console.log(`Player ${id} disconnected`);
+    if (this.clients.every(c => this.players[c.id].bot)) { // nobody left to play the bot
+      this.clients.forEach(c => delete this.players[c.id]);
+      this.clients = [];
+    }
     if (this.clients.length === 1) {
       Object.values(this.players).forEach(pl => pl.ready = false);
       this.broadcast({ type: 'opponentLeft' });
@@ -131,6 +150,7 @@ export class Game {
 
   // --- per-tick: pits, pickups, state broadcast ---
   tick() {
+    for (const p of Object.values(this.players)) if (p.bot) botTick(this, p);
     if (this.gameOn) {
       const now = Date.now();
       for (const p of Object.values(this.players)) {
@@ -167,7 +187,7 @@ Game.prototype.handlers = {
   level(p, msg) {
     if (this.gameOn || !LEVELS[msg.level]) return;
     this.setLevel(msg.level);
-    Object.values(this.players).forEach(pl => pl.ready = false); // everyone re-confirms on the new map
+    Object.values(this.players).forEach(pl => pl.ready = !!pl.bot); // everyone re-confirms on the new map
     this.broadcast({ type: 'level', level: this.level });
     this.waiting('Level: ' + LEVEL_NAMES[this.level] + " — click \"I'm Here\" to start!");
   },
