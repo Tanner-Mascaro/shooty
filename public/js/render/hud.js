@@ -1,8 +1,8 @@
 // Everything drawn at full resolution on top of the 3D view: tracers, glows, the gun,
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
-import { WEAPONS, AMMO, WEAPON_ORDER, EYE } from '/shared/config.js';
-import { S, owned } from '../state.js';
+import { WEAPONS, AMMO, WEAPON_ORDER, EYE, BODY_H } from '/shared/config.js';
+import { S, owned, isEnemy, nameOf } from '../state.js';
 import { BASE_FOV, MAX_SPEED, GUN_COLOR } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
@@ -51,18 +51,37 @@ export function drawPickupGlows() {
   });
 }
 
-// enemy muzzle flash and scope glint (only if not behind a wall)
+// other players' muzzle flashes and scope glints (only if not behind a wall)
 export function drawEnemyGlows(now) {
-  const e = S.enemy;
-  if (!e) return;
-  if (now - S.enemyFlashT < 70) {
-    const p = project(e.x, e.y, e.z + EYE - 0.1);
-    if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 160 / p.f + 20, 'rgba(255,210,90,0.9)');
+  for (const o of Object.values(S.others)) {
+    const e = o.now;
+    if (!e) continue;
+    if (now - o.flashT < 70) {
+      const p = project(e.x, e.y, e.z + EYE - 0.1);
+      if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 160 / p.f + 20, 'rgba(255,210,90,0.9)');
+    }
+    if (e.sc) {
+      const p = project(e.x, e.y, e.z + EYE);
+      if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 18 + 8 * Math.sin(now / 120), 'rgba(255,240,230,0.9)');
+    }
   }
-  if (e.sc) {
-    const p = project(e.x, e.y, e.z + EYE);
-    if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 18 + 8 * Math.sin(now / 120), 'rgba(255,240,230,0.9)');
+}
+
+// names over heads: teammates always (blue), enemies red when in sight and not too far
+export function drawNameTags() {
+  ctx.textAlign = 'center';
+  for (const [id, o] of Object.entries(S.others)) {
+    const e = o.now;
+    if (!e) continue;
+    const enemy = isEnemy(+id), p = project(e.x, e.y, e.z + BODY_H + 0.3);
+    if (p.f < 0.4 || (enemy && (p.f > 18 || occluded(p)))) continue;
+    ctx.font = 'bold ' + Math.round(Math.max(11, Math.min(16, 40 / p.f + 9))) + 'px Courier New';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillText(nameOf(+id), p.x + 1, p.y + 1);
+    ctx.fillStyle = enemy ? '#ff6655' : '#66aaff';
+    ctx.fillText(nameOf(+id), p.x, p.y);
   }
+  ctx.textAlign = 'left';
 }
 
 function drawScope() {
@@ -259,7 +278,11 @@ export function drawMinimap(now) {
     if (!S.pickupActive[i]) return;
     ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
   });
-  if (S.enemy) { ctx.fillStyle = '#f33'; ctx.beginPath(); ctx.arc(S.enemy.x, S.enemy.y, 0.3, 0, Math.PI * 2); ctx.fill(); }
+  for (const [id, o] of Object.entries(S.others)) {
+    if (!o.now) continue;
+    ctx.fillStyle = isEnemy(+id) ? '#f33' : '#4af';
+    ctx.beginPath(); ctx.arc(o.now.x, o.now.y, 0.3, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
   ctx.fillStyle = '#fa4'; // you: arrow pointing up
   ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 5, cy + 6); ctx.lineTo(cx - 5, cy + 6); ctx.closePath(); ctx.fill();

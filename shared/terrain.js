@@ -33,6 +33,20 @@ export function kindAt(T, x, y) {
   return T.kind[j * T.TW + i];
 }
 
+// does a player of radius r standing at (x, y) overlap a wall (or the map edge)?
+// Same test as wallHitbox in public/js/physics.js, so the server agrees with the client.
+export function hitsWall(T, x, y, r) {
+  const minI = Math.floor((x - r) * T.RES), maxI = Math.floor((x + r) * T.RES);
+  const minJ = Math.floor((y - r) * T.RES), maxJ = Math.floor((y + r) * T.RES);
+  for (let j = minJ; j <= maxJ; j++) for (let i = minI; i <= maxI; i++) {
+    if (i < 0 || j < 0 || i >= T.TW || j >= T.TH) return true;
+    if (T.kind[j * T.TW + i] !== 1) continue;
+    const cx = Math.min(Math.max(x, i / T.RES), (i + 1) / T.RES), cy = Math.min(Math.max(y, j / T.RES), (j + 1) / T.RES);
+    if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) return true;
+  }
+  return false;
+}
+
 // pickup pads in map order; the server and client index them identically
 export function findPickups(MAP) {
   const kinds = { S: 'sniper', G: 'shotgun', M: 'smg', H: 'health' }, out = [];

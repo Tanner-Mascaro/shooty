@@ -16,6 +16,7 @@ import { log } from './log.js';
 
 export const STATS = ['kills', 'deaths', 'wins', 'losses'];
 const BOARD_SIZE = 10;
+const MAX_FRIENDS = 100; // friends + pending requests per player
 
 export const hashToken = token => crypto.createHash('sha256').update(token).digest('hex');
 export const newToken = () => crypto.randomBytes(24).toString('hex');
@@ -51,6 +52,10 @@ export async function openProfiles(root) {
 //   addSession(tokenHash, id) / removeSession(tokenHash)
 //   board()                  -> top players [{ name, kills, deaths, wins, losses }]
 //   rank(stats)              -> 1-based leaderboard position for these stats, or null if unranked
+//   friendRequest(from, to)  -> 'sent' | 'accepted' (they'd already asked you) | 'already' | 'limit'
+//   friendAccept(me, from)   -> false if there was no such request
+//   friendRemove(x, y)       -> unfriend / decline / cancel, either direction
+//   friends(id)              -> [{ id, name, username, status: 'friend' | 'incoming' | 'outgoing' }]
 async function postgresStore(url) {
   const { default: pg } = await import('pg');
   const db = new pg.Pool({ connectionString: url, max: 3 });
@@ -64,6 +69,9 @@ async function postgresStore(url) {
   await db.query(`CREATE TABLE IF NOT EXISTS sessions (
     token_hash text PRIMARY KEY, profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     created_at timestamptz NOT NULL DEFAULT now())`);
+  await db.query(`CREATE TABLE IF NOT EXISTS friends (
+    a text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, b text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    accepted boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (a, b))`); // a asked b
   log('Profiles: Postgres');
   const one = async (sql, args) => (await db.query(sql, args)).rows[0];
   return {
@@ -104,6 +112,27 @@ async function postgresStore(url) {
         (wins > $1 OR (wins = $1 AND (kills > $2 OR (kills = $2 AND deaths < $3))))`, [s.wins, s.kills, s.deaths]);
       return r.rank;
     },
+    async friendRequest(from, to) {
+      const rev = await one('SELECT accepted FROM friends WHERE a = $1 AND b = $2', [to, from]);
+      if (rev) {
+        if (rev.accepted) return 'already';
+        await db.query('UPDATE friends SET accepted = true WHERE a = $1 AND b = $2', [to, from]);
+        return 'accepted';
+      }
+      if ((await one('SELECT count(*)::int AS n FROM friends WHERE a = $1 OR b = $1', [from])).n >= MAX_FRIENDS) return 'limit';
+      const r = await db.query('INSERT INTO friends (a, b) VALUES ($1, $2) ON CONFLICT DO NOTHING', [from, to]);
+      return r.rowCount ? 'sent' : 'already';
+    },
+    async friendAccept(me, from) {
+      return (await db.query('UPDATE friends SET accepted = true WHERE a = $1 AND b = $2', [from, me])).rowCount === 1;
+    },
+    async friendRemove(x, y) { await db.query('DELETE FROM friends WHERE (a = $1 AND b = $2) OR (a = $2 AND b = $1)', [x, y]); },
+    async friends(id) {
+      const rows = (await db.query(`SELECT f.a, f.accepted, p.id, p.name, p.username FROM friends f
+        JOIN profiles p ON p.id = CASE WHEN f.a = $1 THEN f.b ELSE f.a END
+        WHERE f.a = $1 OR f.b = $1 ORDER BY lower(p.name)`, [id])).rows;
+      return rows.map(r => ({ id: r.id, name: r.name, username: r.username, status: r.accepted ? 'friend' : r.a === id ? 'outgoing' : 'incoming' }));
+    },
   };
 }
 
@@ -113,6 +142,7 @@ function fileStore(file) {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
     data = raw.profiles ? raw : { profiles: raw, sessions: {} }; // older files were just the profiles map
   } catch {}
+  data.friends ??= []; // [{ a, b, accepted }]: a asked b
   const all = data.profiles;
   let saving = null;
   const save = () => { // coalesce bursts of changes into one write
@@ -154,5 +184,26 @@ function fileStore(file) {
     async removeSession(tokenHash) { delete data.sessions[tokenHash]; save(); },
     async board() { return Object.values(all).filter(ranked).sort((a, b) => ahead(b, a)).slice(0, BOARD_SIZE).map(pick).map(({ username, ...p }) => p); },
     async rank(s) { return ranked(s) ? 1 + Object.values(all).filter(p => ranked(p) && ahead(p, s) > 0).length : null; },
+    async friendRequest(from, to) {
+      const rev = data.friends.find(f => f.a === to && f.b === from);
+      if (rev) { if (rev.accepted) return 'already'; rev.accepted = true; save(); return 'accepted'; }
+      if (data.friends.some(f => f.a === from && f.b === to)) return 'already';
+      if (data.friends.filter(f => f.a === from || f.b === from).length >= MAX_FRIENDS) return 'limit';
+      data.friends.push({ a: from, b: to, accepted: false }); save();
+      return 'sent';
+    },
+    async friendAccept(me, from) {
+      const f = data.friends.find(f => f.a === from && f.b === me);
+      if (!f) return false;
+      f.accepted = true; save();
+      return true;
+    },
+    async friendRemove(x, y) { data.friends = data.friends.filter(f => !((f.a === x && f.b === y) || (f.a === y && f.b === x))); save(); },
+    async friends(id) {
+      return data.friends.filter(f => (f.a === id || f.b === id) && all[f.a === id ? f.b : f.a]).map(f => {
+        const oid = f.a === id ? f.b : f.a, o = all[oid];
+        return { id: oid, name: o.name, username: o.username || null, status: f.accepted ? 'friend' : f.a === id ? 'outgoing' : 'incoming' };
+      }).sort((x, y) => x.name.toLowerCase().localeCompare(y.name.toLowerCase()));
+    },
   };
 }

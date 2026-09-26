@@ -126,10 +126,17 @@ export function drawSprite(ex, ey, ez, w, h, px, pal, emit, flash, glint) {
   }
 }
 
-// the enemy (or a corpse: squashed tall, stretched wide) using the level's character
-export function drawPlayer(x, y, z, hScale, wScale, flash, glint) {
+// another player (or a corpse: squashed tall, stretched wide) using the level's character;
+// `tint` [r, g, b] recolors the body for teams
+const tinted = {};
+export function drawPlayer(x, y, z, hScale, wScale, flash, glint, tint) {
   const s = PLAYER_SPRITES[S.theme.sprite];
-  drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, s.pal, s.emit, flash, glint);
+  let pal = s.pal;
+  if (tint) {
+    const key = S.theme.sprite + tint;
+    pal = tinted[key] ??= s.pal.map((c, i) => c && (i === 1 || i === 2) ? c.map((v, j) => v * 0.35 + tint[j] * (i === 1 ? 0.65 : 0.4)) : c);
+  }
+  drawSprite(x, y, z, 0.6 * wScale, (BODY_H + 0.12) * hScale, s.px, pal, s.emit, flash, glint);
 }
 
 export function drawParticles(list) {

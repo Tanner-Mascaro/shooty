@@ -1,38 +1,31 @@
-// DOM bits: lobby screen, center messages, HP bars.
-import { S } from './state.js';
-import { send } from './net.js';
-import { initAudio } from './audio.js';
+// DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
+import { TEAMS } from '/shared/config.js';
+import { S, nameOf, teamOf } from './state.js';
+import { initRoom, showRoom } from './room.js';
 import { initAccount } from './account.js';
+import { initFriends } from './friends.js';
 
 const $ = id => document.getElementById(id);
-const wait = $('wait'), waitMsg = $('waitMsg'), readyBtn = $('readyBtn');
+const wait = $('wait');
 
 export function initLobby() {
+  initRoom();
   initAccount();
-  readyBtn.addEventListener('click', () => {
-    initAudio();
-    send({ type: 'ready' });
-    readyBtn.disabled = true;
-    readyBtn.textContent = 'Ready!';
-    waitMsg.textContent = 'Waiting for other player...';
-  });
-  document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => {
-    initAudio();
-    send({ type: 'level', level: b.dataset.level });
-  }));
+  initFriends();
 }
 
-export function setWaitText(text) { waitMsg.textContent = text; }
-export function setReady(enabled, label) { readyBtn.disabled = !enabled; if (label) readyBtn.textContent = label; }
+export function setWaitText(text) { $('waitMsg').textContent = text; }
 
-export function showWait(text, btn) {
-  wait.style.display = 'flex';
-  setWaitText(text);
-  setReady(true, btn);
+// back to the lobby; `result` (e.g. "You won! Rematch?") stays until the next match starts
+export function showWait(result) {
+  wait.style.display = '';
+  $('result').textContent = result || '';
+  showRoom();
   if (document.pointerLockElement) document.exitPointerLock();
 }
 export function hideWait() {
   wait.style.display = 'none';
+  $('result').textContent = '';
   $('msg').style.opacity = 0;
 }
 
@@ -42,7 +35,7 @@ export function applyLevelUI(name, theme) {
   title.textContent = theme.name;
   title.style.color = theme.title;
   title.style.textShadow = '0 0 18px ' + theme.title;
-  wait.style.background = 'radial-gradient(circle at 50% 60%, ' + theme.bg + ', #000 70%)';
+  wait.style.background = 'radial-gradient(circle at 50% 40%, ' + theme.bg + ', #000 70%)';
 }
 
 // center-screen text; fades after 1.5s unless persist
@@ -53,11 +46,83 @@ export function showMsg(text, persist) {
   if (!persist) setTimeout(() => el.style.opacity = 0, 1500);
 }
 
+// small message in the corner (friend requests, errors, "link copied")
+export function toast(text) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = text;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.classList.add('gone'), 3500);
+  setTimeout(() => el.remove(), 4000);
+}
+
 // big animated banner drawn on the canvas (render/hud.js)
 export function banner(text, gold) { S.bannerText = text; S.bannerT = performance.now(); S.bannerGold = gold; }
+
+const FEED_MS = 5000;
+export function pushFeed(msg) {
+  S.feed.push({ killer: msg.killer, victim: msg.victim, weapon: msg.weapon, head: msg.head, backstab: msg.backstab, t: performance.now() });
+  if (S.feed.length > 5) S.feed.shift();
+  drawFeed();
+}
+
+// a name colored by side: you gold, teammates blue, enemies red
+function nameSpan(id) {
+  const el = document.createElement('span');
+  el.textContent = nameOf(id);
+  el.className = id === S.myId ? 'me' : S.room && S.room.mode === 'teams' && teamOf(id) === S.myTeam ? 'ally' : 'foe';
+  return el;
+}
+
+function drawFeed() {
+  $('feed').replaceChildren(...S.feed.map(k => {
+    const row = document.createElement('div');
+    if (k.killer !== null && k.killer !== undefined) row.append(nameSpan(k.killer));
+    const w = document.createElement('span');
+    w.className = 'weapon';
+    w.textContent = ` [${k.weapon}${k.head ? ' HS' : k.backstab ? ' BS' : ''}] `;
+    row.append(w, nameSpan(k.victim));
+    return row;
+  }));
+}
+
+// everyone in the room with their kills, most first
+function scoreRows() {
+  if (!S.room) return [];
+  return S.room.players.map(p => ({
+    id: p.id, team: p.team,
+    kills: p.id === S.myId ? S.myKills : S.others[p.id] && S.others[p.id].cur ? S.others[p.id].cur.kills : 0,
+  })).sort((a, b) => b.kills - a.kills);
+}
+
+let lastScores = '';
+function drawScores() {
+  const rows = scoreRows(), teams = S.room && S.room.mode === 'teams';
+  const key = JSON.stringify([rows, teams, S.myTeam, S.room && S.room.players.map(p => p.name)]);
+  if (key === lastScores) return; // only touch the DOM when something changed
+  lastScores = key;
+  const line = r => {
+    const d = document.createElement('div');
+    const k = document.createElement('b');
+    k.textContent = r.kills;
+    d.append(k, ' ', nameSpan(r.id));
+    return d;
+  };
+  const out = [];
+  if (teams) {
+    for (const t of [1, 2]) {
+      const h = document.createElement('div');
+      h.className = 'teamHead team' + t;
+      h.textContent = `${TEAMS[t]} ${rows.filter(r => r.team === t).reduce((n, r) => n + r.kills, 0)}`;
+      out.push(h, ...rows.filter(r => r.team === t).map(line));
+    }
+  } else out.push(...rows.map(line));
+  $('scores').replaceChildren(...out);
+}
 
 export function updateHud() {
   $('myhp').style.width = Math.max(0, S.me.hp) + '%';
   $('sk').textContent = S.myKills;
-  if (S.enemy) { $('ename').textContent = (S.enemy.n || 'ENEMY').toUpperCase(); $('ehp').style.width = Math.max(0, S.enemy.hp) + '%'; $('ek').textContent = S.enemy.kills || 0; }
+  drawScores();
+  if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
 }

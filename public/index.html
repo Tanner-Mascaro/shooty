@@ -9,41 +9,81 @@
 <body>
 <div id="wait">
   <div id="waitTitle">ARENA</div>
-  <div id="profile">
-    <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
-    <div id="stats"></div>
-    <div id="account">
-      <span id="signedOut"><button id="showAuth" class="link">Sign in / create account</button> to keep your stats on any device</span>
-      <span id="signedIn" hidden>Signed in as <b id="acctName"></b> · <button id="logoutBtn" class="link">Sign out</button></span>
-      <form id="authForm" hidden>
-        <input id="authUser" placeholder="Username" maxlength="16" autocomplete="username" spellcheck="false">
-        <input id="authPass" type="password" placeholder="Password" maxlength="72" autocomplete="current-password">
-        <button type="submit">Sign in</button>
-        <button type="button" id="registerBtn">Create account</button>
-        <div id="authErr"></div>
-      </form>
-    </div>
+  <div id="lobby">
+    <section id="play">
+      <div id="roomBar">
+        <span>ROOM <b id="roomCode">·····</b> <small id="roomKind"></small></span>
+        <button id="copyLink">Copy invite link</button>
+      </div>
+      <div class="links"><button id="quickPlay" class="link">Quick play</button> · <button id="newRoom" class="link">New private room</button></div>
+      <div id="modes" class="choice">
+        <button data-mode="ffa">FREE-FOR-ALL</button>
+        <button data-mode="teams">TEAMS</button>
+      </div>
+      <div id="levels" class="choice">
+        <button data-level="hell">HELL</button>
+        <button data-level="robot">ROBOT FACTORY</button>
+        <button data-level="witch">WITCH SWAMP</button>
+      </div>
+      <div class="panel">
+        <h3 id="rosterHead">PLAYERS</h3>
+        <ul id="roster"></ul>
+        <div id="teamPick" class="choice" hidden>
+          <button data-team="1" class="team1">JOIN RED</button>
+          <button data-team="2" class="team2">JOIN BLUE</button>
+        </div>
+        <div id="botCtl" hidden><button id="addBot">+ BOT</button> <button id="removeBot">− BOT</button></div>
+      </div>
+      <div id="result"></div>
+      <div id="waitMsg">Connecting...</div>
+      <button id="readyBtn" disabled>I'm Here</button>
+    </section>
+    <section id="side">
+      <div id="profile">
+        <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
+        <div id="stats"></div>
+        <div id="account">
+          <span id="signedOut"><button id="showAuth" class="link">Sign in / create account</button> to keep your stats and add friends</span>
+          <span id="signedIn" hidden>Signed in as <b id="acctName"></b> · <button id="logoutBtn" class="link">Sign out</button></span>
+          <form id="authForm" hidden>
+            <input id="authUser" placeholder="Username" maxlength="16" autocomplete="username" spellcheck="false">
+            <input id="authPass" type="password" placeholder="Password" maxlength="72" autocomplete="current-password">
+            <button type="submit">Sign in</button>
+            <button type="button" id="registerBtn">Create account</button>
+            <div id="authErr"></div>
+          </form>
+        </div>
+      </div>
+      <div class="panel" id="friends">
+        <h3>FRIENDS</h3>
+        <div id="friendsGuest">Sign in to add friends and invite them.</div>
+        <form id="friendForm" hidden>
+          <input id="friendName" placeholder="Add by username" maxlength="16" autocomplete="off" spellcheck="false">
+          <button type="submit">Add</button>
+        </form>
+        <div id="friendEmpty" hidden>No friends yet — add someone by their username.</div>
+        <ul id="friendList"></ul>
+      </div>
+      <table id="board" hidden>
+        <caption>LEADERBOARD</caption>
+        <thead><tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Kills</th><th>K/D</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
   </div>
-  <div id="levels">
-    <button data-level="hell">HELL</button>
-    <button data-level="robot">ROBOT FACTORY</button>
-    <button data-level="witch">WITCH SWAMP</button>
-  </div>
-  <div id="waitMsg">Connecting...</div>
-  <button id="readyBtn" disabled>I'm Here</button>
-  <table id="board" hidden>
-    <caption>LEADERBOARD</caption>
-    <thead><tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Kills</th><th>K/D</th></tr></thead>
-    <tbody></tbody>
-  </table>
 </div>
 <div id="hud">
   <div class="ph"><span style="color:#fa4;font-weight:bold">YOU</span> <span id="sk">0</span>
     <div class="hp-bar"><div class="hp-fill" id="myhp" style="width:100%;background:#fa4"></div></div>
   </div>
-  <div class="ph"><span id="ename" style="color:#f33;font-weight:bold">ENEMY</span> <span id="ek">0</span>
-    <div class="hp-bar"><div class="hp-fill" id="ehp" style="width:100%;background:#f33"></div></div>
-  </div>
+</div>
+<div id="scores"></div>
+<div id="feed"></div>
+<div id="toasts"></div>
+<div id="invite" hidden>
+  <span id="inviteText"></span>
+  <button id="inviteJoin">Join</button><button id="inviteDismiss">✕</button>
+  <div id="inviteHint" hidden>Press Esc to free the mouse</div>
 </div>
 <canvas id="c"></canvas>
 <div id="msg"></div>

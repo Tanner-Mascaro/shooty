@@ -1,5 +1,5 @@
-// Server-side bot for local testing (BOTS=1). It fills the opponent slot, wanders between
-// random reachable spots, and shoots the rifle at you when it has line of sight.
+// Server-side bot for local testing (--bots). It wanders between random reachable spots and
+// shoots the rifle at the nearest enemy it can see.
 import { TICK, EYE, BODY_H } from '../shared/config.js';
 import { MW, MH } from '../shared/levels.js';
 import { groundAt, kindAt } from '../shared/terrain.js';
@@ -57,7 +57,8 @@ function pickGoal(game, p) {
 // one server tick of thinking, moving and shooting
 export function botTick(game, p) {
   const T = game.T, b = p.brain, dt = TICK / 1000, now = Date.now();
-  const foe = game.opponent(p);
+  const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
+  const foe = game.enemies(p).filter(o => canSee(T, p, o)).sort((x, y) => dist(x) - dist(y))[0];
 
   // move toward the current goal, picking a new one on arrival or when blocked
   if (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10) {
@@ -71,9 +72,10 @@ export function botTick(game, p) {
     else b.stuck++;
   }
 
-  // look for you; turn and shoot once it has had time to react
-  const sees = foe && canSee(T, p, foe);
-  if (!sees) {
+  // turn toward the target and shoot once it has had time to react
+  if (!foe || (b.target !== undefined && b.target !== foe.id)) b.seenAt = 0; // new target: react again
+  b.target = foe ? foe.id : undefined;
+  if (!foe) {
     b.seenAt = 0;
     p.a = turnToward(p.a, heading, TURN * dt);
     p.p *= 0.9;

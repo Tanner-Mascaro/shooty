@@ -3,7 +3,9 @@ import { BASE_FOV } from './constants.js';
 
 export const S = {
   // connection / match
-  myId: null, started: false, myKills: 0,
+  myId: null, started: false, myKills: 0, myTeam: 0,
+  // the room from the server: { code, private, mode, level, gameOn, bots, max, players: [{ id, name, team, ready, bot }] }
+  room: null,
 
   // you: position is client-authoritative; seq changes when the server respawns you
   me: null, mySeq: 0, pitch: 0,
@@ -14,9 +16,10 @@ export const S = {
   nextFire: { rifle: 0, sniper: 0, shotgun: 0, smg: 0, blade: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
 
-  // enemy, interpolated between the last two server states
-  ePrev: null, eCur: null, eTime: 0, enemy: null, enemyStep: 0,
-  enemyFlashT: -1e9, enemyHitT: -1e9,
+  // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick
+  // behind, interpolated from prev to cur (`now` is this frame's position)
+  others: {},
+  feed: [], // kill feed: { killer, victim, weapon, head, backstab, mine, t }
 
   // current level (see level.js)
   level: null, MAP: null, T: null, theme: null, pickupSpots: [], pickupActive: [],
@@ -32,3 +35,9 @@ export const S = {
 };
 
 export const owned = w => w === 'rifle' || w === 'blade' || S.inv[w] > 0;
+
+// roster lookups
+export const playerInfo = id => (S.room && S.room.players.find(p => p.id === id)) || null;
+export const nameOf = id => id === S.myId ? 'You' : (playerInfo(id) || { name: '?' }).name;
+export const teamOf = id => id === S.myId ? S.myTeam : (playerInfo(id) || { team: 0 }).team;
+export const isEnemy = id => !S.room || S.room.mode !== 'teams' || teamOf(id) !== S.myTeam;

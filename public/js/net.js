@@ -1,13 +1,15 @@
 // WebSocket connection and handlers for every server -> client message.
-import { EYE, HEAL } from '/shared/config.js';
+import { EYE, HEAL, TEAMS } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
-import { S, owned } from './state.js';
+import { S, owned, nameOf } from './state.js';
 import { setLevel } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, setReady, showMsg, banner } from './ui.js';
+import { showWait, hideWait, setWaitText, showMsg, banner, toast, pushFeed } from './ui.js';
+import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
+import { showFriends, showInvite } from './friends.js';
 
 let ws = null;
 
@@ -15,28 +17,34 @@ export function send(msg) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
 }
 
+// the room code in the page URL (?room=ABCDE) picks the room; none means quick play
 export function connect() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => { setWaitText('Waiting for opponent...'); sendHello(); };
-  ws.onclose = () => { setWaitText('Disconnected — refresh to reconnect.'); setReady(false); };
-  ws.onerror = () => { setWaitText('Connection failed — refresh to retry.'); setReady(false); };
+  const code = new URLSearchParams(location.search).get('room');
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + (code ? '?room=' + encodeURIComponent(code) : ''));
+  ws.onopen = () => sendHello();
+  ws.onclose = () => { S.disconnected = true; setWaitText('Disconnected — refresh to reconnect.'); };
+  ws.onerror = () => { S.disconnected = true; setWaitText('Connection failed — refresh to retry.'); };
   ws.onmessage = e => {
     const msg = JSON.parse(e.data);
     const h = handlers[msg.type];
     if (h) h(msg, performance.now());
   };
+  // leaving the page (e.g. switching rooms): hang up, or the browser may keep this page and
+  // its connection alive in the back/forward cache, leaving a ghost player in the old room
+  addEventListener('pagehide', () => ws.close());
+  addEventListener('pageshow', e => { if (e.persisted) location.reload(); }); // came back via Back: reconnect
 }
 
 const airborne = p => p.z - groundAt(S.T, p.x, p.y) > 0.05;
 
-// footsteps / jump / land sounds for the enemy, from consecutive server states
-function enemySounds(prev, cur) {
+// footsteps / jump / land sounds for another player, from consecutive server states
+function otherSounds(o, prev, cur) {
   if (prev.seq !== cur.seq) return;
   if (!airborne(prev) && airborne(cur)) playAt('jump', cur.x, cur.y);
   if (airborne(prev) && !airborne(cur)) playAt('land', cur.x, cur.y);
   if (!airborne(cur)) {
-    S.enemyStep += Math.hypot(cur.x - prev.x, cur.y - prev.y);
-    if (S.enemyStep > 0.85) { S.enemyStep = 0; playAt('step', cur.x, cur.y); }
+    o.step += Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    if (o.step > 0.85) { o.step = 0; playAt('step', cur.x, cur.y); }
   }
 }
 
@@ -46,25 +54,26 @@ const handlers = {
     setLevel(msg.level);
     S.me = { x: msg.x, y: msg.y, z: msg.z, a: msg.a, hp: msg.hp };
     S.mySeq = msg.seq;
-    setReady(true);
+    S.others = {};
+    history.replaceState(null, '', '?room=' + msg.room); // the address bar is now this room's invite link
   },
 
-  level(msg) {
-    setLevel(msg.level);
-    setReady(true, "I'm Here");
+  room(msg) {
+    S.room = msg;
+    const mine = msg.players.find(p => p.id === S.myId);
+    if (mine) S.myTeam = mine.team;
+    for (const id in S.others) if (!msg.players.some(p => p.id === +id)) delete S.others[id]; // left
+    showRoom();
   },
 
-  waiting(msg) { setWaitText(msg.reason); },
-
-  profile(msg) { showProfile(msg); },
-  auth(msg) { onAuth(msg); },
-  leaderboard(msg) { showBoard(msg.rows); },
+  level(msg) { setLevel(msg.level); },
 
   start(msg) {
     setLevel(msg.level);
     S.started = true;
     S.myKills = 0;
     S.weapon = 'rifle'; S.scoped = false;
+    S.feed = [];
     hideWait();
   },
 
@@ -86,21 +95,21 @@ const handlers = {
   },
 
   state(msg, now) {
-    const ep = msg.players.find(p => p.id !== S.myId);
-    const mp = msg.players.find(p => p.id === S.myId);
-    if (ep) {
-      if (S.eCur) enemySounds(S.eCur, ep);
-      S.ePrev = S.eCur && S.eCur.seq === ep.seq ? S.eCur : ep;
-      S.eCur = ep; S.eTime = now;
-    }
-    if (mp) {
-      S.me.hp = mp.hp; S.myKills = mp.kills;
-      // our own position is client-authoritative; only snap to the server on respawn
-      if (mp.seq !== S.mySeq) {
-        S.mySeq = mp.seq;
-        Object.assign(S.me, { x: mp.x, y: mp.y, z: mp.z, a: mp.a });
-        S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false;
+    for (const p of msg.players) {
+      if (p.id === S.myId) {
+        S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team;
+        // our own position is client-authoritative; only snap to the server on respawn
+        if (p.seq !== S.mySeq) {
+          S.mySeq = p.seq;
+          Object.assign(S.me, { x: p.x, y: p.y, z: p.z, a: p.a });
+          S.pitch = 0; S.vx = S.vy = S.vz = 0; S.onGround = true; S.scoped = false;
+        }
+        continue;
       }
+      const o = S.others[p.id] ??= { cur: null, step: 0, flashT: -1e9, hitT: -1e9 };
+      if (o.cur) otherSounds(o, o.cur, p);
+      o.prev = o.cur && o.cur.seq === p.seq ? o.cur : p; // respawned: don't slide across the map
+      o.cur = p; o.t = now;
     }
   },
 
@@ -108,7 +117,7 @@ const handlers = {
     const me = S.me, mine = msg.id === S.myId;
     if (msg.weapon === 'blade') { if (!mine) playAt('swing', msg.x, msg.y); return; }
     if (!mine) {
-      S.enemyFlashT = now;
+      if (S.others[msg.id]) S.others[msg.id].flashT = now;
       playAt(msg.weapon, msg.x, msg.y, msg.weapon === 'sniper' ? 2 : 1);
       if (msg.weapon === 'shotgun') setTimeout(() => playAt('pump', msg.x, msg.y), 350);
     }
@@ -131,7 +140,7 @@ const handlers = {
     burst(msg.x, msg.y, msg.z, msg.weapon === 'sniper' ? 40 : msg.weapon === 'shotgun' ? 30 : msg.head ? 20 : 12, 'blood');
     if (msg.weapon === 'blade') playAt('slash', msg.x, msg.y);
     if (msg.who === S.myId) { S.hitFlash = 8; play('hurt'); S.shake = Math.max(S.shake, 6); }
-    else S.enemyHitT = now;
+    else if (S.others[msg.who]) S.others[msg.who].hitT = now;
     if (msg.by === S.myId) {
       S.hitMarker = 14; S.hitHead = msg.head;
       play(msg.head ? 'headshot' : 'hitmarker');
@@ -146,6 +155,7 @@ const handlers = {
       t: now, landed: false, mine: msg.victim === S.myId });
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');
+    pushFeed(msg);
     if (msg.killer === S.myId) {
       const label = msg.backstab ? 'BACKSTAB' : msg.head ? 'HEADSHOT' : 'KILL';
       banner(label + (msg.weapon === 'sniper' ? '  ' + msg.dist.toFixed(1) + 'm' : ''), msg.head || msg.backstab);
@@ -154,25 +164,32 @@ const handlers = {
       if (msg.weapon === 'sniper') S.killFlash = 10;
       if (S.theme.id === 'witch') setTimeout(() => play('cackle'), 250);
     } else if (msg.victim === S.myId) {
-      showMsg(pit ? S.theme.pitDeath : msg.backstab ? 'Backstabbed!' : 'You died!');
+      showMsg(pit ? S.theme.pitDeath : (msg.backstab ? 'Backstabbed by ' : 'Killed by ') + nameOf(msg.killer));
       play(pit ? 'burn' : 'death');
-    } else {
-      showMsg(S.theme.enemyPitDeath);
-      playAt('burn', msg.x, msg.y);
-    }
+    } else playAt(pit ? 'burn' : 'death', msg.x, msg.y);
   },
 
+  // { winner: id } in free-for-all, { team } in teams
   win(msg) {
-    const won = msg.winner === S.myId;
-    showMsg(won ? 'YOU WIN!' : 'YOU LOSE!', true);
+    const won = msg.team ? msg.team === S.myTeam : msg.winner === S.myId;
+    const who = msg.team ? TEAMS[msg.team] + ' TEAM' : nameOf(msg.winner).toUpperCase();
+    showMsg(won ? (msg.team ? 'YOUR TEAM WINS!' : 'YOU WIN!') : who + ' WINS!', true);
     play(won ? 'win' : 'lose');
     S.started = false;
-    setTimeout(() => showWait(won ? 'You win! Pick a level and rematch?' : 'You lose. Pick a level and rematch?', 'Play Again'), 2000);
+    setTimeout(() => showWait(won ? 'You won! Rematch?' : who.toLowerCase().replace(/^\w/, c => c.toUpperCase()) + ' won. Rematch?'), 2000);
   },
 
-  opponentLeft() {
+  // the match stopped early (not enough players left)
+  end(msg) {
     S.started = false;
-    S.ePrev = S.eCur = S.enemy = null;
-    showWait('Opponent left — waiting for opponent to join...', "I'm Here");
+    showWait(msg.reason);
   },
+
+  notice(msg) { toast(msg.text); },
+
+  profile(msg) { showProfile(msg); },
+  auth(msg) { onAuth(msg); },
+  leaderboard(msg) { showBoard(msg.rows); },
+  friends(msg) { showFriends(msg.list); },
+  invite(msg) { showInvite(msg); },
 };

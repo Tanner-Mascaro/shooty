@@ -11,29 +11,73 @@ canvas { display:block; position:absolute; top:0; left:0; }
 #msg { position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); color:#fc3; font-size:32px; font-weight:bold; text-shadow:0 0 12px #000; z-index:20; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
 #controls { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); color:#666; font-size:11px; z-index:10; pointer-events:none; white-space:nowrap; }
 
+/* in-game: scoreboard + kill feed (top left), toasts + invite popup */
+#scores { position:absolute; top:10px; left:10px; z-index:10; pointer-events:none; color:#ddd; font-size:13px; text-shadow:0 0 4px #000; min-width:120px; }
+#scores b { display:inline-block; min-width:2ch; text-align:right; color:#fff; }
+#scores .teamHead { font-weight:bold; margin-top:4px; letter-spacing:2px; }
+#feed { position:absolute; top:10px; left:50%; transform:translateX(-50%); margin-top:44px; z-index:10; pointer-events:none; font-size:13px; text-align:center; text-shadow:0 0 4px #000; }
+#feed .weapon { color:#999; }
+.me { color:#fc6; font-weight:bold; } .ally { color:#6af; } .foe { color:#f76; }
+.team1, #scores .team1 { color:#f66; } .team2, #scores .team2 { color:#6af; }
+#toasts { position:absolute; bottom:30px; left:50%; transform:translateX(-50%); z-index:300; display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none; }
+.toast { background:rgba(20,20,20,0.92); color:#eee; border:1px solid #555; border-radius:4px; padding:8px 14px; font-size:14px; transition:opacity .5s; max-width:90vw; overflow-wrap:anywhere; }
+.toast.gone { opacity:0; }
+#invite { position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:300; background:rgba(20,20,30,0.95); color:#eee; border:2px solid #6af; border-radius:6px; padding:10px 14px; font-size:14px; text-align:center; max-width:92vw; }
+#invite button { font-family:'Courier New',monospace; font-weight:bold; margin-left:8px; padding:5px 12px; border-radius:4px; cursor:pointer; border:1px solid #6af; background:#6af; color:#000; }
+#invite #inviteDismiss { background:#222; color:#ccc; border-color:#555; }
+#inviteHint { color:#888; font-size:12px; margin-top:4px; }
+
 /* lobby */
-#wait { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; overflow-y:auto; padding:16px; color:#bbb; font-size:20px; z-index:100; gap:16px; }
+#wait { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; overflow-y:auto; padding:16px; color:#bbb; font-size:16px; z-index:100; gap:14px; }
 #waitTitle { font-size:40px; font-weight:bold; letter-spacing:6px; }
-#levels { display:flex; gap:12px; }
-#levels button, #readyBtn { font-family:'Courier New',monospace; font-size:16px; padding:10px 20px; border:2px solid #555; border-radius:4px; cursor:pointer; font-weight:bold; background:#111; color:#aaa; }
+#lobby { display:flex; flex-wrap:wrap; gap:24px; justify-content:center; align-items:flex-start; width:100%; max-width:980px; }
+#lobby section { display:flex; flex-direction:column; align-items:center; gap:12px; flex:1 1 360px; max-width:460px; min-width:0; }
+.panel { width:100%; background:rgba(0,0,0,0.45); border:1px solid #333; border-radius:6px; padding:10px 12px; }
+.panel h3 { font-size:13px; letter-spacing:3px; color:#999; margin-bottom:6px; }
+button { font-family:'Courier New',monospace; }
+.link { font:inherit; color:#bbb; background:none; border:none; text-decoration:underline; cursor:pointer; }
+.links { font-size:14px; color:#777; }
+#roomBar { display:flex; gap:12px; align-items:center; font-size:15px; flex-wrap:wrap; justify-content:center; }
+#roomBar b { color:#fff; letter-spacing:3px; font-size:20px; }
+#roomBar small { color:#777; }
+#copyLink { font-size:13px; font-weight:bold; padding:6px 12px; background:#6af; color:#000; border:none; border-radius:4px; cursor:pointer; }
+.choice { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+.choice button, #readyBtn, #botCtl button { font-size:14px; padding:8px 14px; border:2px solid #555; border-radius:4px; cursor:pointer; font-weight:bold; background:#111; color:#aaa; }
+.choice button.sel { color:#000; background:#ddd; border-color:#fff; }
 #levels button.sel { color:#000; }
 #levels button[data-level=hell].sel { background:#e33; border-color:#f66; }
 #levels button[data-level=robot].sel { background:#3ce; border-color:#8ef; }
 #levels button[data-level=witch].sel { background:#6d3; border-color:#af7; }
-#profile { display:flex; flex-direction:column; align-items:center; gap:6px; }
-#nameInput { font-family:'Courier New',monospace; font-size:18px; font-weight:bold; text-align:center; width:240px; padding:8px; background:#111; color:#fff; border:2px solid #555; border-radius:4px; }
+#teamPick { margin-top:8px; }
+#teamPick .team1.sel { background:#e44; border-color:#f88; } #teamPick .team2.sel { background:#48f; border-color:#8bf; }
+#botCtl { margin-top:8px; text-align:center; } #botCtl button { font-size:12px; padding:4px 10px; }
+#roster, #friendList { list-style:none; font-size:14px; }
+#roster li { display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid #222; }
+#roster .tag { color:#888; font-size:12px; }
+#result { color:#fc6; font-weight:bold; min-height:0; }
+#waitMsg { text-align:center; }
+#profile { display:flex; flex-direction:column; align-items:center; gap:6px; width:100%; }
+#nameInput { font-family:'Courier New',monospace; font-size:18px; font-weight:bold; text-align:center; width:240px; max-width:100%; padding:8px; background:#111; color:#fff; border:2px solid #555; border-radius:4px; }
 #nameInput:focus { outline:none; border-color:#aaa; }
-#stats { font-size:14px; color:#888; min-height:1em; }
+#stats { font-size:13px; color:#888; min-height:1em; text-align:center; }
 #account { font-size:13px; color:#777; text-align:center; }
-#account .link { font:inherit; color:#bbb; background:none; border:none; text-decoration:underline; cursor:pointer; }
-#authForm { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
-#authForm input { font-family:'Courier New',monospace; font-size:14px; width:150px; padding:6px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; }
-#authForm button { font-family:'Courier New',monospace; font-size:13px; font-weight:bold; padding:6px 12px; background:#222; color:#ccc; border:1px solid #666; border-radius:4px; cursor:pointer; }
+#authForm, #friendForm { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+#authForm input, #friendForm input { font-family:'Courier New',monospace; font-size:14px; width:150px; padding:6px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; }
+#authForm button, #friendForm button, #friendList button { font-size:12px; font-weight:bold; padding:4px 10px; background:#222; color:#ccc; border:1px solid #666; border-radius:4px; cursor:pointer; }
 #authErr { width:100%; color:#f66; min-height:1em; }
-#board { border-collapse:collapse; font-size:14px; color:#aaa; background:rgba(0,0,0,0.5); }
+#friendsGuest, #friendEmpty { font-size:13px; color:#777; }
+#friendList { margin-top:8px; }
+#friendList li { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:5px 0; border-bottom:1px solid #222; }
+#friendList .who { color:#ccc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#friendList .who small { color:#666; }
+#friendList .status { grid-column:1; font-size:12px; color:#666; }
+#friendList li.online .status { color:#6d6; }
+#friendList .actions { grid-column:2; grid-row:1 / span 2; display:flex; gap:4px; align-items:center; }
+#friendList .remove { border:none; background:none; color:#666; }
+#board { border-collapse:collapse; font-size:14px; color:#aaa; background:rgba(0,0,0,0.5); width:100%; }
 #board caption { font-weight:bold; letter-spacing:3px; color:#ccc; padding-bottom:6px; }
-#board th, #board td { padding:3px 10px; text-align:right; }
-#board th:nth-child(2), #board td:nth-child(2) { text-align:left; }
+#board th, #board td { padding:3px 8px; text-align:right; }
+#board th:nth-child(2), #board td:nth-child(2) { text-align:left; overflow-wrap:anywhere; }
 #board th { color:#666; border-bottom:1px solid #333; }
 #board tr.you td { color:#fc6; font-weight:bold; }
 #readyBtn { font-size:18px; padding:12px 28px; background:#ddd; color:#000; border-color:#fff; }

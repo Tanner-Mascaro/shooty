@@ -3,7 +3,10 @@
 export const TICK = 1000 / 30;   // server state broadcast interval (ms)
 export const RES = 8;            // heightmap samples per map unit
 export const MAX_HP = 100;
-export const WIN_SCORE = 10;
+export const WIN_SCORE = 10;       // free-for-all: first player to this many kills
+export const TEAM_WIN_SCORE = 20;  // teams: first team to this many kills
+export const MAX_PLAYERS = 8;      // per room
+export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
 export const MAX_DEPTH = 40;     // max view / bullet distance
 export const PIT_DPS = 40;       // damage per second standing in lava / acid / bog
 export const PICKUP_RESPAWN = 15000;

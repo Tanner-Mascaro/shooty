@@ -1,5 +1,5 @@
 // Lobby profile panel: your name and stats, sign in / create account / sign out, leaderboard.
-// The server does the checking; see the hello/register/login/logout handlers in server/game.js.
+// The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
 import { token, setToken, clearToken, savedName, saveName } from './profile.js';
 

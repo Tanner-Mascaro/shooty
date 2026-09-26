@@ -6,18 +6,23 @@ import { BASE_FOV, SCOPE_FOV, GRAVITY, GUN_COLOR } from '../constants.js';
 import { view, present } from './canvas.js';
 import { drawTerrain, drawSprite, drawPlayer, drawParticles } from './world.js';
 import { pickupSprite } from './sprites.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap } from './hud.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawWeaponView, drawHitMarker, drawFlashes, drawBanner, drawSpeed, drawMinimap } from './hud.js';
 import { updateEmbers, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
 
-// draw the enemy one server tick behind, interpolating between the last two states
-function interpolateEnemy(now) {
-  const a = S.ePrev, b = S.eCur;
-  if (!b) return;
-  const k = Math.min(1, (now - S.eTime) / TICK);
-  S.enemy = Object.assign({}, b, { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k });
+// draw everyone one server tick behind, interpolating between their last two states
+function interpolateOthers(now) {
+  for (const o of Object.values(S.others)) {
+    const a = o.prev, b = o.cur;
+    if (!b) continue;
+    const k = Math.min(1, (now - o.t) / TICK);
+    o.now = Object.assign({}, b, { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k });
+  }
 }
+
+// teams mode tints bodies: red / blue (free-for-all keeps the level's own colors)
+const TEAM_TINT = { 1: [230, 50, 40], 2: [40, 110, 255] };
 
 // bodies fly in the shot direction, thud on landing, sink after 4s
 function updateCorpses(now, dt) {
@@ -53,7 +58,7 @@ function decayEffects(dt) {
 export function render(dt) {
   if (!S.me || !S.T) return;
   const now = performance.now();
-  interpolateEnemy(now);
+  interpolateOthers(now);
   setupCamera();
 
   if (S.started) updateEmbers();
@@ -73,7 +78,9 @@ export function render(dt) {
     const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0;
     drawPlayer(c.x, c.y, c.z - sink, 1 - 0.72 * fall, 1 + 0.9 * fall, false, false);
   }
-  if (S.enemy) drawPlayer(S.enemy.x, S.enemy.y, S.enemy.z, 1, 1, now - S.enemyHitT < 90, S.enemy.sc);
+  const teams = S.room && S.room.mode === 'teams';
+  for (const o of Object.values(S.others))
+    if (o.now) drawPlayer(o.now.x, o.now.y, o.now.z, 1, 1, now - o.hitT < 90, o.now.sc, teams ? TEAM_TINT[o.now.team] : null);
   drawParticles(S.embers);
   drawParticles(S.particles);
   present(S.cam.ox, S.cam.oy);
@@ -82,6 +89,7 @@ export function render(dt) {
   drawPickupGlows();
   drawTracers(now);
   drawEnemyGlows(now);
+  drawNameTags();
   drawWeaponView(now);
   drawHitMarker();
   drawFlashes();
