@@ -159,13 +159,16 @@ export class Room {
   }
   // who's here, teams and ready state: sent whenever any of it changes
   roster() {
-    const votes = {};
-    for (const p of this.humans) if (p.vote && LEVELS[p.vote]) votes[p.vote] = (votes[p.vote] || 0) + 1;
+    const votes = {}, modeVotes = {};
+    for (const p of this.humans) {
+      if (p.vote && LEVELS[p.vote]) votes[p.vote] = (votes[p.vote] || 0) + 1;
+      if (p.modeVote && Object.hasOwn(MODE_NAMES, p.modeVote)) modeVotes[p.modeVote] = (modeVotes[p.modeVote] || 0) + 1;
+    }
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, plagueRemainingMs: this.plagueRemainingMs,
+      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
       winScore: this.winScore, teamWinScore: this.teamWinScore, hardpoint: this.hardpointSnapshot(),
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null, modeVote: p.modeVote || null })) });
   }
 
   // --- level / pickups ---
@@ -215,6 +218,26 @@ export class Room {
     let best = this.level, n = 0;
     for (const [k, v] of Object.entries(counts)) if (v > n) { n = v; best = k; }
     return best;
+  }
+
+  modeVoteWinner() {
+    const counts = {};
+    for (const p of this.humans) if (p.modeVote && Object.hasOwn(MODE_NAMES, p.modeVote)) counts[p.modeVote] = (counts[p.modeVote] || 0) + 1;
+    let best = this.mode, n = 0;
+    for (const [k, v] of Object.entries(counts)) if (v > n) { n = v; best = k; }
+    return best;
+  }
+
+  // apply a lobby mode (from votes): reassign teams and clear ready flags
+  applyMode(mode) {
+    if (!Object.hasOwn(MODE_NAMES, mode) || mode === this.mode) return false;
+    this.mode = mode;
+    this.plagueEndsAt = 0;
+    this.list.forEach((pl, i) => {
+      pl.team = this.mode === 'plague' ? HEALTHY_TEAM : ['teams', 'hardpoint'].includes(this.mode) ? i % 2 + 1 : 0;
+      pl.ready = !!pl.bot;
+    });
+    return true;
   }
 
   // a loot box on the ground at (x, y); nothing if it would land in lava / acid / bog
@@ -343,7 +366,7 @@ export class Room {
 
   add(p) {
     if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
-    Object.assign(p, { room: this, kills: 0, deaths: 0, ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, nades: 0 });
+    Object.assign(p, { room: this, kills: 0, deaths: 0, ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, modeVote: p.modeVote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
     p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : ['teams', 'hardpoint'].includes(this.mode) ? this.smallerTeam() : 0;
@@ -448,6 +471,8 @@ export class Room {
 
   startGame() {
     if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid()) return;
+    const mode = this.modeVoteWinner();
+    if (mode !== this.mode) this.applyMode(mode);
     if (['teams', 'hardpoint'].includes(this.mode) && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
     const map = this.voteWinner();
@@ -702,11 +727,17 @@ Room.prototype.handlers = {
   },
 
   mode(p, msg) {
-    if (this.gameOn || !Object.hasOwn(MODE_NAMES, msg.mode) || msg.mode === this.mode) return;
-    this.mode = msg.mode;
-    this.plagueEndsAt = 0;
-    this.list.forEach((pl, i) => { pl.team = this.mode === 'plague' ? HEALTHY_TEAM : ['teams', 'hardpoint'].includes(this.mode) ? i % 2 + 1 : 0; pl.ready = !!pl.bot; });
-    log(`[${this.code}] ${this.hub.who(p)} switched to ${MODE_NAMES[this.mode]}`);
+    if (this.gameOn || !Object.hasOwn(MODE_NAMES, msg.mode)) return;
+    if (p.modeVote === msg.mode) return;
+    p.modeVote = msg.mode;
+    p.ready = !!p.bot;
+    const winner = this.modeVoteWinner();
+    if (winner !== this.mode) {
+      this.applyMode(winner);
+      log(`[${this.code}] ${this.hub.who(p)} voted ${MODE_NAMES[msg.mode]} → leading ${MODE_NAMES[this.mode]}`);
+    } else {
+      log(`[${this.code}] ${this.hub.who(p)} voted ${MODE_NAMES[msg.mode]}`);
+    }
     this.roster();
   },
 
