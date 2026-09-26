@@ -10,6 +10,7 @@
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
 //   haunt  # -> full-height walls under a ceiling (CEILING_H)
 //   castle # -> stone walls of uneven height: curtain walls + taller corner/keep towers
+//          T -> climbable multi-level towers with switchback stairs + battlement decks
 //          edge -> wall, under a ceiling (the client draws it at CEILING_H)
 //   nuke   # clusters -> cars / a bus, + -> junk crates, B clusters -> big enterable houses
 //          facing the street, edge -> block wall
@@ -328,8 +329,140 @@ export function buildTerrain(MAP, RES, style) {
     }
   }
 
+  if (style === 'castle') addCastleClimbTowers(hgt, kind, mat, props, MAP, RES, TW, TH);
+
   // no procedural scatter of extra bushes/crates — map ASCII already places the cover we want
   return { hgt, kind, mat, props, TW, TH, RES };
+}
+
+// Climbable castle towers: real stair treads (flat rectangles) + mid balconies + battlement deck.
+// Axis-aligned flights so steps stay crisp in the heightmap and in the mesh.
+function addCastleClimbTowers(hgt, kind, mat, props, MAP, RES, TW, TH) {
+  const MW = MAP[0].length, MH = MAP.length;
+  const rise = 0.26; // under STEP_H / client STEP so you can walk up without jumping
+
+  const stampRect = (x0, y0, x1, y1, height, wall) => {
+    const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
+    const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
+    const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES) - 1);
+    const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES) - 1);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const k = j * TW + i;
+      if (mat[k] === MAT.PIT) continue;
+      if (wall) {
+        if (height >= hgt[k]) { hgt[k] = height; mat[k] = MAT.WALL; kind[k] = 1; }
+        continue;
+      }
+      // never flatten another level, and never skip a step (keeps rise ≤ walk STEP)
+      if (kind[k] === 0 && hgt[k] > 0.05) {
+        if (height < hgt[k] - 0.02) continue;
+        if (height > hgt[k] + rise * 1.15) continue;
+      }
+      hgt[k] = height;
+      mat[k] = MAT.WALL;
+      kind[k] = 0;
+    }
+  };
+
+  const stepsN = (h0, h1) => Math.max(1, Math.ceil(Math.abs(h1 - h0) / rise));
+  // Discrete flat treads along +X or +Y. Returns mesh boxes {x0,y0,x1,y1,z}.
+  const stairRun = (x0, y0, x1, y1, h0, h1, halfW) => {
+    const treads = [];
+    const axisX = Math.abs(x1 - x0) >= Math.abs(y1 - y0);
+    const span = axisX ? (x1 - x0) : (y1 - y0);
+    const steps = stepsN(h0, h1);
+    const dh = (h1 - h0) / steps;
+    const ds = span / steps;
+    for (let i = 0; i < steps; i++) {
+      const h = h0 + (i + 1) * dh;
+      if (axisX) {
+        const a = x0 + i * ds, b = x0 + (i + 1) * ds;
+        const xa = Math.min(a, b), xb = Math.max(a, b);
+        const ya = y0 - halfW, yb = y0 + halfW;
+        // pad slightly so adjacent treads share an edge in the heightmap (no 1-cell gaps)
+        stampRect(xa - 0.02, ya, xb + 0.02, yb, h, false);
+        treads.push({ x0: xa, y0: ya, x1: xb, y1: yb, z: h });
+      } else {
+        const a = y0 + i * ds, b = y0 + (i + 1) * ds;
+        const ya = Math.min(a, b), yb = Math.max(a, b);
+        const xa = x0 - halfW, xb = x0 + halfW;
+        stampRect(xa, ya - 0.02, xb, yb + 0.02, h, false);
+        treads.push({ x0: xa, y0: ya, x1: xb, y1: yb, z: h });
+      }
+    }
+    return treads;
+  };
+
+  for (let cy = 2; cy < MH - 2; cy++) for (let cx = 2; cx < MW - 2; cx++) {
+    if (MAP[cy][cx] !== 'T') continue;
+    const cxw = cx + 0.5, cyw = cy + 0.5;
+    const deckH = 5.4;
+    const h1 = deckH / 3, h2 = (2 * deckH) / 3;
+    const deckR = 0.85;
+    const L = 1.55;
+    const halfW = 0.42;
+    const treads = [];
+
+    // clear footprint (stairs + approach + balconies)
+    for (let j = Math.max(0, Math.floor((cyw - 2.7) * RES)); j <= Math.min(TH - 1, Math.ceil((cyw + 2.7) * RES)); j++)
+      for (let i = Math.max(0, Math.floor((cxw - 2.7) * RES)); i <= Math.min(TW - 1, Math.ceil((cxw + 2.7) * RES)); i++) {
+        const px = (i + 0.5) / RES, py = (j + 0.5) / RES;
+        if (Math.hypot(px - cxw, py - cyw) > 2.65) continue;
+        const k = j * TW + i;
+        if (mat[k] === MAT.PIT) continue;
+        hgt[k] = 0; mat[k] = MAT.FLOOR; kind[k] = 0;
+      }
+
+    // battlement deck
+    stampRect(cxw - deckR, cyw - deckR, cxw + deckR, cyw + deckR, deckH, false);
+    treads.push({ x0: cxw - deckR, y0: cyw - deckR, x1: cxw + deckR, y1: cyw + deckR, z: deckH });
+
+    // merlons
+    for (const [ox, oy] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]])
+      stampRect(cxw + ox - 0.18, cyw + oy - 0.18, cxw + ox + 0.18, cyw + oy + 0.18, deckH + 0.85, true);
+
+    // approach pad (flat ground under first step)
+    stampRect(cxw - L - halfW, cyw - L - 0.95, cxw - L + halfW, cyw - L, 0, false);
+
+    // flights stop short of corners; landings own the turns so heights never skip
+    const end = halfW;
+    treads.push(...stairRun(cxw - L, cyw - L, cxw + L - end, cyw - L, 0, h1, halfW));
+    stampRect(cxw + L - halfW, cyw - L - halfW, cxw + L + halfW, cyw - L + halfW, h1, false);
+    treads.push({ x0: cxw + L - halfW, y0: cyw - L - halfW, x1: cxw + L + halfW, y1: cyw - L + halfW, z: h1 });
+    stampRect(cxw - 0.75, cyw - L - 0.85, cxw + 0.75, cyw - L - halfW, h1, false);
+    treads.push({ x0: cxw - 0.75, y0: cyw - L - 0.85, x1: cxw + 0.75, y1: cyw - L - halfW, z: h1 });
+
+    treads.push(...stairRun(cxw + L, cyw - L + end, cxw + L, cyw + L - end, h1, h2, halfW));
+    stampRect(cxw + L - halfW, cyw + L - halfW, cxw + L + halfW, cyw + L + halfW, h2, false);
+    treads.push({ x0: cxw + L - halfW, y0: cyw + L - halfW, x1: cxw + L + halfW, y1: cyw + L + halfW, z: h2 });
+    stampRect(cxw + L + halfW, cyw - 0.75, cxw + L + 0.85, cyw + 0.75, h2, false);
+    treads.push({ x0: cxw + L + halfW, y0: cyw - 0.75, x1: cxw + L + 0.85, y1: cyw + 0.75, z: h2 });
+
+    treads.push(...stairRun(cxw + L - end, cyw + L, cxw - L + end, cyw + L, h2, deckH, halfW));
+    stampRect(cxw - L - halfW, cyw + L - halfW, cxw - L + halfW, cyw + L + halfW, deckH, false);
+    treads.push({ x0: cxw - L - halfW, y0: cyw + L - halfW, x1: cxw - L + halfW, y1: cyw + L + halfW, z: deckH });
+    // narrow L-bridge onto the deck (don't pave over the last stair treads)
+    stampRect(cxw - L - halfW, cyw + deckR - 0.05, cxw - L + halfW, cyw + L + halfW, deckH, false);
+    treads.push({ x0: cxw - L - halfW, y0: cyw + deckR - 0.05, x1: cxw - L + halfW, y1: cyw + L + halfW, z: deckH });
+    stampRect(cxw - L - halfW, cyw + deckR - 0.05, cxw - deckR + 0.1, cyw + deckR + 0.2, deckH, false);
+    treads.push({ x0: cxw - L - halfW, y0: cyw + deckR - 0.05, x1: cxw - deckR + 0.1, y1: cyw + deckR + 0.2, z: deckH });
+
+    // low curb on deck rim
+    for (let j = Math.max(0, Math.floor((cyw - deckR - 0.12) * RES)); j <= Math.min(TH - 1, Math.ceil((cyw + deckR + 0.12) * RES)); j++)
+      for (let i = Math.max(0, Math.floor((cxw - deckR - 0.12) * RES)); i <= Math.min(TW - 1, Math.ceil((cxw + deckR + 0.12) * RES)); i++) {
+        const px = (i + 0.5) / RES, py = (j + 0.5) / RES;
+        const m = Math.max(Math.abs(px - cxw), Math.abs(py - cyw));
+        if (m < deckR - 0.08 || m > deckR + 0.1) continue;
+        const k = j * TW + i;
+        if (mat[k] === MAT.PIT || kind[k] === 1) continue;
+        if (Math.abs(hgt[k] - deckH) > 0.05) continue;
+        hgt[k] = deckH + 0.18;
+        mat[k] = MAT.WALL;
+        kind[k] = 0;
+      }
+
+    props.push({ type: 'tower', x: cxw, y: cyw, h: deckH, r: 2.2, treads });
+  }
 }
 
 // bilinear height at a world position
@@ -345,7 +478,9 @@ export function groundAt(T, x, y) {
 }
 
 // like groundAt, but blocked cells contribute 0 so tall walls don't lift the floor beside them
-// (that bleed was making eye-height bullets die next to castle walls / cottage roofs)
+// (that bleed was making eye-height bullets die next to castle walls / cottage roofs).
+// Sharp ledges (stairs, decks) also skip bilinear blend so a high tread doesn't fake a
+// mid-air floor beside it and eat shots.
 function openGroundAt(T, x, y) {
   const fx = x * T.RES - 0.5, fy = y * T.RES - 0.5;
   const i = Math.floor(fx), j = Math.floor(fy), u = fx - i, v = fy - j;
@@ -356,7 +491,14 @@ function openGroundAt(T, x, y) {
     if (T.kind[k] === 1 || T.mat[k] === MAT.PIT) return 0;
     return T.hgt[k];
   };
-  return g(i, j) * (1 - u) * (1 - v) + g(i + 1, j) * u * (1 - v) + g(i, j + 1) * (1 - u) * v + g(i + 1, j + 1) * u * v;
+  const h00 = g(i, j), h10 = g(i + 1, j), h01 = g(i, j + 1), h11 = g(i + 1, j + 1);
+  const lo = Math.min(h00, h10, h01, h11), hi = Math.max(h00, h10, h01, h11);
+  if (hi - lo > STEP_H) {
+    const ci = Math.min(T.TW - 1, Math.max(0, Math.floor(x * T.RES)));
+    const cj = Math.min(T.TH - 1, Math.max(0, Math.floor(y * T.RES)));
+    return g(ci, cj);
+  }
+  return h00 * (1 - u) * (1 - v) + h10 * u * (1 - v) + h01 * (1 - u) * v + h11 * u * v;
 }
 
 function underHutFloor(T, x, y) {
