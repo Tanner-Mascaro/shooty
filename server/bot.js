@@ -346,9 +346,11 @@ export function botTick(game, p) {
     }
   }
   const needsGun = !infected && !p.knife && !p.nadeBot && Object.keys(p.mag).length < GUN_SLOTS;
+  // nearest first, so clearPath (the costly part) usually runs once instead of for every crate
   const gunPickup = needsGun && game.pickups
-    .filter(pu => pu.active && pu.gun && pu.crate && p.mag[pu.weapon] === undefined && clearPath(T, p, pu))
-    .sort((a, c) => dist(a) - dist(c))[0];
+    .filter(pu => pu.active && pu.gun && pu.crate && p.mag[pu.weapon] === undefined)
+    .sort((a, c) => dist(a) - dist(c))
+    .find(pu => clearPath(T, p, pu));
   const rememberedThreat = !foe && hill && b.lastSeen && now - b.lastSeen.at <= 1800
     && Math.hypot(b.lastSeen.x - hill.x, b.lastSeen.y - hill.y) <= hill.radius + 5 ? b.lastSeen : null;
   const combatTarget = foe || rememberedThreat;

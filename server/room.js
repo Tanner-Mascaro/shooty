@@ -64,6 +64,40 @@ function makeHardpointSites(MAP, T) {
 const TERRAINS = {};
 for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES, k); // level key = obstacle style
 
+// open flat cells reachable from the map's corner; only depends on the level, so each is built once
+const SPAWN_SPOTS = {};
+function spawnSpots(M, T) {
+  const spots = [];
+  const reach = Array.from({ length: MH }, () => Array(MW).fill(false));
+  const q = [];
+  if (M[1][1] !== '#') { reach[1][1] = true; q.push([1, 1]); }
+  while (q.length) {
+    const [cx, cy] = q.pop();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= MW || ny >= MH || reach[ny][nx] || M[ny][nx] === '#') continue;
+      reach[ny][nx] = true;
+      q.push([nx, ny]);
+    }
+  }
+  for (let y = 1; y < MH - 1; y++)
+    for (let x = 1; x < MW - 1; x++) {
+      if (M[y][x] !== '.' || !reach[y][x]) continue;
+      let nearPit = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (M[y + dy][x + dx] === 'L') nearPit = true;
+      // shapes spread past their squares (volcano slopes, cliffs): only spawn on clear flat ground
+      if (!nearPit && !hitsWall(T, x + 0.5, y + 0.5, 0.5) && groundAt(T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
+    }
+  if (!spots.length) { // fallback: any open flat cell
+    for (let y = 1; y < MH - 1; y++)
+      for (let x = 1; x < MW - 1; x++) {
+        if (M[y][x] === '#' || hitsWall(T, x + 0.5, y + 0.5, 0.5)) continue;
+        if (groundAt(T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
+      }
+  }
+  return spots;
+}
+
 export class Room {
   constructor(hub, code, isPrivate) {
     this.hub = hub;
@@ -285,40 +319,13 @@ export class Room {
 
   // a random open spot on the main walkable area, preferring ones far from everyone in `avoid`
   spawnPos(avoid) {
-    const M = this.map, spots = [];
-    const reach = Array.from({ length: MH }, () => Array(MW).fill(false));
-    const q = [];
-    if (M[1][1] !== '#') { reach[1][1] = true; q.push([1, 1]); }
-    while (q.length) {
-      const [cx, cy] = q.pop();
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx >= MW || ny >= MH || reach[ny][nx] || M[ny][nx] === '#') continue;
-        reach[ny][nx] = true;
-        q.push([nx, ny]);
-      }
-    }
-    for (let y = 1; y < MH - 1; y++)
-      for (let x = 1; x < MW - 1; x++) {
-        if (M[y][x] !== '.' || !reach[y][x]) continue;
-        let nearPit = false;
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (M[y + dy][x + dx] === 'L') nearPit = true;
-        // shapes spread past their squares (volcano slopes, cliffs): only spawn on clear flat ground
-        if (!nearPit && !hitsWall(this.T, x + 0.5, y + 0.5, 0.5) && groundAt(this.T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
-      }
-    if (!spots.length) { // fallback: any open flat cell
-      for (let y = 1; y < MH - 1; y++)
-        for (let x = 1; x < MW - 1; x++) {
-          if (M[y][x] === '#' || hitsWall(this.T, x + 0.5, y + 0.5, 0.5)) continue;
-          if (groundAt(this.T, x + 0.5, y + 0.5) < 0.05) spots.push({ x: x + 0.5, y: y + 0.5 });
-        }
-    }
-    if (!avoid.length) return spots[Math.floor(Math.random() * spots.length)];
+    const spots = SPAWN_SPOTS[this.level] ||= spawnSpots(this.map, this.T);
+    if (!spots.length) return undefined;
+    if (!avoid.length) return { ...spots[Math.floor(Math.random() * spots.length)] };
     // pick one of the 10 spots furthest from the nearest enemy
     const gap = s => Math.min(...avoid.map(o => Math.hypot(s.x - o.x, s.y - o.y)));
-    spots.forEach(s => s.gap = gap(s));
-    spots.sort((a, b) => b.gap - a.gap);
-    return spots[Math.floor(Math.random() * Math.min(10, spots.length))];
+    const far = spots.map(s => ({ s, gap: gap(s) })).sort((a, b) => b.gap - a.gap);
+    return { ...far[Math.floor(Math.random() * Math.min(10, far.length))].s };
   }
 
   // --- players ---

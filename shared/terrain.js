@@ -501,9 +501,14 @@ function openGroundAt(T, x, y) {
   return h00 * (1 - u) * (1 - v) + h10 * u * (1 - v) + h01 * (1 - u) * v + h11 * u * v;
 }
 
+// just the huts, cached on the terrain: walkHeight runs this thousands of times a tick and
+// swamp maps have hundreds of trees in props
+function hutsOf(T) {
+  return T.huts ||= (T.props || []).filter(p => p.type === 'hut');
+}
+
 function underHutFloor(T, x, y) {
-  for (const p of T.props || []) {
-    if (p.type !== 'hut') continue;
+  for (const p of hutsOf(T)) {
     // inset past wall thickness so side walls stay solid for bullets / walking
     const hw = (p.w || 2.2) / 2 - 0.28, hd = (p.d || 2.2) / 2 - 0.28;
     const fullHd = (p.d || 2.2) / 2;
@@ -520,8 +525,7 @@ function underHutFloor(T, x, y) {
 }
 
 function underHutRoof(T, x, y) {
-  for (const p of T.props || []) {
-    if (p.type !== 'hut') continue;
+  for (const p of hutsOf(T)) {
     // slightly past the walls so eaves still count as a ceiling
     const hw = (p.w || 2.2) / 2 + 0.1, hd = (p.d || 2.2) / 2 + 0.1;
     if (Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd) return p;

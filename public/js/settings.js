@@ -20,7 +20,6 @@ export const ACTIONS = {
   respawn: ['Respawn if stuck', 'KeyK'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
-  clip: ['Save clip (last 12s)', 'F9'],
 };
 // ads: right click scopes while held ('hold') or until clicked again ('toggle');
 // voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
@@ -183,7 +182,7 @@ export function showControlsHint() {
     return;
   }
   el.textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('clip')} clip | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {
