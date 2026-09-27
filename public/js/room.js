@@ -406,7 +406,7 @@ export function showRoom() {
     tag.className = 'tag';
     const side = teams || (r.mode === 'plague' && r.gameOn) ? teamName(r.mode, p.team) + ' · ' : '';
     const skin = r.mode === 'plague' && r.gameOn && p.team === PLAGUE_TEAM ? 'Monster' : PLAYER_SKIN_NAMES[p.skin] || 'Witch';
-    const botLvl = p.bot && p.level ? p.level.toUpperCase() + ' · ' : '';
+    const botLvl = p.bot && p.level ? p.level.toUpperCase() + ' · ' + (p.personality ? p.personality.toUpperCase() + ' · ' : '') : '';
     tag.textContent = side + botLvl + skin + (p.bot ? '' : ' · ' + (p.ready ? 'READY' : 'NOT READY'));
     li.append(name, tag);
     if (p.bot && !r.gameOn) {

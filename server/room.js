@@ -5,7 +5,7 @@ import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_W
 import { LEVELS, LEVEL_NAMES, FEATURED_LEVELS, MW, MH } from '../shared/levels.js';
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
-import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName } from './bot.js';
+import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
 import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
@@ -205,7 +205,7 @@ export class Room {
       gameOn: this.gameOn, bots: BOTS, max: this.max, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
       winScore: this.winScore, teamWinScore: this.teamWinScore, hardpoint: this.hardpointSnapshot(),
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null, modeVote: p.modeVote || null })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
   }
 
   // --- level / pickups ---
@@ -438,7 +438,8 @@ export class Room {
     const name = randomBotName(taken);
     const knife = Math.random() < KNIFE_CHANCE;
     const nadeBot = !knife && this.mode !== 'snipers' && Math.random() < NADE_CHANCE;
-    const bot = { id, bot: true, name, level, skin, knife, nadeBot, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
+    const personality = knife ? 'knife' : nadeBot ? 'potions' : randomPersonality();
+    const bot = { id, bot: true, name, level, skin, knife, nadeBot, personality, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
     return true;

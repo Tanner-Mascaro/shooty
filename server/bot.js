@@ -16,8 +16,28 @@ export const BOT_LEVELS = {
   hard:   { speed: 3.0, sprint: 3.6, sight: 32, reaction: 200, fireGap: 220, aim: 0.025, turn: 11 },
 };
 
-export const KNIFE_CHANCE = 0.25;
-export const NADE_CHANCE = 0.2;
+export const KNIFE_CHANCE = 0.2;
+export const NADE_CHANCE = 0.15;
+
+// how gun bots like to fight (knife and potion bots are their own kinds):
+//   guns   favorite guns, sought out and used first     range  scales how close it fights
+//   rush   always sprints and hops                        camp   holds spots it reaches for a while
+//   hunt   goes to where it last saw you                  heal   heads for health below this share of hp
+//   sight  scales how far it sees                         weight how common it is
+export const PERSONALITIES = {
+  soldier: { weight: 3 },
+  rusher: { weight: 2, guns: ['shotgun', 'uzi', 'smg', 'carbine', 'burst'], range: 0.55, rush: true, hunt: true },
+  sniper: { weight: 2, guns: ['sniper', 'crossbow', 'beam', 'revolver', 'deagle'], range: 1.25, camp: true },
+  survivor: { weight: 2, heal: 0.45 },
+  hunter: { weight: 1, hunt: true, sight: 1.25 },
+};
+export function randomPersonality() {
+  const all = Object.entries(PERSONALITIES), total = all.reduce((n, [, v]) => n + v.weight, 0);
+  let r = Math.random() * total;
+  for (const [name, v] of all) if ((r -= v.weight) < 0) return name;
+  return 'soldier';
+}
+const LONG_GUNS = ['sniper', 'crossbow', 'beam'];
 
 const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0;
 const GUN_RANGES = {
@@ -212,8 +232,10 @@ function canSee(T, p, o, sight) {
   return true;
 }
 
-function botGun(p, b, d) {
+export function botGun(p, b, d, P) {
   const guns = Object.keys(p.mag);
+  const liked = P && P.guns && P.guns.find(w => guns.includes(w));
+  if (liked) return liked;
   if (guns.includes(b.weapon)) return b.weapon;
   return guns.includes('sniper') && d > 5 ? 'sniper'
     : guns.includes('beam') && d > 4 ? 'beam'
@@ -221,8 +243,8 @@ function botGun(p, b, d) {
     : guns.find(w => w !== 'pistol') || guns[0];
 }
 
-function engagementPoint(p, foe, gun, side) {
-  const [min, max] = GUN_RANGES[gun] || GUN_RANGES.pistol;
+// somewhere between min and max from the foe, circling it a little once in range
+function engagementPoint(p, foe, [min, max], side) {
   const dx = p.x - foe.x, dy = p.y - foe.y, d = Math.hypot(dx, dy) || 1;
   const ux = dx / d, uy = dy / d;
   const distance = Math.max(min + 0.4, Math.min(max - 0.6, d));
@@ -287,12 +309,14 @@ function pickGoal(game, p) {
 // one server tick of thinking, moving and shooting
 export function botTick(game, p) {
   const T = game.T, b = p.brain, dt = TICK / 1000, now = Date.now(), L = BOT_LEVELS[p.level] || BOT_LEVELS.medium;
+  const P = PERSONALITIES[p.personality] || PERSONALITIES.soldier, sight = L.sight * (P.sight || 1);
+  const ranges = gun => (GUN_RANGES[gun] || GUN_RANGES.pistol).map(v => v * (P.range || 1));
   // gun game: everyone fights with their rung of the ladder, so no knife-only or potion bots
   const gunGame = game.mode === 'gungame';
   const knife = gunGame ? gunGameGun(p.gunLevel) === 'blade' : p.knife, nadeBot = !gunGame && p.nadeBot;
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
   const hill = game.mode === 'hardpoint' ? game.hardpointTarget(now) : null;
-  const visibleEnemies = game.enemies(p).filter(o => canSee(T, p, o, L.sight));
+  const visibleEnemies = game.enemies(p).filter(o => canSee(T, p, o, sight));
   const foe = visibleEnemies.sort((x, y) => {
     const xThreat = hill && Math.hypot(x.x - hill.x, x.y - hill.y) <= hill.radius + 5 ? 0 : 1;
     const yThreat = hill && Math.hypot(y.x - hill.x, y.y - hill.y) <= hill.radius + 5 ? 0 : 1;
@@ -315,7 +339,16 @@ export function botTick(game, p) {
       && o.z - walkHeight(T, o.x, o.y, o.z) <= 0.55)
     .sort((a, c) => (a.bot ? 1 : 0) - (c.bot ? 1 : 0) || a.id - c.id)[0];
   const leadBot = hill && game.list.filter(o => o.bot && o.team === p.team).sort((a, c) => a.id - c.id)[0];
-  const selectedGun = botGun(p, b, foe ? dist(foe) : 10);
+  const selectedGun = botGun(p, b, foe ? dist(foe) : 10, P);
+  // survivors limp to a health pickup when badly hurt
+  const heal = P.heal && p.hp < game.maxHp(p) * P.heal && game.pickups
+    .filter(pu => pu.active && pu.weapon === 'health' && dist(pu) < 35).sort((a, c) => dist(a) - dist(c))[0];
+  const healGoal = heal && !game.isInfected(p)
+    ? hardpointWaypoint(T, p, { index: 'heal', x: Math.floor(heal.x) + 0.5, y: Math.floor(heal.y) + 0.5 }, b, 'heal', b.stuck > 10) : null;
+  // hunters and rushers go to where they last saw someone
+  const lastSeen = P.hunt && !foe && b.lastSeen && now - b.lastSeen.at < 6000 && Math.hypot(b.lastSeen.x - p.x, b.lastSeen.y - p.y) > 1.5 ? b.lastSeen : null;
+  const huntGoal = lastSeen
+    ? hardpointWaypoint(T, p, { index: 'hunt', x: Math.floor(lastSeen.x) + 0.5, y: Math.floor(lastSeen.y) + 0.5 }, b, 'hunt', b.stuck > 10) : null;
   p.vx = p.vx || 0; p.vy = p.vy || 0;
 
   // Infected pursue reachable survivors; knife / nade bots chase until a blocked path makes them wander.
@@ -323,11 +356,12 @@ export function botTick(game, p) {
   let tacticalGoal = null, holdInCover = false;
   b.combatSprint = false;
   if (foe && !infected && !knife && !nadeBot && selectedGun) {
-    const d = dist(foe), [min, max] = GUN_RANGES[selectedGun] || GUN_RANGES.pistol;
-    if (b.coverGoal && (selectedGun !== 'sniper' || b.coverTarget !== foe.id)) b.coverGoal = null;
-    if (selectedGun === 'sniper' && (!b.coverGoal || now >= b.coverUntil || b.coverTarget !== foe.id) && now >= (b.coverSearchAt || 0)) {
+    const d = dist(foe), [min, max] = ranges(selectedGun);
+    const coverFighter = selectedGun === 'sniper' || P.camp && LONG_GUNS.includes(selectedGun);
+    if (b.coverGoal && (!coverFighter || b.coverTarget !== foe.id)) b.coverGoal = null;
+    if (coverFighter && (!b.coverGoal || now >= b.coverUntil || b.coverTarget !== foe.id) && now >= (b.coverSearchAt || 0)) {
       b.coverSearchAt = now + 5000;
-      const cover = findCover(T, p, foe, L.sight, min, max);
+      const cover = findCover(T, p, foe, sight, min, max);
       if (cover) {
         b.coverGoal = cover; b.coverTarget = foe.id; b.coverUntil = now + 7000;
         b.coverHoldUntil = 0;
@@ -340,7 +374,7 @@ export function botTick(game, p) {
         b.combatSide = Math.random() < 0.5 ? -1 : 1;
         b.combatSideUntil = now + 1800;
       }
-      tacticalGoal = engagementPoint(p, foe, selectedGun, b.combatSide || 1);
+      tacticalGoal = engagementPoint(p, foe, [min, max], b.combatSide || 1);
       b.combatSprint = d < min - 0.5 || d > max + 0.5;
     }
   } else if (!foe && b.coverGoal) {
@@ -355,11 +389,15 @@ export function botTick(game, p) {
       }
     }
   }
-  const needsGun = !gunGame && !infected && !knife && !nadeBot && Object.keys(p.mag).length < GUN_SLOTS;
-  // nearest first, so clearPath (the costly part) usually runs once instead of for every crate
+  // bots with favorite guns go get one even with their hands full (walking over it swaps it in)
+  const likes = w => !!(P.guns && P.guns.includes(w));
+  const handsFull = Object.keys(p.mag).length >= GUN_SLOTS, noFavorite = P.guns && !Object.keys(p.mag).some(likes);
+  const needsGun = !gunGame && !infected && !knife && !nadeBot && (!handsFull || noFavorite);
+  // nearest first (favorites count as closer), so clearPath (the costly part) usually runs once
+  const pull = pu => dist(pu) - (likes(pu.weapon) ? 12 : 0);
   const gunPickup = needsGun && game.pickups
-    .filter(pu => pu.active && pu.gun && pu.crate && p.mag[pu.weapon] === undefined)
-    .sort((a, c) => dist(a) - dist(c))
+    .filter(pu => pu.active && pu.gun && pu.crate && p.mag[pu.weapon] === undefined && (!handsFull || likes(pu.weapon)))
+    .sort((a, c) => pull(a) - pull(c))
     .find(pu => clearPath(T, p, pu));
   const rememberedThreat = !foe && hill && b.lastSeen && now - b.lastSeen.at <= 1800
     && Math.hypot(b.lastSeen.x - hill.x, b.lastSeen.y - hill.y) <= hill.radius + 5 ? b.lastSeen : null;
@@ -368,7 +406,7 @@ export function botTick(game, p) {
   const shouldFightForHill = hillAnchor ? hillAnchor !== p : leadBot === p;
   const combatDestination = combatTarget && (tacticalGoal || (
     selectedGun && !knife && !nadeBot
-      ? engagementPoint(p, combatTarget, selectedGun, b.combatSide || 1)
+      ? engagementPoint(p, combatTarget, ranges(selectedGun), b.combatSide || 1)
       : { x: combatTarget.x, y: combatTarget.y }
   ));
   const combatRouteTarget = combatDestination && {
@@ -382,6 +420,10 @@ export function botTick(game, p) {
   if (zoneGoal) {
     b.goal = zoneGoal;
     b.pickupGoal = false;
+    b.combatGoal = false;
+  } else if (healGoal) {
+    b.goal = healGoal;
+    b.pickupGoal = true;
     b.combatGoal = false;
   } else if (hardpointCombatGoal) {
     b.goal = hardpointCombatGoal;
@@ -404,6 +446,10 @@ export function botTick(game, p) {
     b.goal = tacticalGoal;
     b.pickupGoal = false;
     b.combatGoal = true;
+  } else if (huntGoal) {
+    b.goal = huntGoal;
+    b.pickupGoal = false;
+    b.combatGoal = true;
   } else if (gunPickup) {
     b.goal = { x: gunPickup.x, y: gunPickup.y };
     b.pickupGoal = true;
@@ -411,18 +457,22 @@ export function botTick(game, p) {
   if (infected && chasing && b.target === foe.id && b.seenAt && now - b.seenAt >= L.reaction && dist(foe) > 3 && dist(foe) < 6)
     game.dash(p, foe.x - p.x, foe.y - p.y, now);
   // move toward the current goal, picking a new one on arrival or when blocked
-  if (!zoneGoal && !hardpointGoal && !hardpointHold && !chasing && !tacticalGoal && !gunPickup && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10 || b.pickupGoal || b.combatGoal)) {
-    b.goal = pickGoal(game, p); b.stuck = 0; b.pickupGoal = false; b.combatGoal = false;
+  let camping = false;
+  if (!zoneGoal && !healGoal && !huntGoal && !hardpointGoal && !hardpointHold && !chasing && !tacticalGoal && !gunPickup && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10 || b.pickupGoal || b.combatGoal)) {
+    // campers hold each spot they reach for a few seconds, scanning, before moving on
+    if (P.camp && b.goal && !b.campUntil && b.stuck <= 10 && !b.pickupGoal && !b.combatGoal) b.campUntil = now + 3500 + Math.random() * 4000;
+    if (P.camp && now < (b.campUntil || 0)) { b.goal = null; camping = true; }
+    else { b.campUntil = 0; b.goal = pickGoal(game, p); b.stuck = 0; b.pickupGoal = false; b.combatGoal = false; }
   }
 
-  let heading = p.a;
+  let heading = camping ? Math.atan2(MH / 2 - p.y, MW / 2 - p.x) + Math.sin(now / 1400) * 0.9 : p.a;
   const stopClose = hardpointHold && !hardpointCombatGoal
     || (!hardpointGoal && !hardpointHold && (holdInCover || chasing && foe && dist(foe) < (infected ? WEAPONS.claws.range * 0.65 : nadeBot ? 4 : 0.8)));
   let wx = 0, wy = 0;
   if (b.goal && !stopClose) {
     heading = Math.atan2(b.goal.y - p.y, b.goal.x - p.x);
     // air-strafe only for hoppers; walkers keep a straight wish dir
-    if (!p.onGround && b.bhop) {
+    if (!p.onGround && (b.bhop || P.rush)) {
       if (Math.random() < 0.04) b.strafe = -b.strafe;
       const side = heading + b.strafe * (Math.PI / 2);
       wx = Math.cos(heading) * 0.7 + Math.cos(side) * 0.7;
@@ -434,7 +484,7 @@ export function botTick(game, p) {
     wx /= wl; wy /= wl;
   }
 
-  const sprinting = !!zoneGoal || !!hardpointGoal || chasing || knife || nadeBot || infected || b.pickupGoal || b.combatSprint;
+  const sprinting = !!zoneGoal || !!healGoal || !!huntGoal || P.rush || !!hardpointGoal || chasing || knife || nadeBot || infected || b.pickupGoal || b.combatSprint;
   let wishSpeed = sprinting ? L.sprint : L.speed;
   if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
   else if (knife && chasing) wishSpeed = L.sprint * 1.12;
@@ -450,7 +500,7 @@ export function botTick(game, p) {
     }
     const spd = Math.hypot(p.vx, p.vy);
     // only some bots bunny-hop; the rest just sprint/walk on the ground
-    const wantJump = b.bhop && sprinting && !!(wx || wy) && (spd > wishSpeed * 0.8 || !p.onGround);
+    const wantJump = (b.bhop || P.rush) && sprinting && !!(wx || wy) && (spd > wishSpeed * 0.8 || !p.onGround);
     tryJump(p, wantJump, infected ? PLAGUE_JUMPS : 1);
     if (!p.onGround && (wx || wy)) airAccelerate(p, wx, wy, wishSpeed, dt);
   }
@@ -545,7 +595,7 @@ export function botTick(game, p) {
     game.handlers.shoot.call(game, p, { weapon: 'blade' });
     return;
   }
-  const gun = botGun(p, b, d);
+  const gun = botGun(p, b, d, P);
   if (!gun) return; // out of ammo altogether
   if (!(p.mag[gun] > 0)) { // out: reload, a little after the last shot like a player would
     if (now - (p.lastShot[gun] || 0) >= WEAPONS[gun].reload) game.handlers.reload.call(game, p, { weapon: gun });
