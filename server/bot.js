@@ -4,7 +4,7 @@
 // Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
 // Some (NADE_CHANCE) get endless grenades and just lob them.
 // Movement uses the same accelerate / air-strafe / hold-jump bhop model as players.
-import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, BUILDS, rampLevels, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
+import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, BUILDS, rampLevels, canBuildIn, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
 import { kindAt, walkHeight, solidAt } from '../shared/terrain.js';
@@ -362,7 +362,7 @@ export function botTick(game, p) {
   }
   // now and then in a fight, conjure a ramp toward the foe and run up it for height (snipers
   // love this); it also soaks up shots aimed low
-  if (foe && game.gameOn && !infected && (p.mana ?? 0) >= BUILDS.ramp.mana && now >= (b.nextRamp || 0) && dist(foe) > 5 && dist(foe) < 20) {
+  if (foe && game.gameOn && canBuildIn(game.mode) && !infected && (p.mana ?? 0) >= BUILDS.ramp.mana && now >= (b.nextRamp || 0) && dist(foe) > 5 && dist(foe) < 20) {
     b.nextRamp = now + 6000 + Math.random() * 8000;
     const at = aimBuild('ramp', p.x, p.y, Math.atan2(foe.y - p.y, foe.x - p.x), game.builds);
     if (Math.random() < (P.camp ? 0.8 : 0.4) && fitsLevels(at.base, rampLevels(game.level)) && canBuild(T, 'ramp', at.x, at.y, at.dir)) {

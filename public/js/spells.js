@@ -2,7 +2,7 @@
 // back) holsters your gun and shows where a ramp would go; click to conjure one. Stand on a ramp
 // facing the same way to stack the next one on top. The spell keys cast what's stored in those
 // slots. The server checks mana and room and has the final say.
-import { BUILDS, rampLevels } from '/shared/config.js';
+import { BUILDS, rampLevels, canBuildIn } from '/shared/config.js';
 import { aimBuild, canBuild, fitsLevels } from '/shared/spells.js';
 import { S } from './state.js';
 import { send } from './net.js';
@@ -19,8 +19,10 @@ export function buildPlan() {
   return { kind: 'ramp', ...at, ok };
 }
 
+export const buildingAllowed = () => canBuildIn(S.room?.mode);
+
 export function setBuildMode(on) {
-  on = !!on && canCast();
+  on = !!on && canCast() && buildingAllowed();
   if (on === S.buildMode) return;
   S.buildMode = on;
   S.scoped = false; S.reloading = null; S.mouseHeld = false;

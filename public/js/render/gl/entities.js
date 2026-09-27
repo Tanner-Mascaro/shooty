@@ -196,7 +196,7 @@ export function drawPickupBillboards(now) {
   for (const n of S.thrown) {
     const bob = 0.04 * Math.sin(now / 70 + n.id);
     const spr = acquire(nadePool, makeSprite);
-    setBillboard(spr, nadeTex, n.x, n.y, n.z + bob, nadeSp.w * 1.15, nadeSp.h * 1.15, false);
+    setBillboard(spr, nadeTex, n.x, n.y, n.z + bob, nadeSp.w * 1.7, nadeSp.h * 1.7, false); // big enough to spot in flight
     if (nadeSp.src) { spr.material.opacity = 1; spr.material.alphaTest = 0.15; }
   }
 }

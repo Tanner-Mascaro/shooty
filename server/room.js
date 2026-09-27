@@ -7,7 +7,7 @@ import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } fro
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
-import { rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN } from '../shared/config.js';
+import { canBuildIn, rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN } from '../shared/config.js';
 import { RAMP, canBuild, applyBuild, removeBuild, touchesBuild, rampUnder, fitsLevels } from '../shared/spells.js';
 import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
@@ -835,7 +835,7 @@ export class Room {
       mn: Math.floor(p.mana ?? MAX_MANA),
       ...(p.dead ? { dead: true } : {}), ...(gunGame ? { gl: p.gunLevel || 0 } : {}) }));
     this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs,
-      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
+      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z, f: Math.max(0, Math.round(n.until - Date.now())) })) });
   }
 
   stepNades(dt, now) {
@@ -984,7 +984,7 @@ Room.prototype.handlers = {
     if (this.mode === 'teams') {
       if (!TEAM_WIN_SCORE_OPTIONS.includes(n) || n === this.teamWinScore) return;
       this.teamWinScore = n;
-    } else if (this.mode === 'ffa' || this.mode === 'snipers') {
+    } else if (this.mode === 'ffa' || this.mode === 'snipers' || this.mode === 'build') {
       if (!WIN_SCORE_OPTIONS.includes(n) || n === this.winScore) return;
       this.winScore = n;
     } else return;
@@ -1133,6 +1133,7 @@ Room.prototype.handlers = {
     if (!this.gameOn || p.dead || this.isInfected(p)) return;
     const now = Date.now();
     if (BUILDS[msg.build]) {
+      if (!canBuildIn(this.mode)) return;
       const cost = BUILDS[msg.build].mana;
       if (![msg.x, msg.y].every(Number.isFinite) || !Number.isInteger(msg.dir) || msg.dir < 0 || msg.dir > 3) return;
       if (Math.hypot(msg.x - p.x, msg.y - p.y) > 6 || (p.mana ?? MAX_MANA) < cost) return;

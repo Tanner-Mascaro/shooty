@@ -71,8 +71,9 @@ test('hunters go to where they last saw someone', () => {
   assert.ok(Math.hypot(spot.x - bot.x, spot.y - bot.y) < start - 2);
 });
 
-test('bots conjure ramps in a fight and run up them', () => {
+test('bots conjure ramps in a fight in Build Battle and run up them', () => {
   const { room, bot, person } = game('sniper');
+  room.mode = 'build';
   // an open run east with the target in plain sight at the far end
   let spot = null;
   for (let i = 0; i < 800 && !spot; i++) {

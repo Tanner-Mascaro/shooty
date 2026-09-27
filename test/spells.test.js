@@ -5,7 +5,7 @@ import { walkHeight, kindAt } from '../shared/terrain.js';
 import { aimBuild, canBuild, RAMP } from '../shared/spells.js';
 import { MAX_HP, MAX_MANA, BUILDS, SPELL_SLOTS, HEAL_SPELL, WARD, WEAPONS, RAMP_STACK } from '../shared/config.js';
 
-function game(count = 2) {
+function game(count = 2, mode = 'build') {
   const messages = [];
   const hub = {
     nextId: count, name: p => p.name, who: p => p.name,
@@ -15,6 +15,7 @@ function game(count = 2) {
   };
   const room = new Room(hub, 'MAGIC', true);
   for (let id = 0; id < count; id++) room.add({ id, name: `Player ${id}`, skin: 'witch' });
+  room.handlers.mode.call(room, room.list[0], { mode });
   room.startGame();
   return { room, events: (type, id = 0) => messages.filter(m => m.to === id && m.msg.type === type).map(m => m.msg) };
 }
@@ -131,6 +132,15 @@ test('scrolls store up to three spells; heal, ward and haste work', () => {
   assert.ok(me.hasteUntil > Date.now());
   assert.deepEqual(me.spells, []);
   assert.equal(events('spell').length, 3);
+});
+
+test('ramps only go up in Build Battle', () => {
+  const { room } = game(2, 'ffa');
+  const [me, other] = room.list;
+  clearing(room, me, [other]);
+  cast(room, me, 'ramp');
+  assert.equal(room.builds.length, 0);
+  assert.equal(me.mana, MAX_MANA);
 });
 
 test('the infected cannot cast', () => {

@@ -10,8 +10,8 @@ import { syncCamera } from './gl/camera.js';
 import { beginEntities, endEntities, drawPickupBillboards, drawOthersAndCorpses, drawParticlePoints } from './gl/entities.js';
 import { drawZone } from './gl/zone.js';
 import { drawBuilds } from './gl/builds.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawHotbar } from './hud.js';
-import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawHotbar, drawPotionWarnings } from './hud.js';
+import { updateEmbers, volcanoPlumes, potionTrails, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
 import { colors } from '../level.js';
@@ -71,7 +71,7 @@ export function render(dt) {
   setupCamera();
   syncCamera();
 
-  if (S.started) { updateEmbers(); volcanoPlumes(dt); }
+  if (S.started) { updateEmbers(); volcanoPlumes(dt); potionTrails(dt); }
   S.embers = stepParticles(S.embers, dt);
   S.particles = stepParticles(S.particles, dt);
   updateCorpses(now, dt);
@@ -92,6 +92,7 @@ export function render(dt) {
   drawEnemyGlows(now);
   drawNameTags();
   drawHardpointMarker();
+  drawPotionWarnings(now);
   if (!S.dead && !S.buildMode) drawWeaponView(now); // build mode holsters the gun
   drawHitMarker();
   drawFlashes();

@@ -13,6 +13,17 @@ export function burst(x, y, z, n, kind) {
   }
 }
 
+// a glowing violet trail behind every potion in flight, so you can see them coming
+export function potionTrails(dt) {
+  for (const n of S.thrown) {
+    if (Math.random() > 40 * dt) continue;
+    const life = 0.35 + Math.random() * 0.3;
+    S.particles.push({ x: n.x + (Math.random() - 0.5) * 0.1, y: n.y + (Math.random() - 0.5) * 0.1, z: n.z + (Math.random() - 0.5) * 0.1,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3, vz: 0.2, g: 0,
+      life, max: life, col: Math.random() < 0.5 ? [200, 120, 255] : [255, 180, 255], size: 0.05, emit: true });
+  }
+}
+
 export function updateEmbers() {
   const me = S.me, c = S.theme.ambient;
   while (S.embers.length < 55) {

@@ -358,11 +358,12 @@ export function showRoom() {
     : r.mode === 'hardpoint' ? `Red vs blue. Hold the rotating hill for 1 point per second. Contested hills stop scoring; first to ${HARDPOINT_SCORE_LIMIT} wins or the leader at ${Math.floor(HARDPOINT_MATCH_MS / 60000)}:${String(Math.floor(HARDPOINT_MATCH_MS / 1000) % 60).padStart(2, '0')}.`
     : r.mode === 'teams' ? `Red vs blue. First team to ${teamWin} kills wins.`
     : r.mode === 'snipers' ? `Sniper, crossbow, and beam rifle only. First to ${win} kills wins.`
+    : r.mode === 'build' ? `Every player for themselves, with Earth Ramps: press build mode, click to raise one, stack them for height. First to ${win} kills wins.`
     : r.mode === 'gungame' ? `Every kill hands you the next gun, ${GUN_GAME_LADDER.length} in all. A kill with the final blade wins; getting stabbed knocks you back one.`
     : r.mode === 'royale' ? 'One life each. Loot guns from crates and the fallen while the storm closes in. Last one standing wins.'
     : `Every player for themselves. First to ${win} kills wins.`;
   document.body.classList.toggle('snipers', r.mode === 'snipers');
-  const scoreOn = r.mode === 'ffa' || r.mode === 'snipers' || r.mode === 'teams';
+  const scoreOn = r.mode === 'ffa' || r.mode === 'snipers' || r.mode === 'teams' || r.mode === 'build';
   $('scoreSetup').hidden = !scoreOn;
   $('scorePick').hidden = r.mode === 'teams';
   $('teamScorePick').hidden = r.mode !== 'teams';

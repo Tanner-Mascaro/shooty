@@ -1,13 +1,15 @@
 // Everything drawn at full resolution on top of the 3D view: tracers, glows, the gun,
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
-import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS } from '/shared/config.js';
+import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS, NADE } from '/shared/config.js';
 import { S, spare, isEnemy, nameOf } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, SPELL_LOOK, MAX_SPEED } from '../constants.js';
 import { pickupSprite } from './sprites.js';
+import { buildingAllowed } from '../spells.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
+import { walkHeight } from '/shared/terrain.js';
 import { inPit } from '../physics.js';
 import { settings, keyName } from '../settings.js';
 import { slotWeapon, gunToDrop } from '../weapons.js';
@@ -73,7 +75,7 @@ export function drawPickupGlows() {
     const q = project(n.x, n.y, n.z);
     if (q.f < 0.3 || occluded(q)) continue;
     const pulse = 0.55 + 0.45 * Math.sin(performance.now() / 90 + n.id);
-    glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(122,80,136,' + (0.3 + 0.25 * pulse) + ')');
+    glow(q.x, q.y, (380 * pulse) / q.f + 12, 'rgba(190,110,255,' + (0.45 + 0.3 * pulse) + ')');
   }
 }
 
@@ -561,7 +563,7 @@ export function drawHotbar(now) {
         sub: !w ? '' : w === 'blade' ? 'BLADE' : S.mag[w] + ' / ' + spare(w) };
     }),
     [{ keyName: key('nade'), potion: true, col: GUN_COLOR.nade, on: S.nades > 0, sub: '× ' + (S.nades || 0) }],
-    [{ keyName: key('build'), label: 'RAMP', sub: BUILDS.ramp.mana + ' MANA', col: [190, 150, 255], on: S.mana >= BUILDS.ramp.mana, held: S.buildMode }],
+    ...(buildingAllowed() ? [[{ keyName: key('build'), label: 'RAMP', sub: BUILDS.ramp.mana + ' MANA', col: [190, 150, 255], on: S.mana >= BUILDS.ramp.mana, held: S.buildMode }]] : []),
     Array.from({ length: SPELL_SLOTS }, (_, i) => {
       const sp = S.spells[i], look = sp && SPELL_LOOK[sp];
       return { keyName: key('spell' + (i + 1)), label: sp ? look.rune + ' ' + sp.toUpperCase() : '—', sub: '', col: look ? look.col : [120, 110, 100], on: !!sp };
@@ -603,4 +605,23 @@ export function drawHotbar(now) {
     ctx.fillText(`${name} ${((until - now) / 1000).toFixed(1)}s`, W / 2 + (i - (effects.length - 1) / 2) * 110, H - (bh + 22) * sc);
   });
   ctx.textAlign = 'left';
+}
+
+// a ring on the ground around every potion in flight: its blast radius, flashing faster as the
+// fuse runs down (f is the ms left, from the server)
+export function drawPotionWarnings(now) {
+  for (const n of S.thrown || []) {
+    const fuse = Math.max(0, Math.min(1, (n.f ?? NADE.fuse) / NADE.fuse)), ground = walkHeight(S.T, n.x, n.y, n.z) + 0.05;
+    const blink = 0.5 + 0.5 * Math.sin(now / (40 + 120 * fuse));
+    ctx.strokeStyle = `rgba(230,90,255,${0.35 + 0.5 * blink})`; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    let pen = false;
+    for (let i = 0; i <= 40; i++) {
+      const a = i / 40 * Math.PI * 2, q = project(n.x + Math.cos(a) * NADE.radius, n.y + Math.sin(a) * NADE.radius, ground);
+      if (q.f < 0.15) { pen = false; continue; } // behind you: break the line
+      if (pen) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
+      pen = true;
+    }
+    ctx.stroke();
+  }
 }

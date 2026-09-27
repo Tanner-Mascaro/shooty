@@ -47,6 +47,7 @@ The ⚙ button (top right, or P in a match) sets the frame rate limit, FPS count
 - **Rooms:** every game is a room with a short code, and the address bar is its invite link (`/?room=ABCDE`). **Quick play** puts you in any public room with space; **New private room** makes one only people with the link (or an invite) can join. Up to 8 players; you can join a match in progress.
 - **Free-for-all:** first to 10 kills wins. **Teams:** red vs blue, first team to 20 kills; bullets pass through teammates. Pick a team in the lobby, or the game splits everyone if one side is empty.
 - **Gun Game:** every kill hands you the next gun on a 14-gun ladder (pistol up to sniper); a kill with the final blade wins. Getting stabbed knocks you back one gun. No gun pickups or potions; ammo crates still work.
+- **Build Battle:** free-for-all (first to the kill limit) where you can build: see Spells below. Building is only in this mode.
 - **Battle Royale:** one life each, up to 16 players: a room with bots fills the extra seats with more bots when the match starts. Everyone starts with a pistol and loots crates and the fallen while a storm closes in over four stages in under two minutes (hurting more each stage); the minimap shows the safe circle and where it's heading. Last one standing wins. People who join mid-match spectate.
 - **Dying:** you watch your killer from behind for 3 seconds before respawning (click to switch players when you're out of a Battle Royale). Plague still turns you into a monster on the spot.
 - **Kill streaks:** callouts for multi-kills (double, triple, …) and streaks (killing spree at 3, rampage at 5, up to legendary at 15), announced in the kill feed, plus a note when someone ends a streak of 3 or more.
@@ -86,10 +87,11 @@ Speed, sight range, reaction time, fire rate and aim error per difficulty are in
 
 ## Spells
 
-- **Build mode (X):** puts your gun away and shows where an **Earth Ramp** would land (violet if it fits, red if not); click to raise it. X again, a weapon key, the mouse wheel or right-click brings the gun back. Ramps snap to a half-square grid facing the way you look; they're mossy mounds of soil and roots with glowing mushrooms that rise out of the ground. Each costs mana (the purple bar under your health, refilling over time), can be shot or blown down, and crumbles after 30 seconds. They only go on open flat ground with nobody standing there.
+- **Build mode (X, Build Battle only):** puts your gun away and shows where an **Earth Ramp** would land (violet if it fits, red if not); click to raise it. X again, a weapon key, the mouse wheel or right-click brings the gun back. Ramps snap to a half-square grid facing the way you look; they're mossy mounds of soil and roots with glowing mushrooms that rise out of the ground. Each costs mana (the purple bar under your health, refilling over time), can be shot or blown down, and crumbles after 30 seconds. They only go on open flat ground with nobody standing there.
 - **Stacking:** stand on a ramp (or just past its top) facing the same way and the next ramp continues it upward, up to three high (one in the Hexed Manor, under its ceiling). Breaking a ramp brings down the ones on top of it.
 - **Stored spells (4, 5, 6):** carry up to three. **Med kits** go in a free slot as a **Heal** (+50 hp) to use when you want; with no free slot they heal you on the spot. **Spell scrolls** around every map hold **Heal**, **Haste** (move faster for 5 seconds) or **Ward** (soaks up 60 damage for 8 seconds). The hotbar shows what you're carrying.
-- **Bots** raise ramps in fights and run up them for height (snipers most of all), and use the spells and med kits they pick up.
+- **Bots** raise ramps in Build Battle fights and run up them for height (snipers most of all), and use the spells and med kits they pick up.
+- **Potions** you or others throw glow and leave a violet trail, and a ring on the ground shows their blast radius, flashing faster just before they burst.
 - The server checks every cast. A room builds on its own copy of the map, so builds never leak between rooms, and they're cleared for each new match. Costs, health, lifetimes, stacking and effects are in `shared/config.js`; the ramp shape is in `shared/spells.js`. Keys can be rebound in Settings.
 
 ## Maps

@@ -18,7 +18,9 @@ export const MAX_PLAYERS = 8;      // people per room (and seats, counting bots)
 export const ROYALE_MAX_PLAYERS = 16; // battle royale has room for this many, the extra seats for bots
 export const maxPlayers = mode => mode === 'royale' ? ROYALE_MAX_PLAYERS : MAX_PLAYERS;
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
-export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale' };
+export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale', build: 'Build Battle' };
+// modes where you can raise Earth Ramps (build mode, the ramp slot and the mana bar)
+export const canBuildIn = mode => mode === 'build';
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
 export const PLAGUE_TEAM = 1;
 export const HEALTHY_TEAM = 2;
