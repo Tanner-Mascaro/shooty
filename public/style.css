@@ -135,6 +135,7 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
   box-shadow:6px 6px 0 rgba(0,0,0,0.55); padding:22px 22px 18px;
   display:flex; flex-direction:column; gap:12px;
   animation:summaryIn .35s ease-out;
+  max-height:100%; overflow-y:auto;
 }
 @keyframes summaryIn {
   from { opacity:0; transform:translateY(12px); }
@@ -167,6 +168,16 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 #summaryBoard .team1 .name { color:#b05050; }
 #summaryBoard .team2 .name { color:#9a78b8; }
 body.plague #summaryBoard .team1 .name { color:#5a8a40; }
+#summaryVote { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; }
+.svLabel { font-size:10px; font-weight:600; letter-spacing:.16em; color:#9a9184; white-space:nowrap; }
+.svRow { display:flex; flex-wrap:wrap; gap:5px; }
+.svRow button {
+  font:600 11px/1 'Caslon Antique',Georgia,serif; letter-spacing:.06em; text-transform:uppercase;
+  padding:6px 8px 5px; cursor:pointer; color:#c8bda8; background:#24201b; border:1px solid #3a332a;
+}
+.svRow button:hover { border-color:#6a5c48; color:#ebe4d6; }
+.svRow button.leading { border-color:#c4a060; color:#ebe4d6; }
+.svRow button.mine { background:#3a2f1e; color:#e8c060; }
 #summaryActions { display:flex; gap:10px; margin-top:4px; }
 #summaryActions button { flex:1; }
 #summaryWait { text-align:center; font-size:13px; color:#c4a060; min-height:1em; }

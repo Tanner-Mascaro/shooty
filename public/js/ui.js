@@ -1,6 +1,6 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
 import { MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS, GUN_GAME_LADDER, gunGameGun } from '/shared/config.js';
-import { LEVEL_NAMES } from '/shared/levels.js';
+import { LEVEL_NAMES, FEATURED_LEVELS } from '/shared/levels.js';
 import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
 import { MAX_SPEED } from './constants.js';
@@ -116,6 +116,31 @@ export function showSummary({ headline, rematch, scores, mode, level, won, hardp
   summaryTimer = setTimeout(dismissSummary, 12000);
 }
 
+// vote buttons for the next map and mode (the same votes as the lobby); the leading one is outlined
+function showVotes() {
+  const r = S.room;
+  if (!r) return;
+  const me = r.players.find(p => p.id === S.myId);
+  const row = (el, keys, names, counts, mine, leading, vote) => el.replaceChildren(...keys.map(k => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = names[k] + (counts[k] ? ' · ' + counts[k] : '');
+    b.classList.toggle('mine', mine === k);
+    b.classList.toggle('leading', leading === k);
+    b.disabled = r.gameOn;
+    b.addEventListener('click', () => vote(k));
+    return b;
+  }));
+  row($('summaryMaps'), FEATURED_LEVELS, LEVEL_NAMES, r.votes || {}, me?.vote, r.level, level => castVote({ type: 'vote', level }));
+  row($('summaryModes'), Object.keys(MODE_NAMES), MODE_NAMES, r.modeVotes || {}, me?.modeVote, r.mode, mode => castVote({ type: 'mode', mode }));
+}
+
+function castVote(msg) {
+  clearTimeout(summaryTimer); // voting means you're staying for another round
+  send(msg);
+  if (rematchAsked) send({ type: 'ready' }); // a vote un-readies you; keep your rematch
+}
+
 function rematch() {
   if (rematchAsked) return;
   initAudio();
@@ -125,9 +150,11 @@ function rematch() {
   updateRematch();
 }
 
-// the REMATCH button and who it's waiting on; called again whenever the room changes
+// the REMATCH button, who it's waiting on and the map / mode votes for the next match; called
+// again whenever the room changes
 export function updateRematch() {
   if (summary.hidden) return;
+  showVotes();
   const btn = $('summaryRematch'), players = S.room?.players || [];
   const humans = players.filter(p => !p.bot), ready = humans.filter(p => p.ready).length;
   btn.disabled = rematchAsked || S.disconnected;
@@ -173,6 +200,8 @@ export function pushFeed(msg) {
   if (S.feed.length > 5) S.feed.shift();
   drawFeed();
 }
+export function clearFeed() { S.feed = []; drawFeed(); }
+
 // a line of text in the kill feed ("Hex Grim is on a RAMPAGE")
 export function pushNote(text) {
   S.feed.push({ text, t: performance.now() });

@@ -6,7 +6,7 @@ import { setLevel, colors } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, showMsg, showSummary, updateRematch, banner, callout, toast, pushFeed, pushNote } from './ui.js';
+import { showWait, hideWait, setWaitText, showMsg, showSummary, updateRematch, banner, callout, toast, pushFeed, pushNote, clearFeed } from './ui.js';
 import { enterSpectate, leaveSpectate } from './spectate.js';
 import { STREAK_NAMES, MULTI_NAMES } from './constants.js';
 import { prewarmWorld } from './render/gl/scene.js';
@@ -123,7 +123,7 @@ const handlers = {
     S.jumpsUsed = 0; S.jumpHeld = false; S.quickUntil = 0;
     S.dashUntil = 0; S.nextDash = 0;
     showControlsHint();
-    S.feed = [];
+    clearFeed();
     S.corpses = [];
     S.plagueEndsAt = performance.now() + (msg.plagueRemainingMs || 0);
     S.thrown = []; S.nades = 0;
