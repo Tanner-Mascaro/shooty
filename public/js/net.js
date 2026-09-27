@@ -6,7 +6,7 @@ import { setLevel, colors } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, showMsg, showSummary, banner, callout, toast, pushFeed, pushNote } from './ui.js';
+import { showWait, hideWait, setWaitText, showMsg, showSummary, updateRematch, banner, callout, toast, pushFeed, pushNote } from './ui.js';
 import { enterSpectate, leaveSpectate } from './spectate.js';
 import { STREAK_NAMES, MULTI_NAMES } from './constants.js';
 import { prewarmWorld } from './render/gl/scene.js';
@@ -99,6 +99,7 @@ const handlers = {
     if (mine) S.myTeam = mine.team;
     for (const id in S.others) if (!msg.players.some(p => p.id === +id)) delete S.others[id]; // left
     showRoom();
+    updateRematch();
     syncVoice();
   },
 

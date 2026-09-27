@@ -9,12 +9,15 @@ import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
 import { initHome } from './home.js';
 import { refreshChat } from './chat.js';
+import { send } from './net.js';
+import { initAudio } from './audio.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait');
 const summary = $('summary');
 let summaryTimer = 0;
 let summaryNext = null;
+let rematchAsked = false; // clicked REMATCH: stay on the results until the next match starts
 
 export function initLobby() {
   initHome();
@@ -22,6 +25,7 @@ export function initLobby() {
   initAccount();
   initFriends();
   $('summaryContinue').addEventListener('click', dismissSummary);
+  $('summaryRematch').addEventListener('click', rematch);
 }
 
 export function setWaitText(text) { $('waitMsg').textContent = text; }
@@ -65,7 +69,8 @@ export function showMsg(text, persist) {
   if (!persist) setTimeout(() => el.style.opacity = 0, 1500);
 }
 
-// post-match scoreboard; Continue (or auto) returns to the lobby rematch prompt
+// post-match scoreboard; REMATCH readies you for the same map and mode right here, LOBBY (or
+// waiting) goes back to the lobby
 export function showSummary({ headline, rematch, scores, mode, level, won, hardpointScores }) {
   clearTimeout(summaryTimer);
   summaryNext = rematch || '';
@@ -105,8 +110,31 @@ export function showSummary({ headline, rematch, scores, mode, level, won, hardp
     tbody.appendChild(tr);
   });
 
+  rematchAsked = false;
   summary.hidden = false;
+  updateRematch();
   summaryTimer = setTimeout(dismissSummary, 12000);
+}
+
+function rematch() {
+  if (rematchAsked) return;
+  initAudio();
+  rematchAsked = true;
+  clearTimeout(summaryTimer); // don't drift off to the lobby while waiting for the others
+  send({ type: 'ready' });
+  updateRematch();
+}
+
+// the REMATCH button and who it's waiting on; called again whenever the room changes
+export function updateRematch() {
+  if (summary.hidden) return;
+  const btn = $('summaryRematch'), players = S.room?.players || [];
+  const humans = players.filter(p => !p.bot), ready = humans.filter(p => p.ready).length;
+  btn.disabled = rematchAsked || S.disconnected;
+  btn.textContent = rematchAsked ? 'WAITING…' : 'REMATCH';
+  $('summaryWait').textContent = !rematchAsked ? ''
+    : players.length < 2 ? 'Waiting for another player to join'
+    : `Waiting for players (${ready}/${humans.length} ready)`;
 }
 
 function dismissSummary() {
@@ -118,6 +146,7 @@ function dismissSummary() {
 
 function hideSummary(silent) {
   clearTimeout(summaryTimer);
+  rematchAsked = false;
   summaryTimer = 0;
   summary.hidden = true;
   if (!silent) summaryNext = null;
