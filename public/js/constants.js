@@ -8,6 +8,9 @@ export const SENS = 0.0025; // mouse sensitivity (radians per pixel)
 // Quake-style movement, scaled so 320 qu/s = 3 map units/s
 export { MOVE_SPEED as MAX_SPEED, MOVE_GRAVITY as GRAVITY, MOVE_JUMP_V as JUMP_V, MOVE_SPEED_LIMIT as SPEED_LIMIT } from '/shared/config.js';
 export const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0, STEP = 0.3;
+// callouts for kill streaks (kills without dying) and multi-kills (see MULTI_KILL_MS)
+export const STREAK_NAMES = { 3: 'KILLING SPREE', 5: 'RAMPAGE', 7: 'UNSTOPPABLE', 10: 'GODLIKE', 15: 'LEGENDARY' };
+export const MULTI_NAMES = { 2: 'DOUBLE KILL', 3: 'TRIPLE KILL', 4: 'QUAD KILL', 5: 'MASSACRE' };
 export const ALLY_OUTLINE_COLOR = [122, 80, 136], ENEMY_OUTLINE_COLOR = [168, 64, 64];
 
 export const GUN_COLOR = {

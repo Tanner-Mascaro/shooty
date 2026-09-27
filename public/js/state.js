@@ -7,11 +7,17 @@ export const S = {
   myId: null, started: false, myKills: 0, myTeam: 0, hacks: false,
   plagueEndsAt: 0, // estimated local deadline from the server's remaining time
   hardpoint: null, // latest authoritative hill, team score and match-clock snapshot
+  // battle royale storm from the server: { x, y, r, nx, ny, nr, stage, stages, shrinking, ms, alive };
+  // zoneEndsAt is the local time its current hold / shrink ends
+  zone: null, zoneEndsAt: 0,
+  myStreak: 0, myGunLevel: 0, // kills since you last died; your gun game rung
   // the room from the server: { code, private, mode, level, gameOn, bots, max, players: [{ id, name, team, ready, bot }] }
   room: null,
 
   // you: position is client-authoritative; seq changes when the server respawns you
   me: null, mySeq: 0, pitch: 0,
+  // dead: the camera watches spectateId (or where you fell) until respawnAt (null: not this match)
+  dead: false, spectateId: null, respawnAt: 0, deathAt: null, specCam: null,
   vx: 0, vy: 0, vz: 0, onGround: true, speed: 0, bobPhase: 0, stepAcc: 0,
   // sliding: slideEnd while it lasts, slideReady after its cooldown; slideArmed is set by a fresh
   // key press (so holding the key through a landing slides once); slideDip eases the camera down
@@ -43,6 +49,7 @@ export const S = {
   hitFlash: 0, healFlash: 0, killFlash: 0, muzzle: 0, recoil: 0, hitMarker: 0, hitHead: false, damageIndicators: [],
   punch: 0, shake: 0, fovKick: 0, swayX: 0, swayY: 0, fireT: -1e9, swingT: -1e9, quickUntil: 0,
   bannerText: '', bannerT: -1e9, bannerGold: false,
+  calloutText: '', calloutT: -1e9, // streak / multi-kill line under the banner
 
   // world effects
   fov: BASE_FOV, tracers: [], particles: [], corpses: [], embers: [],

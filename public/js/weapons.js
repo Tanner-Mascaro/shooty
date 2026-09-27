@@ -34,7 +34,7 @@ export function swapWeapon() {
 }
 
 export function throwNade() {
-  if (!S.started || S.clawsOnly || !(S.nades > 0) || performance.now() < S.switchUntil) return;
+  if (!S.started || S.dead || S.clawsOnly || !(S.nades > 0) || performance.now() < S.switchUntil) return;
   if (!S.hacks) S.nades--;
   S.switchUntil = performance.now() + 400;
   send({ type: 'nade' });
@@ -42,7 +42,7 @@ export function throwNade() {
 }
 
 export function reload() {
-  if (S.clawsOnly) return;
+  if (S.clawsOnly || S.dead) return;
   const w = S.weapon, def = WEAPONS[w];
   if (def.melee || S.reloading || !(S.mag[w] < def.mag) || !(spare(w) > 0)) return;
   S.reloading = { w, start: performance.now(), until: performance.now() + def.reload };
@@ -116,13 +116,13 @@ export function gunToDrop() {
 
 export function use() {
   const t = S.useTarget;
-  if (S.clawsOnly || !t) return;
+  if (S.clawsOnly || S.dead || !t) return;
   send(t.pad !== undefined ? { type: 'use', pad: t.pad, drop: gunToDrop() } : { type: 'use', box: t.box, drop: gunToDrop() });
 }
 
 // quick = F key: stab without switching away from your gun
 export function melee(quick) {
-  if (!S.started || !S.me) return;
+  if (!S.started || !S.me || S.dead) return;
   const weapon = S.clawsOnly ? 'claws' : 'blade';
   const now = performance.now();
   if (now < S.nextFire[weapon]) return;
@@ -157,7 +157,7 @@ const KICK = {
 };
 
 export function fire() {
-  if (!S.started || !S.me) return;
+  if (!S.started || !S.me || S.dead) return;
   const w = S.weapon;
   if (S.clawsOnly || w === 'blade') { melee(false); return; }
   const now = performance.now();
@@ -188,6 +188,6 @@ export function fire() {
 export function autoFire() {
   updateReload();
   updateScope();
-  S.useTarget = S.started && S.me ? findUseTarget() : null;
+  S.useTarget = S.started && S.me && !S.dead ? findUseTarget() : null;
   if (S.mouseHeld && S.started && (S.clawsOnly || WEAPONS[S.weapon].auto)) fire();
 }

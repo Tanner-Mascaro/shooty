@@ -1,12 +1,14 @@
 // WebSocket connection and handlers for every server -> client message.
-import { EYE, HEAL, PLAGUE_TEAM, teamName } from '/shared/config.js';
+import { EYE, HEAL, PLAGUE_TEAM, teamName, gunGameGun, GUN_GAME_LADDER } from '/shared/config.js';
 import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S, owned, nameOf, gunSlots } from './state.js';
 import { setLevel, colors } from './level.js';
 import { play, playAt, spatial } from './audio.js';
 import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
-import { showWait, hideWait, setWaitText, showMsg, showSummary, banner, toast, pushFeed } from './ui.js';
+import { showWait, hideWait, setWaitText, showMsg, showSummary, banner, callout, toast, pushFeed, pushNote } from './ui.js';
+import { enterSpectate, leaveSpectate } from './spectate.js';
+import { STREAK_NAMES, MULTI_NAMES } from './constants.js';
 import { prewarmWorld } from './render/gl/scene.js';
 import { showRoom } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard } from './account.js';
@@ -54,6 +56,19 @@ function otherSounds(o, prev, cur) {
   }
 }
 
+// battle royale storm; ms left in its current hold / shrink becomes a local deadline
+function setZone(zone, now) {
+  S.zone = zone || null;
+  if (zone) S.zoneEndsAt = now + zone.ms;
+}
+
+// streaks everyone hears about: "X is on a RAMPAGE", "Y shut down X"
+function announceStreak(msg) {
+  if (msg.killer == null) return;
+  if (msg.ended) pushNote(`${nameOf(msg.killer)} ended ${nameOf(msg.victim)}'s ${msg.ended}-kill streak`);
+  if (STREAK_NAMES[msg.streak]) pushNote(`${nameOf(msg.killer)} ${msg.killer === S.myId ? 'are' : 'is'} on a ${STREAK_NAMES[msg.streak]} (${msg.streak})`);
+}
+
 let lastRoster = null; // id -> name, to announce joins / leaves in Messages
 
 const handlers = {
@@ -98,6 +113,9 @@ const handlers = {
     try { prewarmWorld(S.level, S.T, S.theme, colors); } catch {}
     S.started = true;
     S.hardpoint = msg.hardpoint || null;
+    leaveSpectate();
+    S.myStreak = 0; S.myGunLevel = 0;
+    setZone(msg.zone, performance.now());
     S.damageIndicators = [];
     S.myKills = 0;
     S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
@@ -111,6 +129,8 @@ const handlers = {
     addSystem('Match started on ' + (LEVEL_NAMES[msg.level] || msg.level));
     hideWait();
     if (msg.mode === 'plague') banner(S.myTeam === PLAGUE_TEAM ? 'YOU ARE THE PLAGUE' : 'STAY HEALTHY', true);
+    if (msg.mode === 'gungame') banner('GUN GAME', true);
+    if (msg.mode === 'royale') banner('LAST ONE STANDING', true);
   },
 
   // full ammo state: on respawn, or when the server disagreed with our count
@@ -156,10 +176,11 @@ const handlers = {
   state(msg, now) {
     S.plagueEndsAt = now + (msg.plagueRemainingMs || 0);
     S.hardpoint = msg.hardpoint || null;
+    setZone(msg.zone, now);
     S.thrown = msg.nades || [];
     for (const p of msg.players) {
       if (p.id === S.myId) {
-        S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team;
+        S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team; S.myGunLevel = p.gl || 0;
         // our own position is client-authoritative; only snap to the server on respawn
         if (p.seq !== S.mySeq) {
           S.mySeq = p.seq;
@@ -168,7 +189,8 @@ const handlers = {
           S.jumpsUsed = 0; S.jumpHeld = false;
           S.dashUntil = 0; S.nextDash = 0;
           S.damageIndicators = [];
-        }
+          leaveSpectate();
+        } else if (p.dead && !S.dead && S.started) enterSpectate(null, null); // joined a battle royale already underway
         continue;
       }
       const o = S.others[p.id] ??= { cur: null, step: 0, flashT: -1e9, hitT: -1e9 };
@@ -249,19 +271,31 @@ const handlers = {
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');
     pushFeed(msg);
+    announceStreak(msg);
     if (msg.killer === S.myId) {
-      const label = msg.infected ? 'INFECTED' : msg.backstab ? 'BACKSTAB' : msg.head ? 'HEADSHOT' : 'KILL';
-      banner(label + (msg.weapon === 'sniper' ? '  ' + msg.dist.toFixed(1) + 'm' : ''), msg.head || msg.backstab);
+      // gun game: the kill hands you the next gun (a stab only knocks them down one)
+      const gunLabel = msg.climbed && msg.gunLevel < GUN_GAME_LADDER.length
+        ? (gunGameGun(msg.gunLevel) === 'blade' ? 'FINAL: BLADE' : gunGameGun(msg.gunLevel).toUpperCase())
+        : msg.demoted !== undefined ? 'HUMILIATED' : '';
+      const label = gunLabel || (msg.infected ? 'INFECTED' : msg.backstab ? 'BACKSTAB' : msg.head ? 'HEADSHOT' : 'KILL');
+      banner(label + (msg.weapon === 'sniper' && !gunLabel ? '  ' + msg.dist.toFixed(1) + 'm' : ''), msg.head || msg.backstab || !!gunLabel);
+      S.myStreak = msg.streak || 0;
+      const call = MULTI_NAMES[Math.min(5, msg.multi || 0)] || STREAK_NAMES[msg.streak] || (msg.ended ? 'SHUT DOWN' : '');
+      if (call) { callout(call); play('streak'); }
       play('kill');
       if (msg.backstab) play('backstab');
       if (msg.weapon === 'sniper') S.killFlash = 10;
       if (S.theme.id === 'witch') setTimeout(() => play('cackle'), 250);
     } else if (msg.victim === S.myId) {
+      S.myStreak = 0;
+      if (msg.respawnMs !== 0) enterSpectate(msg.killer, msg.respawnMs);
+      if (msg.demoted !== undefined) callout('STABBED: DOWN TO ' + gunGameGun(msg.demoted).toUpperCase());
       if (msg.infected) {
         S.myTeam = PLAGUE_TEAM;
         banner('YOU ARE INFECTED', true);
       }
-      showMsg(msg.infected ? 'You joined the plague!' : pit ? S.theme.pitDeath : (msg.backstab ? 'Backstabbed by ' : 'Killed by ') + nameOf(msg.killer));
+      showMsg(msg.infected ? 'You joined the plague!' : pit ? S.theme.pitDeath : msg.weapon === 'zone' ? 'The storm took you'
+        : (msg.backstab ? 'Backstabbed by ' : 'Killed by ') + nameOf(msg.killer));
       play(pit ? 'burn' : 'death');
     } else playAt(pit ? 'burn' : 'death', msg.x, msg.y);
   },
@@ -278,13 +312,14 @@ const handlers = {
       rematch = (plagueWon ? 'Plague' : 'Survivors') + ' won. Rematch?';
     } else {
       const who = msg.team ? teamName(mode, msg.team) + ' TEAM' : nameOf(msg.winner).toUpperCase();
-      headline = won ? (msg.team ? 'YOUR TEAM WINS!' : 'YOU WIN!') : who + ' WINS!';
+      headline = won ? (msg.team ? 'YOUR TEAM WINS!' : mode === 'royale' ? 'LAST ONE STANDING!' : 'YOU WIN!') : who + ' WINS!';
       sys = won ? (msg.team ? 'Your team wins!' : 'You win!') : who + ' wins';
       rematch = won ? 'You won! Rematch?' : who.toLowerCase().replace(/^\w/, c => c.toUpperCase()) + ' won. Rematch?';
     }
     play(won ? 'win' : 'lose');
     addSystem(sys);
     S.started = false;
+    leaveSpectate();
     const scores = (msg.scores || []).map(r => ({
       ...r,
       winner: msg.team ? r.team === msg.team : r.id === msg.winner,
@@ -298,6 +333,7 @@ const handlers = {
   // the match stopped early (not enough players left)
   end(msg) {
     S.started = false;
+    leaveSpectate();
     addSystem(msg.reason || 'Match ended');
     if (msg.scores && msg.scores.length) {
       showSummary({

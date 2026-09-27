@@ -16,7 +16,7 @@ export const HARDPOINT_SITE_COUNT = 5;
 export const HARDPOINT_RADIUS = 2.25;
 export const MAX_PLAYERS = 8;      // per room
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
-export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers' };
+export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale' };
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
 export const PLAGUE_TEAM = 1;
 export const HEALTHY_TEAM = 2;
@@ -31,6 +31,30 @@ export const MOVE_SPEED = 3, MOVE_SPEED_LIMIT = 10, MOVE_GRAVITY = 7.5, MOVE_JUM
 export const PLAGUE_TEAMS = { [PLAGUE_TEAM]: 'PLAGUE', [HEALTHY_TEAM]: 'HEALTHY' };
 export const isTeamMode = mode => mode === 'teams' || mode === 'hardpoint' || mode === 'plague';
 export const teamName = (mode, team) => (mode === 'plague' ? PLAGUE_TEAMS : TEAMS)[team] || '';
+// after dying you watch your killer for a moment before respawning; plague turns you into a
+// monster on the spot, and battle royale has no respawns (you spectate until the match ends)
+export const RESPAWN_MS = 3000;
+export const respawnDelay = mode => mode === 'plague' ? 0 : mode === 'royale' ? Infinity : RESPAWN_MS;
+
+// kill streaks (kills without dying) get callouts on the client; multi-kills are kills within
+// MULTI_KILL_MS of each other, and ending a streak this long is a "shut down"
+export const MULTI_KILL_MS = 3500;
+export const SHUTDOWN_STREAK = 3;
+
+// gun game: every kill moves you to the next gun; a kill with the last one (the blade) wins.
+// Getting stabbed knocks you back one gun
+export const GUN_GAME_LADDER = ['pistol', 'uzi', 'smg', 'shotgun', 'burst', 'carbine', 'rifle', 'lmg', 'deagle', 'revolver', 'beam', 'crossbow', 'sniper', 'blade'];
+export const gunGameGun = level => GUN_GAME_LADDER[Math.max(0, Math.min(level, GUN_GAME_LADDER.length - 1))];
+
+// battle royale: no respawns, and a storm closes in. Each stage holds, then shrinks the safe
+// circle to r (a fraction of the starting radius) over `shrink` ms; outside it costs dps hp/s
+export const ROYALE_ZONE = [
+  { hold: 30000, shrink: 30000, r: 0.55, dps: 4 },
+  { hold: 25000, shrink: 25000, r: 0.3, dps: 8 },
+  { hold: 20000, shrink: 25000, r: 0.12, dps: 15 },
+  { hold: 15000, shrink: 30000, r: 0, dps: 25 },
+];
+
 export const PLAYER_SKINS = ['witch', 'robotWitch', 'gothicWitch', 'infernalWitch', 'iceWitch', 'ghostWitch', 'plagueWitch'];
 
 // silly cheat mode: set your display name to one of these (case-insensitive)

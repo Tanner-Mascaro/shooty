@@ -89,6 +89,12 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 #hardpointStatus.contested #hardpointRole { color:#b17834; }
 #hardpointStatus.friendly #hardpointRole { color:#7a5088; }
 #hardpointStatus.enemy #hardpointRole { color:#a84040; }
+#modeStatus { text-align:center; color:var(--muted,#6a5640); font-size:11px; line-height:1.35; white-space:nowrap; }
+#modeRole { color:#6a4828; font-size:14px; letter-spacing:.08em; font-weight:700; }
+#modeClock { color:var(--ink,#2a1e12); font-weight:700; margin-left:8px; font-variant-numeric:tabular-nums; }
+#modeObjective { margin-top:3px; }
+#modeStatus.storm #modeRole, #modeStatus.storm #modeObjective { color:#7a3a98; }
+#feed .note { color:#c8a060; font-style:italic; }
 #modeHelp, #plagueSetupHelp { color:var(--muted); font-size:12px; line-height:1.5; }
 #plagueSelection { flex-wrap:wrap; }
 #plagueSelection button:disabled { cursor:default; opacity:.6; }

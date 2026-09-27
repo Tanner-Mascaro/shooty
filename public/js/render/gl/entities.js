@@ -284,12 +284,12 @@ export function drawParticlePoints(embers, particles) {
 
 export function drawOthersAndCorpses(now) {
   for (const c of S.corpses) {
-    if (c.mine) continue;
+    if (c.mine && !S.dead) continue; // your own body is under the camera, unless you're spectating
     const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0;
     drawPlayerBillboard(c.x, c.y, c.z - sink, 1 - 0.72 * fall, 1 + 0.9 * fall, false, null, c.skin, null);
   }
   for (const o of Object.values(S.others)) {
-    if (!o.now) continue;
+    if (!o.now || o.now.dead) continue; // their corpse is drawn instead
     const player = S.room && S.room.players.find(p => p.id === o.now.id);
     const team = player ? player.team : o.now.team;
     const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM

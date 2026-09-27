@@ -9,6 +9,7 @@ import { openChat, chatOpen } from './chat.js';
 import { askMic } from './voice.js';
 import { dash } from './physics.js';
 import { send } from './net.js';
+import { cycleSpectate } from './spectate.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
@@ -32,7 +33,7 @@ export function initInput() {
     if (act === 'chat') { e.preventDefault(); return openChat(); }
     if (act === 'talk') askMic(); // first press asks for the mic
     if (act === 'slide' && !S.clawsOnly) S.slideArmed = true;
-    if (!S.started || !act) return;
+    if (!S.started || !act || S.dead) return;
     if (act.startsWith('slot')) switchSlot(+act.slice(4));
     if (act === 'swap') swapWeapon();
     if (act === 'use') use();
@@ -49,6 +50,7 @@ export function initInput() {
   document.addEventListener('mousedown', e => {
     if (!S.started || !S.me || !locked()) return;
     if (e.button === 2) aim(true);
+    if (e.button === 0 && S.dead) return cycleSpectate(); // dead: click watches someone else
     if (e.button === 0) { S.mouseHeld = true; fire(); }
   });
   document.addEventListener('mouseup', e => {

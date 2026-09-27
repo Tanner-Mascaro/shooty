@@ -80,7 +80,7 @@ export function drawPickupGlows() {
 export function drawEnemyGlows(now) {
   for (const o of Object.values(S.others)) {
     const e = o.now;
-    if (!e) continue;
+    if (!e || e.dead) continue;
     if (now - o.flashT < 70) {
       const p = project(e.x, e.y, e.z + EYE - 0.1);
       if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 160 / p.f + 20, 'rgba(255,210,90,0.9)');
@@ -97,7 +97,7 @@ export function drawNameTags() {
   ctx.textAlign = 'center';
   for (const [id, o] of Object.entries(S.others)) {
     const e = o.now;
-    if (!e) continue;
+    if (!e || e.dead) continue;
     const enemy = isEnemy(+id), p = project(e.x, e.y, e.z + BODY_H + 0.3);
     if (p.f < 0.4 || p.f > 18 || occluded(p)) continue;
     ctx.font = 'bold ' + Math.round(Math.max(11, Math.min(16, 40 / p.f + 9))) + 'px Courier New';
@@ -291,6 +291,11 @@ export function drawFlashes() {
   flash('killFlash', 10, '200,180,140', 0.2);
   flash('hitFlash', 8, '140,40,40', 0.3);
   flash('healFlash', 10, '60,110,70', 0.18);
+  if (inStorm()) { // purple haze while the storm eats at you
+    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.15, W / 2, H / 2, Math.max(W, H) * 0.7);
+    v.addColorStop(0, 'rgba(120,40,160,0.12)'); v.addColorStop(1, 'rgba(90,20,130,0.6)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  }
   if (inPit()) {
     const o = S.theme.pitOverlay, v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7);
     v.addColorStop(0, 'rgba(' + o + ',0.05)'); v.addColorStop(1, 'rgba(' + o + ',0.55)');
@@ -300,6 +305,7 @@ export function drawFlashes() {
 
 // kill / pickup banner: pops in, holds, fades
 export function drawBanner(now) {
+  drawCallout(now);
   const age = now - S.bannerT;
   if (age >= 1600) return;
   const a = age < 1200 ? 1 : 1 - (age - 1200) / 400, sc = 1 + Math.max(0, 1 - age / 150) * 0.5;
@@ -340,6 +346,15 @@ export function drawMinimap(now) {
       ctx.strokeStyle = `rgba(${color},${alpha})`; ctx.lineWidth = 2 / ms;
       ctx.setLineDash(dashed ? [3 / ms, 2 / ms] : []); ctx.stroke(); ctx.setLineDash([]);
     };
+    const z = S.zone;
+    if (z) { // storm: shade outside the safe circle, dashed ring where it's heading
+      ctx.beginPath(); ctx.rect(-MW, -MH, MW * 3, MH * 3); ctx.arc(z.x, z.y, Math.max(0.01, z.r), 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(110,30,150,0.4)'; ctx.fill('evenodd');
+      ctx.strokeStyle = 'rgba(190,110,230,0.95)'; ctx.lineWidth = 2 / ms;
+      ctx.beginPath(); ctx.arc(z.x, z.y, Math.max(0.01, z.r), 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(245,235,200,0.9)'; ctx.setLineDash([3 / ms, 2 / ms]);
+      ctx.beginPath(); ctx.arc(z.nx, z.ny, Math.max(0.01, z.nr), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
     if (hp?.next) drawHill(hp.next, '245,225,150', 0.8, true);
     if (hp?.active) {
       const color = hp.contested ? '255,190,80'
@@ -358,13 +373,22 @@ export function drawMinimap(now) {
       ctx.fillStyle = '#c07070'; ctx.beginPath(); ctx.arc(n.x + 0.12, n.y - 0.14, 0.1, 0, Math.PI * 2); ctx.fill();
     }
     for (const [id, o] of Object.entries(S.others)) {
-      if (!o.now) continue;
+      if (!o.now || o.now.dead) continue;
       ctx.fillStyle = isEnemy(+id) ? '#a83838' : '#6a5088';
       ctx.beginPath(); ctx.arc(o.now.x, o.now.y, 0.3, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
     ctx.fillStyle = '#8b1e2d'; // you: arrow pointing up
     ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 5, cy + 6); ctx.lineTo(cx - 5, cy + 6); ctx.closePath(); ctx.fill();
+    if (z && !S.dead && Math.hypot(z.nx - me.x, z.ny - me.y) > 9) { // safe circle off the minimap: point at it
+      const screenAngle = Math.atan2(z.ny - me.y, z.nx - me.x) - me.a - Math.PI / 2;
+      const dx = Math.cos(screenAngle), dy = Math.sin(screenAngle), edge = size / 2 - 14;
+      const s = edge / Math.max(Math.abs(dx), Math.abs(dy)), ax = cx + dx * s, ay = cy + dy * s;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(screenAngle);
+      ctx.fillStyle = '#f5e6b0'; ctx.strokeStyle = '#5a2070'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, 6); ctx.lineTo(-6, -6); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
     ctx.font = '700 12px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const [label, angle] of [['N', -Math.PI / 2], ['E', 0], ['S', Math.PI / 2], ['W', Math.PI]]) {
       const screenAngle = angle - me.a - Math.PI / 2;
@@ -444,4 +468,45 @@ export function drawUsePrompt() {
   ctx.strokeStyle = '#7a5088'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y - 14, kw, 20);
   ctx.fillStyle = '#c8b898'; ctx.textAlign = 'center'; ctx.fillText(k, x + kw / 2, y + 1);
   ctx.fillStyle = '#e8dcc8'; ctx.textAlign = 'left'; ctx.fillText(text, x + kw + 10, y + 1);
+}
+
+// true while you're alive and outside the battle royale storm's safe circle
+function inStorm() {
+  const z = S.zone;
+  return !!(z && S.started && !S.dead && S.me && Math.hypot(S.me.x - z.x, S.me.y - z.y) > z.r);
+}
+
+// streak / multi-kill line under the banner
+function drawCallout(now) {
+  const age = now - S.calloutT;
+  if (age >= 2200 || !S.calloutText) return;
+  const a = age < 1700 ? 1 : 1 - (age - 1700) / 500, sc = 1 + Math.max(0, 1 - age / 180) * 0.6;
+  ctx.save(); ctx.translate(view.W / 2, view.H * 0.3 + 46); ctx.scale(sc, sc);
+  ctx.font = '700 26px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
+  ctx.fillStyle = 'rgba(230,180,80,' + a + ')';
+  ctx.fillText(S.calloutText, 0, 0);
+  ctx.restore();
+}
+
+// dead: who you're watching and when you're back; alive in the storm: get out
+export function drawSpectate(now) {
+  const { W, H } = view;
+  ctx.textAlign = 'center';
+  if (S.dead) {
+    const out = S.respawnAt === null, y = H - 150;
+    ctx.fillStyle = 'rgba(20,14,8,0.55)'; ctx.fillRect(W / 2 - 190, y - 34, 380, 84);
+    ctx.font = '700 22px Caslon Antique, Georgia, serif';
+    ctx.fillStyle = out ? '#c05050' : '#e8dcc8';
+    ctx.fillText(out ? 'ELIMINATED' : 'YOU DIED', W / 2, y - 6);
+    ctx.font = '700 14px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#c8b898';
+    const watching = S.spectateId != null ? 'Watching ' + nameOf(S.spectateId) : '';
+    const left = out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
+    ctx.fillText([watching, left].filter(Boolean).join(' · '), W / 2, y + 20);
+  } else if (inStorm()) {
+    ctx.font = '700 18px Caslon Antique, Georgia, serif';
+    ctx.fillStyle = 'rgba(230,200,255,' + (0.75 + 0.25 * Math.sin(now / 180)) + ')';
+    ctx.fillText('IN THE STORM! GET TO THE CIRCLE', W / 2, H * 0.3 + 84);
+  }
+  ctx.textAlign = 'left';
 }

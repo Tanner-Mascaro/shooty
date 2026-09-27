@@ -1,7 +1,7 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER, MODE_NAMES } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER, MODE_NAMES, GUN_GAME_LADDER } from '/shared/config.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { initAudio } from './audio.js';
@@ -358,6 +358,8 @@ export function showRoom() {
     : r.mode === 'hardpoint' ? `Red vs blue. Hold the rotating hill for 1 point per second. Contested hills stop scoring; first to ${HARDPOINT_SCORE_LIMIT} wins or the leader at ${Math.floor(HARDPOINT_MATCH_MS / 60000)}:${String(Math.floor(HARDPOINT_MATCH_MS / 1000) % 60).padStart(2, '0')}.`
     : r.mode === 'teams' ? `Red vs blue. First team to ${teamWin} kills wins.`
     : r.mode === 'snipers' ? `Sniper, crossbow, and beam rifle only. First to ${win} kills wins.`
+    : r.mode === 'gungame' ? `Every kill hands you the next gun, ${GUN_GAME_LADDER.length} in all. A kill with the final blade wins; getting stabbed knocks you back one.`
+    : r.mode === 'royale' ? 'One life each. Loot guns from crates and the fallen while the storm closes in. Last one standing wins.'
     : `Every player for themselves. First to ${win} kills wins.`;
   document.body.classList.toggle('snipers', r.mode === 'snipers');
   const scoreOn = r.mode === 'ffa' || r.mode === 'snipers' || r.mode === 'teams';

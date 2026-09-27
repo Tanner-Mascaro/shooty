@@ -137,6 +137,7 @@ const SFX = {
   death() { const o = bus(0.6, 0, 0.3); tone(o, { type:'sawtooth', freq:300, to:50, dur:0.7, vol:0.3 }); },
   burn(v, p) { const o = bus(0.7 * v, p, 0.3); noise(o, { filter:'highpass', freq:1500, dur:1.2, vol:0.9, attack:0.05 }); tone(o, { type:'sawtooth', freq:200, to:40, dur:1, vol:0.3 }); },
   thud(v, p) { const o = bus(v, p); tone(o, { freq:70, to:35, dur:0.25, vol:0.8 }); noise(o, { freq:300, dur:0.2, vol:0.6 }); },
+  streak() { const o = bus(0.5, 0, 0.35); [392, 523, 659, 784].forEach((f, i) => tone(o, { type:'sawtooth', freq:f, dur:0.16, vol:0.14, delay:i * 0.06 })); tone(o, { type:'triangle', freq:1568, dur:0.5, vol:0.22, delay:0.26 }); },
   win() { const o = bus(0.5, 0, 0.3); [523, 659, 784, 1047].forEach((f, i) => tone(o, { type:'triangle', freq:f, dur:0.3, vol:0.3, delay:i * 0.12 })); },
   lose() { const o = bus(0.5, 0, 0.3); [392, 330, 262, 196].forEach((f, i) => tone(o, { type:'triangle', freq:f, dur:0.35, vol:0.3, delay:i * 0.15 })); },
   nade(v, p) {

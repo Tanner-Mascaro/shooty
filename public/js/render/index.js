@@ -8,7 +8,8 @@ import { view, present, ensureCanvas } from './canvas.js';
 import { initGL, setLevelWorld, renderGL } from './gl/scene.js';
 import { syncCamera } from './gl/camera.js';
 import { beginEntities, endEntities, drawPickupBillboards, drawOthersAndCorpses, drawParticlePoints } from './gl/entities.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt } from './hud.js';
+import { drawZone } from './gl/zone.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -79,6 +80,7 @@ export function render(dt) {
   drawOthersAndCorpses(now);
   drawParticlePoints(S.embers, S.particles);
   endEntities();
+  drawZone(now);
 
   renderGL();
   present(S.cam.ox, S.cam.oy);
@@ -88,14 +90,14 @@ export function render(dt) {
   drawEnemyGlows(now);
   drawNameTags();
   drawHardpointMarker();
-  drawWeaponView(now);
+  if (!S.dead) drawWeaponView(now);
   drawHitMarker();
   drawFlashes();
   drawDamageIndicators(now);
   drawBanner(now);
   drawMinimap(now);
-  drawAmmo(now);
-  drawUsePrompt();
+  if (!S.dead) { drawAmmo(now); drawUsePrompt(); }
+  drawSpectate(now);
 
   decayEffects(dt);
   updateHud();

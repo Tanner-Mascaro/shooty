@@ -8,6 +8,7 @@ import { initSettings, settings } from './settings.js';
 import { initChat, updateChat } from './chat.js';
 import { initVoice, updateVoice } from './voice.js';
 import { updatePlayer } from './physics.js';
+import { updateSpectate } from './spectate.js';
 import { autoFire } from './weapons.js';
 import { render } from './render/index.js';
 import { homeOpen, onHomeLeave } from './home.js';
@@ -53,7 +54,7 @@ function loop(t) {
   }
   const dt = Math.min(0.05, Math.max(0, (t - lastT) / 1000));
   lastT = t;
-  updatePlayer(dt);
+  if (S.dead && S.started) updateSpectate(dt); else updatePlayer(dt);
   autoFire();
   render(dt);
   updateChat(t);
