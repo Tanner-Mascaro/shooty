@@ -84,9 +84,19 @@ Any room can be filled out with server-side bots using the lobby's **+ BOT / −
 
 Speed, sight range, reaction time, fire rate and aim error per difficulty are in `BOT_LEVELS` at the top of `server/bot.js`.
 
-## Haunted house
+## Maps
 
-The fourth map is half an old house and half the Backrooms, under a ceiling (`theme.ceiling` in `public/js/themes.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`). The world is drawn with Three.js from the shared heightmap.
+Seven maps, all in the lobby vote (`FEATURED_LEVELS` in `shared/levels.js`), each 80×80 and point-symmetric so both sides are fair:
+
+- **Witch Swamp:** bog, trees and enterable cottages.
+- **Gothic Castle:** a moonlit keep with halls and climbable towers.
+- **Brimstone Coven:** charred cottages among volcanoes, with lava rivers to cross.
+- **Frost Hollow:** snowed-in cottages, ice spires and frozen ponds under a violet sky.
+- **Pumpkin Hollow:** a harvest village on a cobbled lane, with carts, pumpkin patches (some are lit jack-o'-lanterns) and a big orange moon.
+- **Alchemist's Lab:** aisles of glowing potion shelves, bubbling brew vats and a ring of shelves at the heart.
+- **Hexed Manor:** half a violet-papered manor and half the yellow Backrooms, under a ceiling (`theme.ceiling` in `public/js/themes.js`; which half a spot is in comes from `inBackrooms` in `shared/levels.js`).
+
+Each map is an ASCII grid in `shared/levels.js` (only the top half is written; it's mirrored), with its look in `public/js/themes.js`, `public/js/level.js` and `public/js/render/gl/`. `npm test` checks every map is symmetric, fully reachable, and has spawns, pickups and hardpoint hills. The world is drawn with Three.js from the shared heightmap.
 
 ## Seeing players
 

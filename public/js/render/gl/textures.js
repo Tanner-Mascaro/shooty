@@ -50,32 +50,24 @@ const FLOOR_DRAW = {
     }
   },
   robot(ctx, w, h) {
-    const cell = 16;
-    for (let y = 0; y < h; y += cell) for (let x = 0; x < w; x += cell) {
-      const v = ((x / cell + y / cell) & 1) ? 0.95 : 0.82;
-      ctx.fillStyle = rgb(52 * v, 60 * v, 72 * v);
-      ctx.fillRect(x, y, cell, cell);
-      ctx.strokeStyle = '#0e1218';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x + 1, y + 1, cell - 2, cell - 2);
-      ctx.fillStyle = '#8a96a8';
-      ctx.fillRect(x + 3, y + 3, 2, 2);
-      ctx.fillRect(x + cell - 5, y + 3, 2, 2);
-      ctx.fillRect(x + 3, y + cell - 5, 2, 2);
-      ctx.fillRect(x + cell - 5, y + cell - 5, 2, 2);
-      // floor glow tiles
-      if ((x / cell + y / cell) % 4 === 0) {
-        ctx.fillStyle = 'rgba(40,220,255,0.55)';
-        ctx.beginPath();
-        ctx.arc(x + cell / 2, y + cell / 2, 3, 0, Math.PI * 2);
-        ctx.fill();
+    // dark lab floorboards with a faint chalk rune circle
+    for (let y = 0; y < h; y++) {
+      const plank = Math.floor(y / 16), seam = y % 16 < 1;
+      for (let x = 0; x < w; x++) {
+        const tone = seam ? 0.35 : 0.62 + 0.3 * noise(plank, Math.floor((x + plank * 37) / 40)) + 0.08 * noise(x * 0.3, y * 0.05);
+        ctx.fillStyle = rgb(74 * tone, 50 * tone, 36 * tone);
+        ctx.fillRect(x, y, 1, 1);
       }
     }
-    // hazard stripe band
-    for (let i = 0; i < w; i += 8) {
-      ctx.fillStyle = (i / 8 | 0) % 2 ? '#e8b010' : '#1a1a1a';
-      ctx.fillRect(i, h - 10, 8, 6);
+    ctx.strokeStyle = 'rgba(190,150,255,0.28)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(w / 2, h / 2, w * 0.3, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i <= 5; i++) {
+      const a = -Math.PI / 2 + i * Math.PI * 4 / 5;
+      ctx[i ? 'lineTo' : 'moveTo'](w / 2 + Math.cos(a) * w * 0.3, h / 2 + Math.sin(a) * w * 0.3);
     }
+    ctx.stroke();
   },
   witch(ctx, w, h) {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -132,16 +124,17 @@ const FLOOR_DRAW = {
     }
   },
   nuke(ctx, w, h) {
-    ctx.fillStyle = '#5a6040';
-    ctx.fillRect(0, 0, w, h);
+    // autumn grass with fallen leaves
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (noise(x * 0.15, y * 0.15) > 0.65) {
-        ctx.fillStyle = rgb(48, 48, 46);
-        ctx.fillRect(x, y, 1, 1);
-      }
+      const v = 0.7 + 0.3 * noise(x * 0.12, y * 0.12);
+      ctx.fillStyle = rgb(78 * v, 84 * v, 44 * v);
+      ctx.fillRect(x, y, 1, 1);
     }
-    ctx.fillStyle = '#c8b43c';
-    ctx.fillRect(w / 2 - 1, 0, 2, h);
+    for (let i = 0; i < 70; i++) {
+      const c = [[200, 90, 30], [170, 60, 30], [220, 150, 50]][i % 3];
+      ctx.fillStyle = rgb(...c, 0.8);
+      ctx.fillRect(noise(i, 11) * w, noise(i, 12) * h, 3, 2);
+    }
   },
 };
 
@@ -159,30 +152,34 @@ const WALL_DRAW = {
     ctx.fillRect(0, h * 0.45, w, 4);
   },
   robot(ctx, w, h, theme) {
-    ctx.fillStyle = '#3a424e';
-    ctx.fillRect(0, 0, w, h);
-    const [br, bg, bb] = theme.band;
-    for (let x = 0; x < w; x += 18) {
-      ctx.fillStyle = '#12161c';
-      ctx.fillRect(x + 1, 4, 16, h - 8);
-      ctx.fillStyle = '#2a323c';
-      ctx.fillRect(x + 3, 6, 12, h - 12);
-      // vent slots
-      for (let y = 10; y < h - 12; y += 7) {
-        ctx.fillStyle = '#0a0c10';
-        ctx.fillRect(x + 4, y, 10, 2);
-      }
-      // status LEDs (cyan / green / amber)
-      for (let y = 14; y < h - 14; y += 14) {
-        const kind = (y / 14 + x / 18 | 0) % 3;
-        ctx.fillStyle = kind === 0 ? rgb(br, bg, bb) : kind === 1 ? '#40ff88' : '#ffb020';
-        ctx.fillRect(x + 5, y, 8, 3);
+    // potion shelves: dark wood boards lined with glowing bottles
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const v = 0.3 + 0.18 * noise(x * 0.05, y * 0.3);
+      ctx.fillStyle = rgb(70 * v, 46 * v, 32 * v);
+      ctx.fillRect(x, y, 1, 1);
+    }
+    const colors = [theme.band, [190, 110, 255], [255, 120, 80], [110, 200, 255], [255, 220, 90]];
+    for (let shelf = 0; shelf < 2; shelf++) {
+      const base = (shelf + 1) * h / 2 - 10;
+      ctx.fillStyle = '#5a3a24';
+      ctx.fillRect(0, base, w, 10);
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, base + 10, w, 4);
+      let k = shelf * 3;
+      for (let x = 8; x < w - 30; x += 30 + (noise(x, shelf) * 16 | 0), k++) {
+        const bh = 40 + noise(x, shelf + 5) * 44, bw = 18 + (noise(shelf, x) * 10 | 0);
+        const [r, g, b] = colors[k % colors.length];
+        ctx.fillStyle = rgb(r * 0.5, g * 0.5, b * 0.5);
+        ctx.fillRect(x, base - bh, bw, bh);                          // bottle
+        ctx.fillStyle = rgb(r, g, b);
+        ctx.fillRect(x + 2, base - bh * 0.62, bw - 4, bh * 0.62 - 2); // glowing brew
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.fillRect(x + 5, y, 8, 1);
+        ctx.fillRect(x + 3, base - bh + 4, 3, bh * 0.5);              // glint
+        ctx.fillStyle = rgb(r * 0.35, g * 0.35, b * 0.35);
+        ctx.fillRect(x + bw / 2 - 4, base - bh - 12, 8, 12);          // neck
+        ctx.fillStyle = '#8a6a48';
+        ctx.fillRect(x + bw / 2 - 4, base - bh - 16, 8, 4);           // cork
       }
-      // cable channel
-      ctx.fillStyle = '#080a0e';
-      ctx.fillRect(x + 8, 6, 2, h - 12);
     }
   },
   witch(ctx, w, h) {

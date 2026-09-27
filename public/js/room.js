@@ -142,7 +142,7 @@ function initSkinCarousel() {
 function updateMapVoteLabel(level) {
   const el = $('mapVote');
   if (!el) return;
-  const names = { witch: 'Witch Swamp', castle: 'Gothic Castle', hell: 'Hell', robot: 'Robot Factory', haunt: 'Haunted House', ice: 'Ice Fields', nuke: 'Nuketown' };
+  const names = { witch: 'Witch Swamp', castle: 'Gothic Castle', hell: 'Brimstone Coven', robot: "Alchemist's Lab", haunt: 'Hexed Manor', ice: 'Frost Hollow', nuke: 'Pumpkin Hollow' };
   el.textContent = level ? 'Your vote: ' + (names[level] || level) : 'Click a map to vote';
 }
 
@@ -175,7 +175,7 @@ function drawMapPreview(b) {
     c = document.createElement('canvas');
     c.width = T.TW; c.height = T.TH;
     const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
-    const floor = { hell: [70, 28, 22], robot: [48, 54, 62], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [72, 76, 80], nuke: [70, 75, 55] }[name] || th.minimap[0];
+    const floor = { hell: [70, 28, 22], robot: [74, 50, 36], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [72, 76, 80], nuke: [78, 84, 44] }[name] || th.minimap[0];
     for (let k = 0; k < T.TW * T.TH; k++) {
       const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
       let r, g, bl;
@@ -183,7 +183,7 @@ function drawMapPreview(b) {
       else if (m === MAT.LAVA) { r = 255; g = 200; bl = 50; }
       else if (kind === 1) {
         const shade = 0.55 + 0.45 * Math.min(1, h / 2.2), top = th.wallTop || th.wall;
-        const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [50, 55, 65] : m === MAT.CRATE ? [120, 95, 50] : top;
+        const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [86, 58, 40] : m === MAT.CRATE ? [120, 95, 50] : m === MAT.PUMPKIN ? [230, 110, 25] : top;
         const mott = 0.85 + 0.2 * noise((k % T.TW) * 0.4, (k / T.TW | 0) * 0.4);
         r = base[0] * shade * mott; g = base[1] * shade * mott; bl = base[2] * shade * mott;
       } else {

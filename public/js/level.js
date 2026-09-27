@@ -103,13 +103,16 @@ const SHAPE_COLORS = {
   },
   [MAT.WALL](x, y, h, n, theme) {
     const v = 0.8 + n * 0.25 + 0.1 * noise(x * 2, y * 2);
+    if (theme.id === 'haunt' && !inBackrooms(x, y)) return [150 * v, 95 * v, 190 * v]; // the manor's hexed violet wallpaper
     return theme.wallTop.map(c => c * v);
   },
-  [MAT.RACK](x, y) { // rack tops: dark with vent slots and a cable channel
-    const vent = (x * 10) % 1 < 0.5 && (y * 3) % 1 < 0.8;
-    const cable = (y * 6) % 1 < 0.12;
-    if (cable) return [18, 20, 24];
-    return vent ? [20, 23, 28] : [46, 50, 58];
+  [MAT.RACK](x, y) { // shelf tops: dark wood with a lip along the edge
+    const lip = (x * 4) % 1 < 0.1 || (y * 4) % 1 < 0.1;
+    return lip ? [52, 34, 24] : [86, 58, 40];
+  },
+  [MAT.PUMPKIN](x, y) { // ribbed orange (the 3D pumpkin is a prop; this is for the minimap)
+    const rib = Math.sin(Math.atan2(y % 1 - 0.5, x % 1 - 0.5) * 8) > 0.6 ? 0.8 : 1;
+    return [230 * rib, 110 * rib, 25 * rib];
   },
   [MAT.CRATE](x, y, h, n) {
     const plank = ((x + y) * 3) % 1 < 0.08 ? 0.7 : 1, v = (0.82 + 0.28 * n) * plank;
@@ -129,17 +132,13 @@ const FLOORS = {
     return [(36 * basalt * ash + 50 * glow) * grit, (14 * basalt + 35 * glow) * grit, 12 * basalt * grit];
   },
   robot(x, y, n, glow, ld, k, EM) {
-    // metal floor plates with seams, rivets, scuffs, hazard stripes by the acid and floor lights
-    const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
-    const v = (0.88 + n * 0.18) * (((cx + cy) & 1) ? 1 : 0.86);
-    const scuff = noise(x * 6, y * 6) > 0.8 ? 0.78 : 1;
-    let r = 48 * v * scuff, g = 54 * v * scuff, b = 62 * v * scuff;
-    if (fx < 0.06 || fy < 0.06) { r = 22; g = 25; b = 30; } // deep plate seams
-    else if (fx < 0.1 || fy < 0.1) { r = 34; g = 38; b = 44; }
-    if ((Math.abs(fx - 0.15) < 0.035 || Math.abs(fx - 0.85) < 0.035) && (Math.abs(fy - 0.15) < 0.035 || Math.abs(fy - 0.85) < 0.035)) { r = 105; g = 112; b = 122; }
-    if (ld < 0.55) { const s = ((x + y) * 2.8) % 1 < 0.5; r = s ? 210 : 22; g = s ? 170 : 22; b = s ? 18 : 22; }
-    r += 10 * glow; g += 65 * glow; b += 45 * glow;
-    if (cx % 4 === 2 && cy % 4 === 2 && Math.hypot(fx - 0.5, fy - 0.5) < 0.14) { EM[k] = 1; return [50, 230, 255]; }
+    // dark lab floorboards, green brew light spilling from the vats, chalk rune circles that glow
+    const plank = Math.floor(y * 3), seam = (y * 3) % 1 < 0.08;
+    const tone = seam ? 0.45 : 0.7 + 0.35 * hash(plank, Math.floor(x * 0.5 + plank * 0.61)) + n * 0.1;
+    let r = 74 * tone, g = 50 * tone, b = 36 * tone;
+    r += 20 * glow; g += 110 * glow; b += 40 * glow;
+    const cx = Math.floor(x / 8) * 8 + 4, cy = Math.floor(y / 8) * 8 + 4, d = Math.hypot(x - cx, y - cy);
+    if ((cx * 3 + cy * 5) % 7 === 0 && Math.abs(d - 1.3) < 0.05) { EM[k] = 1; return [190, 140, 255]; }
     return [r, g, b];
   },
   haunt(x, y, n, glow) {
@@ -195,21 +194,22 @@ const FLOORS = {
     return [r, g, b];
   },
   nuke(x, y, n, glow) {
-    // cracked asphalt street with faded lane paint and dusty yards
-    const cx = Math.floor(x), cy = Math.floor(y), fx = x - cx, fy = y - cy;
-    const street = Math.abs(x - 30) < 8 || (cy > 14 && cy < 46 && Math.abs(x - 30) < 12);
-    const v = 0.75 + n * 0.2;
+    // a cobbled lane down the middle of the village, autumn grass and fallen leaves elsewhere
+    const lane = Math.abs(x - MW / 2) < 4.5;
+    const v = 0.75 + n * 0.25;
     let r, g, b;
-    if (street) {
-      r = 48 * v; g = 48 * v; b = 46 * v;
-      if (Math.abs(x - 30) < 0.12) { r = 200; g = 180; b = 60; } // center line
-      if (fx < 0.05 || fy < 0.05) { r *= 0.7; g *= 0.7; b *= 0.7; }
+    if (lane) {
+      const fx = (x * 2.2 + Math.floor(y * 2.2) * 0.5) % 1, fy = (y * 2.2) % 1;
+      const stone = 0.75 + 0.3 * hash(Math.floor(x * 2.2 + Math.floor(y * 2.2) * 0.5), Math.floor(y * 2.2));
+      r = 88 * stone * v; g = 80 * stone * v; b = 74 * stone * v;
+      if (fx < 0.1 || fy < 0.1) { r *= 0.55; g *= 0.55; b *= 0.55; }
     } else {
       const dirt = 0.85 + 0.2 * noise(x * 2, y * 2);
-      r = 95 * dirt * v; g = 105 * dirt * v; b = 55 * dirt * v;
-      if (noise(x * 6, y * 6) > 0.88) { r = 70; g = 90; b = 40; } // grass tufts
+      r = 78 * dirt * v; g = 86 * dirt * v; b = 44 * dirt * v;
+      const leaf = noise(x * 7, y * 7);
+      if (leaf > 0.86) { r = 190; g = 90; b = 30; } else if (leaf > 0.8) { r = 150; g = 60; b = 28; }
     }
-    r += 15 * glow; g += 12 * glow; b += 5 * glow;
+    r += 40 * glow; g += 20 * glow; b += 5 * glow;
     return [r, g, b];
   },
 };

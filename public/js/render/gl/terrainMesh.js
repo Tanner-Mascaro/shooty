@@ -140,7 +140,7 @@ export function buildWorld(scene, T, theme, palette) {
   // contain walkable cells used to skip the corner check and leave holes you could see through.
   const step = STRIDE;
   const pushObstacle = (i0, j0, i1, j1, maxH, m) => {
-    if (maxH < 0.15) return;
+    if (maxH < 0.15 || m === MAT.PUMPKIN) return; // pumpkins are drawn as props
     const x0 = i0 / RES, y0 = j0 / RES, x1 = i1 / RES, y1 = j1 / RES;
     const tint = sampleColor(palette, i0, j0, TW, TH);
     const lit = [Math.min(1, tint[0] * 1.25), Math.min(1, tint[1] * 1.25), Math.min(1, tint[2] * 1.25)];
@@ -316,10 +316,16 @@ function addProps(root, T, theme) {
   });
   const hutRoofMats = {
     witch: new THREE.MeshLambertMaterial({ color: 0x2f6b32, side: THREE.DoubleSide }),
-    nuke: new THREE.MeshLambertMaterial({ color: 0x6e5428, side: THREE.DoubleSide }),
-    hell: new THREE.MeshLambertMaterial({ color: 0x4a3028, side: THREE.DoubleSide }),
-    ice: new THREE.MeshLambertMaterial({ color: 0x8aa8c0, side: THREE.DoubleSide }),
+    nuke: new THREE.MeshLambertMaterial({ color: 0x4a3040, side: THREE.DoubleSide }), // dark shingles
+    hell: new THREE.MeshLambertMaterial({ color: 0x2a1a1c, side: THREE.DoubleSide }), // charred
+    ice: new THREE.MeshLambertMaterial({ color: 0xe6eef8, side: THREE.DoubleSide }), // snow
   };
+  const pumpkinMat = new THREE.MeshLambertMaterial({ color: 0xe0701c });
+  const stemMat = new THREE.MeshLambertMaterial({ color: 0x3a5a20 });
+  const faceMat = new THREE.MeshBasicMaterial({ color: 0xffc040 });
+  const pumpkinGeo = new THREE.SphereGeometry(1, 10, 7);
+  const stemGeo = new THREE.CylinderGeometry(0.05, 0.07, 0.16, 5);
+  const eyeGeo = new THREE.CircleGeometry(0.07, 3);
   let lamps = 0;
   const maxLamps = 6;
 
@@ -331,6 +337,25 @@ function addProps(root, T, theme) {
       const canopy = new THREE.Mesh(new THREE.SphereGeometry(p.r * 0.85, 6, 4), leaf);
       canopy.position.set(p.x, p.h - 0.4, p.y);
       root.add(canopy);
+    } else if (p.type === 'pumpkin') {
+      // squat, ribbed-looking pumpkin; every third one is a lit jack-o'-lantern
+      const body = new THREE.Mesh(pumpkinGeo, pumpkinMat);
+      body.scale.set(p.r, p.r * 0.72, p.r);
+      body.position.set(p.x, p.r * 0.62, p.y);
+      root.add(body);
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.set(p.x, p.r * 1.32, p.y);
+      root.add(stem);
+      if ((Math.floor(p.x * 7 + p.y * 3) % 3) === 0) {
+        const face = Math.atan2(MH / 2 - p.y, MW / 2 - p.x); // grin toward the middle of the map
+        for (const side of [-1, 1]) {
+          const eye = new THREE.Mesh(eyeGeo, faceMat);
+          const a = face + side * 0.35;
+          eye.position.set(p.x + Math.cos(a) * p.r * 0.97, p.r * 0.78, p.y + Math.sin(a) * p.r * 0.97);
+          eye.lookAt(p.x + Math.cos(a) * 3, p.r * 0.78, p.y + Math.sin(a) * 3);
+          root.add(eye);
+        }
+      }
     } else if (p.type === 'volcano') {
       const h = p.top || 1.5;
       const glow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 8), lavaGlow);

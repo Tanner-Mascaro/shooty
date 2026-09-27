@@ -19,7 +19,15 @@
 // mat:  what a sample is made of, for the client's colors (MAT below)
 // props: things the client draws or animates on top: trees (canopies), volcano craters, huts
 
-export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9 };
+export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10 };
+
+// enterable cottages: walls, roof and wall height per map style (touching B squares make one)
+const COTTAGES = {
+  witch: { wall: MAT.BARK, roof: MAT.LEAVES, h: 1.7, peak: 0.7 },
+  nuke: { wall: MAT.BARK, roof: MAT.CRATE, h: 2.0, peak: 1.15 },
+  hell: { wall: MAT.ROCK, roof: MAT.ROCK, h: 1.75, peak: 0.8 },
+  ice: { wall: MAT.BARK, roof: MAT.ROCK, h: 1.7, peak: 0.95 },
+};
 export const CEILING_H = 2.8; // haunted house: walls go all the way up to the ceiling
 const STEP_H = 0.3; // taller than this can't be walked onto (matches the client's step height)
 
@@ -79,45 +87,16 @@ export function buildTerrain(MAP, RES, style) {
   for (let cy = 1; cy < MH - 1; cy++) for (let cx = 1; cx < MW - 1; cx++) {
     const c = at(cx, cy), x = cx + 0.5, y = cy + 0.5, n = hash2(cx, cy);
     if (c === '+') {
-      if (style === 'robot' || style === 'haunt' || style === 'castle' || style === 'nuke') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
+      if (style === 'nuke') { // pumpkin: a squat dome to hide behind, drawn as a real pumpkin mesh
+        dome(x, y, 0.42, 0.5, MAT.PUMPKIN, 0);
+        props.push({ type: 'pumpkin', x, y, r: 0.42 + 0.06 * n });
+      } else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.7, 0.5, MAT.LEAVES, 0.2);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
-    // outdoor huts / lodges — walls only so the interior is walkable; roof is raised afterward
-    // hell / ice: one small hut per B cell
-    if (c === 'B' && (style === 'hell' || style === 'ice')) {
-      const wallH = style === 'ice' ? 1.65 : 1.75;
-      const wallMat = MAT.ROCK;
-      const t = 0.16, W = 2.2, D = 2.2;
-      const x0 = cx - 0.6, y0 = cy - 0.6, x1 = x0 + W, y1 = y0 + D;
-      const doorL = x0 + W * 0.28, doorR = x0 + W * 0.72; // wide doorway on +Y
-      box(x0, y0, x0 + t, y1, wallH, wallMat);
-      box(x1 - t, y0, x1, y1, wallH, wallMat);
-      box(x0 + t, y0, x1 - t, y0 + t, wallH, wallMat);
-      box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
-      box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
-      // wipe anything that spilled into the room (volcano skirts, scatter) so you can walk in
-      const clearFloor = (xa, ya, xb, yb) => {
-        const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
-        const j0 = Math.max(0, Math.floor(ya * RES)), j1 = Math.min(TH - 1, Math.ceil(yb * RES));
-        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-          const k = j * TW + i;
-          if (mat[k] === MAT.PIT) continue;
-          hgt[k] = 0; mat[k] = MAT.FLOOR;
-        }
-      };
-      clearFloor(x0 + t + 0.05, y0 + t + 0.05, x1 - t - 0.05, y1 - t - 0.05);
-      clearFloor(doorL, y1 - 0.05, doorR, y1 + 0.55); // porch / doorway approach
-      // rebuild the wall segments after the wipe (wipe can shave wall bottoms on the door edge)
-      box(x0 + t, y1 - t, doorL, y1, wallH, wallMat);
-      box(doorR, y1 - t, x1 - t, y1, wallH, wallMat);
-      if (style === 'ice') box(x0 + 0.2, y0 + 0.2, x0 + 0.42, y0 + 0.42, wallH + 0.55, MAT.ROCK);
-      else box(x1 - 0.45, y1 - 0.45, x1 - 0.22, y1 - 0.22, wallH + 0.4, MAT.LAVA);
-      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir: 1 });
-      continue;
-    }
-    // witch cottages + nuketown houses: contiguous B cells become one enterable building
-    if (c === 'B' && (style === 'witch' || style === 'nuke') && !seen.has('B' + cx + ',' + cy)) {
+    // cottages: contiguous B cells become one enterable building (walls only so the inside is
+    // walkable; the roof is raised afterward)
+    if (c === 'B' && COTTAGES[style] && !seen.has('B' + cx + ',' + cy)) {
       const cells = [], stack = [[cx, cy]];
       seen.add('B' + cx + ',' + cy);
       while (stack.length) {
@@ -132,8 +111,8 @@ export function buildTerrain(MAP, RES, style) {
       const minY = Math.min(...cells.map(c => c[1])), maxY = Math.max(...cells.map(c => c[1]));
       const x0 = minX, y0 = minY, x1 = maxX + 1, y1 = maxY + 1;
       const W = x1 - x0, D = y1 - y0;
-      const wallH = style === 'witch' ? 1.7 : 2.1, t = style === 'witch' ? 0.16 : 0.18;
-      const wallMat = style === 'witch' ? MAT.BARK : MAT.WALL;
+      const look = COTTAGES[style], wallH = look.h, t = style === 'witch' ? 0.16 : 0.18;
+      const wallMat = look.wall;
       const midY = (minY + maxY) * 0.5;
       const doorDir = midY < MH / 2 ? 1 : -1; // door toward mid-map
       const doorHalf = Math.max(style === 'witch' ? 0.7 : 0.85, W * 0.22);
@@ -168,9 +147,9 @@ export function buildTerrain(MAP, RES, style) {
         box(x0 + t, y0, doorL, y0 + t, wallH, wallMat);
         box(doorR, y0, x1 - t, y0 + t, wallH, wallMat);
       }
-      // chimney / cauldron stack
+      // chimney (brimstone cottages vent lava)
       if (style === 'witch') box(x1 - 0.4, y0 + 0.18, x1 - 0.18, y0 + 0.4, wallH + 0.9, MAT.ROCK);
-      else box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, MAT.ROCK);
+      else box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, style === 'hell' ? MAT.LAVA : MAT.ROCK);
       // interior cover so fights inside aren't empty boxes
       if (W > 3.5 && D > 2.5) box(x0 + W * 0.38, y0 + D * 0.4, x0 + W * 0.62, y0 + D * 0.58, 0.55, MAT.CRATE);
       props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir, doorHalf });
@@ -267,8 +246,7 @@ export function buildTerrain(MAP, RES, style) {
     if (hut.type !== 'hut') continue;
     const hw = (hut.w || 2.2) / 2, hd = (hut.d || 2.2) / 2, t = 0.16;
     const wallH = hut.h, doorDir = hut.doorDir || 1;
-    const wallMat = hut.style === 'witch' ? MAT.BARK : hut.style === 'nuke' ? MAT.WALL : MAT.ROCK;
-    const roofMat = hut.style === 'witch' ? MAT.LEAVES : hut.style === 'nuke' ? MAT.CRATE : MAT.ROCK;
+    const look = COTTAGES[hut.style] || COTTAGES.witch, wallMat = look.wall, roofMat = look.roof;
     const x0 = hut.x - hw, y0 = hut.y - hd, x1 = hut.x + hw, y1 = hut.y + hd;
     const clear = (xa, ya, xb, yb) => {
       const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
@@ -290,7 +268,7 @@ export function buildTerrain(MAP, RES, style) {
       box(hut.x + hw * 0.44, y0, x1 - t, y0 + t, wallH, wallMat);
     }
     // A-frame roof peaked along X (ridge runs parallel to the doorway wall)
-    const peakH = hut.style === 'nuke' ? 1.15 : 0.7;
+    const peakH = look.peak;
     raise(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, (px, py) => {
       const u = Math.abs(px - hut.x) / (hw + 0.06), v = Math.abs(py - hut.y) / (hd + 0.06);
       if (u > 1 || v > 1) return null;
