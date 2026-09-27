@@ -116,3 +116,19 @@ export const BOX_TIME = 30000;   // loot boxes vanish after this long
 export const NADE = { dmg: 130, radius: 5.8, fuse: 900, speed: 26, bounce: 0.28, gravity: 16, maxCarry: 3 };
 export const NADE_CRATES = 10;
 export const NADE_RESPAWN = 18000;
+
+// spells: build spells cost mana (it refills over time); stored spells come on scrolls found
+// around the map, up to SPELL_SLOTS at once, and are used up when cast
+export const MAX_MANA = 100;
+export const MANA_REGEN = 9; // per second
+export const BUILDS = {
+  wall: { mana: 25, hp: 150, life: 30000 }, // Stone Wall: blocks movement and bullets
+  ramp: { mana: 35, hp: 200, life: 30000 }, // Earth Ramp: a slope to run up for height
+};
+export const SPELL_SLOTS = 3;
+export const STORED_SPELLS = ['heal', 'haste', 'ward'];
+export const HEAL_SPELL = 50;                    // hp, up to your max
+export const HASTE = { ms: 5000, speed: 1.5 };  // move this much faster for a while
+export const WARD = { ms: 8000, absorb: 60 };   // soaks up this much damage while it lasts
+export const SCROLL_CRATES = 8;
+export const SCROLL_RESPAWN = 20000;

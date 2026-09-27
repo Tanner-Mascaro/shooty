@@ -1,9 +1,9 @@
 // Everything drawn at full resolution on top of the 3D view: tracers, glows, the gun,
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
-import { WEAPONS, GUN_SLOTS, EYE, BODY_H } from '/shared/config.js';
+import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS } from '/shared/config.js';
 import { S, spare, isEnemy, nameOf } from '../state.js';
-import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR } from '../constants.js';
+import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, SPELL_LOOK } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
@@ -508,5 +508,42 @@ export function drawSpectate(now) {
     ctx.fillStyle = 'rgba(230,200,255,' + (0.75 + 0.25 * Math.sin(now / 180)) + ')';
     ctx.fillText('IN THE STORM! GET TO THE CIRCLE', W / 2, H * 0.3 + 84);
   }
+  ctx.textAlign = 'left';
+}
+
+// spell bar above the speed box: the two build spells (dim without the mana), then stored spells;
+// haste / ward show how long they have left
+export function drawSpellBar(now) {
+  if (S.clawsOnly) return;
+  const { W, H } = view, bw = 58, bh = 40, gap = 6;
+  const slots = [
+    ...['wall', 'ramp'].map(k => ({ key: key(k), name: k === 'wall' ? 'WALL' : 'RAMP', sub: BUILDS[k].mana + ' MANA', col: [190, 150, 255], on: S.mana >= BUILDS[k].mana, held: S.buildAim === k })),
+    ...Array.from({ length: SPELL_SLOTS }, (_, i) => {
+      const sp = S.spells[i], look = sp && SPELL_LOOK[sp];
+      return { key: key('spell' + (i + 1)), name: sp ? look.rune + ' ' + sp.toUpperCase() : '—', sub: sp ? 'SCROLL' : '', col: look ? look.col : [120, 110, 100], on: !!sp };
+    }),
+  ];
+  const total = slots.length * bw + (slots.length - 1) * gap + 10, x0 = (W - total) / 2, y = H - 136;
+  ctx.textAlign = 'center';
+  slots.forEach((s, i) => {
+    const x = x0 + i * (bw + gap) + (i >= 2 ? 10 : 0);
+    ctx.fillStyle = s.held ? 'rgba(80,50,110,0.85)' : 'rgba(26,20,14,0.7)';
+    ctx.fillRect(x, y, bw, bh);
+    ctx.strokeStyle = `rgba(${s.col.join(',')},${s.on ? 0.9 : 0.3})`; ctx.lineWidth = s.held ? 2 : 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+    ctx.font = '700 10px Caslon Antique, Georgia, serif'; ctx.fillStyle = 'rgba(232,212,170,0.75)';
+    ctx.textAlign = 'left'; ctx.fillText(s.key, x + 4, y + 11); ctx.textAlign = 'center';
+    ctx.font = '700 12px Caslon Antique, Georgia, serif';
+    ctx.fillStyle = s.on ? `rgb(${s.col.join(',')})` : 'rgba(150,140,125,0.6)';
+    ctx.fillText(s.name, x + bw / 2, y + 26);
+    ctx.font = '9px Caslon Antique, Georgia, serif'; ctx.fillStyle = 'rgba(200,185,150,0.6)';
+    ctx.fillText(s.sub, x + bw / 2, y + 36);
+  });
+  const effects = [['HASTE', S.hasteUntil, SPELL_LOOK.haste.col], ['WARD', S.wardUntil, SPELL_LOOK.ward.col]].filter(([, until]) => until > now);
+  ctx.font = '700 13px Caslon Antique, Georgia, serif';
+  effects.forEach(([name, until, col], i) => {
+    ctx.fillStyle = `rgb(${col.join(',')})`;
+    ctx.fillText(`${name} ${((until - now) / 1000).toFixed(1)}s`, W / 2 + (i - (effects.length - 1) / 2) * 110, y - 8);
+  });
   ctx.textAlign = 'left';
 }

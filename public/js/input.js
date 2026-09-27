@@ -10,6 +10,7 @@ import { askMic } from './voice.js';
 import { dash } from './physics.js';
 import { send } from './net.js';
 import { cycleSpectate } from './spectate.js';
+import { aimBuildSpell, releaseBuildSpell, castSlot } from './spells.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
@@ -42,9 +43,15 @@ export function initInput() {
     if (act === 'slide' && S.clawsOnly && locked()) dash();
     if (act === 'nade') throwNade();
     if (act === 'respawn') send({ type: 'respawn' });
+    if (act === 'wall' || act === 'ramp') aimBuildSpell(act);
+    if (act.startsWith('spell')) castSlot(+act.slice(5) - 1);
   });
-  window.addEventListener('keyup', e => { S.keys[e.code] = false; });
-  window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; }); // don't keep running after alt-tab
+  window.addEventListener('keyup', e => {
+    S.keys[e.code] = false;
+    const act = actionFor(e.code);
+    if (act === 'wall' || act === 'ramp') releaseBuildSpell(act);
+  });
+  window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; S.buildAim = null; }); // don't keep running after alt-tab
 
   document.addEventListener('mousemove', e => { if (locked()) { S.mouseDX += e.movementX; S.mouseDY += e.movementY; } });
   document.addEventListener('mousedown', e => {

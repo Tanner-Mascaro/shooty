@@ -19,7 +19,7 @@
 // mat:  what a sample is made of, for the client's colors (MAT below)
 // props: things the client draws or animates on top: trees (canopies), volcano craters, huts
 
-export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10 };
+export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10, STONE: 11 }; // STONE: conjured walls and ramps (shared/spells.js)
 
 // enterable cottages: walls, roof and wall height per map style (touching B squares make one)
 const COTTAGES = {

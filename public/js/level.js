@@ -17,6 +17,7 @@ export function setLevel(name) {
   if (!LEVELS[name] || name === S.level) return;
   S.level = name; S.MAP = LEVELS[name]; S.theme = THEMES[name];
   S.T = buildTerrain(S.MAP, RES, name);
+  S.builds.clear(); // conjured walls / ramps belonged to the old map
   buildColors(); buildMini();
   S.pickupSpots = findPickups(S.MAP);
   S.pickupActive = S.pickupSpots.map(() => true);

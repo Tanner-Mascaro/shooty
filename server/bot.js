@@ -4,7 +4,7 @@
 // Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
 // Some (NADE_CHANCE) get endless grenades and just lob them.
 // Movement uses the same accelerate / air-strafe / hold-jump bhop model as players.
-import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
+import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
 import { kindAt, walkHeight, solidAt } from '../shared/terrain.js';
@@ -353,6 +353,12 @@ export function botTick(game, p) {
 
   // Infected pursue reachable survivors; knife / nade bots chase until a blocked path makes them wander.
   const chasing = foe && (infected ? clearPath(T, p, foe) : (knife || nadeBot) && now >= (b.wanderUntil || 0));
+  // spells off scrolls: heal when low, ward up in a fight, haste to chase or outrun the storm
+  if (p.spells && p.spells.length && game.gameOn) {
+    const maxHp = game.maxHp(p);
+    const want = p.hp < maxHp * 0.45 ? 'heal' : foe && p.hp < maxHp * 0.8 ? 'ward' : zoneGoal || chasing ? 'haste' : null;
+    if (want && p.spells.includes(want)) game.handlers.cast.call(game, p, { slot: p.spells.indexOf(want) });
+  }
   let tacticalGoal = null, holdInCover = false;
   b.combatSprint = false;
   if (foe && !infected && !knife && !nadeBot && selectedGun) {
@@ -488,6 +494,7 @@ export function botTick(game, p) {
   let wishSpeed = sprinting ? L.sprint : L.speed;
   if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
   else if (knife && chasing) wishSpeed = L.sprint * 1.12;
+  if (p.hasteUntil > now) wishSpeed *= HASTE.speed;
 
   const dashing = infected && game.gameOn && now < p.dashUntil;
   if (dashing) {

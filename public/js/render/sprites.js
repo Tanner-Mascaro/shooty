@@ -66,11 +66,26 @@ export function pickupSprite(weapon, color) {
   if (weapon === 'ammo') return AMMO_CRATE;
   if (weapon === 'nade') return NADE_SPRITE;
   if (weapon === 'health') return HEALTH_SPRITE;
+  if (weapon === 'scroll') return SCROLL_SPRITE;
   const g = GUN_SHAPES[weapon] || GUN_SHAPES.pistol, body = color.map(c => 40 + c * 0.35); // each gun's body carries its color
   return { w: g.w, h: g.h, px: gunPx(weapon in GUN_SHAPES ? weapon : 'pistol'), pal: [null, body, [26, 26, 30], color, [110, 70, 40]], emit: [3] };
 }
 
 const HEALTH_SPRITE = { w: 0.55, h: 0.55, src: '/img/health-potion.png' };
+// a rolled spell scroll with a violet seal
+const SCROLL_SPRITE = {
+  w: 0.55, h: 0.55, emit: [3],
+  pal: [null, [230, 205, 150], [150, 110, 60], [190, 120, 255], [120, 80, 40]],
+  px: function scroll(u, v) {
+    const rolls = (u < 0.2 || u > 0.8) && v > 0.28 && v < 0.72;
+    if (rolls) return (u < 0.1 || u > 0.9) ? 4 : 2;
+    if (u >= 0.2 && u <= 0.8 && v > 0.34 && v < 0.66) {
+      if (Math.hypot(u - 0.5, v - 0.5) < 0.1) return 3; // seal
+      return ((v * 20) | 0) % 3 === 0 && u > 0.28 && u < 0.72 ? 4 : 1; // writing
+    }
+    return 0;
+  },
+};
 const NADE_SPRITE = { w: 0.55, h: 0.55, src: '/img/potion.png' };
 const AMMO_CRATE = { w: 0.5, h: 0.5, src: '/img/ammo.png' };
 

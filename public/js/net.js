@@ -1,5 +1,6 @@
 // WebSocket connection and handlers for every server -> client message.
-import { EYE, HEAL, PLAGUE_TEAM, teamName, gunGameGun, GUN_GAME_LADDER } from '/shared/config.js';
+import { EYE, HEAL, PLAGUE_TEAM, teamName, gunGameGun, GUN_GAME_LADDER, HASTE, WARD } from '/shared/config.js';
+import { applyBuild, removeBuild } from '/shared/spells.js';
 import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S, owned, nameOf, gunSlots } from './state.js';
 import { setLevel, colors } from './level.js';
@@ -54,6 +55,16 @@ function otherSounds(o, prev, cur) {
     o.step += Math.hypot(cur.x - prev.x, cur.y - prev.y);
     if (o.step > 0.85) { o.step = 0; playAt('step', cur.x, cur.y); }
   }
+}
+
+function addBuild(b) {
+  if (!S.T || S.builds.has(b.id)) return;
+  S.builds.set(b.id, { ...b, prev: applyBuild(S.T, b.kind, b.x, b.y, b.dir) });
+}
+// the full list (joining, or a new match): take down what's gone, raise what's new
+function setBuilds(list = []) {
+  for (const [id, b] of S.builds) if (!list.some(o => o.id === id)) { removeBuild(S.T, b.prev); S.builds.delete(id); }
+  list.forEach(addBuild);
 }
 
 // battle royale storm; ms left in its current hold / shrink becomes a local deadline
@@ -117,6 +128,8 @@ const handlers = {
     leaveSpectate();
     S.myStreak = 0; S.myGunLevel = 0;
     setZone(msg.zone, performance.now());
+    setBuilds(msg.builds);
+    S.spells = []; S.hasteUntil = 0; S.wardUntil = 0;
     S.damageIndicators = [];
     S.myKills = 0;
     S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
@@ -138,6 +151,7 @@ const handlers = {
   inv(msg) {
     S.mag = msg.mag; S.inv = msg.inv;
     if (msg.nades !== undefined) S.nades = msg.nades;
+    if (msg.spells) S.spells = msg.spells;
     if (S.clawsOnly !== !!msg.clawsOnly) { S.dashUntil = 0; S.nextDash = 0; }
     S.clawsOnly = !!msg.clawsOnly;
     if (S.clawsOnly) {
@@ -171,6 +185,7 @@ const handlers = {
     if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
     else if (msg.weapon === 'ammo') banner('+ AMMO', true);
     else if (msg.weapon === 'nade') banner('+ POTION', true);
+    else if (msg.weapon === 'scroll') banner('+ ' + msg.spell.toUpperCase() + ' SPELL', true);
     else { banner('+ ' + msg.weapon.toUpperCase(), true); switchWeapon(msg.weapon); }
   },
 
@@ -182,6 +197,7 @@ const handlers = {
     for (const p of msg.players) {
       if (p.id === S.myId) {
         S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team; S.myGunLevel = p.gl || 0;
+        if (p.mn !== undefined) S.mana = p.mn;
         // our own position is client-authoritative; only snap to the server on respawn
         if (p.seq !== S.mySeq) {
           S.mySeq = p.seq;
@@ -223,6 +239,32 @@ const handlers = {
         if (miss < 1.5) { play('whiz', 1 - miss / 2, spatial(cx, cy).pan); whizzed = true; }
       }
     }
+  },
+
+  // conjured walls / ramps: raised into our copy of the map so movement matches the server
+  builds(msg) { setBuilds(msg.builds); },
+  build(msg) {
+    addBuild(msg);
+    burst(msg.x, msg.y, 0.3, 40, 'spark');
+    playAt('land', msg.x, msg.y, 1.5);
+  },
+  unbuild(msg) {
+    const b = S.builds.get(msg.id);
+    if (!b) return;
+    removeBuild(S.T, b.prev);
+    S.builds.delete(msg.id);
+    burst(b.x, b.y, 0.8, msg.broken ? 60 : 30, 'spark');
+    if (msg.broken) playAt('thud', b.x, b.y, 1.5);
+  },
+  // someone cast a stored spell (heal / haste / ward)
+  spell(msg, now) {
+    burst(msg.x, msg.y, msg.z + 0.5, 30, 'spark');
+    if (msg.id !== S.myId) { playAt('heal', msg.x, msg.y); return; }
+    play('heal');
+    if (msg.spell === 'heal') S.healFlash = 10;
+    if (msg.spell === 'haste') S.hasteUntil = now + HASTE.ms;
+    if (msg.spell === 'ward') S.wardUntil = now + WARD.ms;
+    banner(msg.spell.toUpperCase(), true);
   },
 
   nadeThrow(msg) {

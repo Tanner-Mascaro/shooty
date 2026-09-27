@@ -7,6 +7,8 @@ import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } fro
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
+import { MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN } from '../shared/config.js';
+import { canBuild, applyBuild, removeBuild, touchesBuild } from '../shared/spells.js';
 import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
@@ -64,6 +66,8 @@ function makeHardpointSites(MAP, T) {
 
 const TERRAINS = {};
 for (const k in LEVELS) TERRAINS[k] = buildTerrain(LEVELS[k], RES, k); // level key = obstacle style
+// a room's own copy of a map's height grid, made the first time someone builds on it
+const ownCopy = T => ({ ...T, hgt: new Float32Array(T.hgt), kind: new Uint8Array(T.kind), mat: new Uint8Array(T.mat) });
 
 // open flat cells reachable from the map's corner; only depends on the level, so each is built once
 const SPAWN_SPOTS = {};
@@ -125,6 +129,8 @@ export class Room {
     this.nades = [];          // thrown grenades in flight
     this.nadeId = 0;
     this.zone = null;         // battle royale storm: { stages: [{ from, to, shrinkAt, doneAt, dps }] }
+    this.builds = [];         // conjured walls / ramps: { id, kind, x, y, dir, hp, until, by, prev }
+    this.buildId = 0;
     this.setLevel('witch');
   }
 
@@ -180,7 +186,7 @@ export class Room {
   }
   startMessage() {
     return { type: 'start', level: this.level, mode: this.mode, plagueRemainingMs: this.plagueRemainingMs,
-      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()) };
+      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), builds: this.buildList() };
   }
   plagueSetupValid() {
     return this.mode !== 'plague' || this.plagueSelection === 'random'
@@ -213,6 +219,7 @@ export class Room {
     this.level = name;
     this.map = LEVELS[name];
     this.T = TERRAINS[name];
+    this.builds = [];
     this.hardpointSites = makeHardpointSites(this.map, this.T);
     this.resetPickups();
   }
@@ -233,6 +240,8 @@ export class Room {
       }
     };
     scatter(AMMO_CRATES, 'ammo', false, false, false);
+    scatter(SCROLL_CRATES, 'scroll', false, false, false);
+    for (const pu of this.pickups) if (pu.weapon === 'scroll') pu.scroll = true;
     if (this.mode !== 'gungame') { // gun game: the ladder hands out every gun, and no potions
       scatter(GUN_CRATES, 'rifle', true, false, true); // weapon re-rolled in rollPad; walk-over crates
       if (this.mode !== 'snipers') scatter(NADE_CRATES, 'nade', false, true, false);
@@ -242,14 +251,15 @@ export class Room {
     this.nades = [];
   }
   rollPad(pu) {
+    if (pu.scroll) pu.spell = STORED_SPELLS[Math.floor(Math.random() * STORED_SPELLS.length)];
     if (!pu.gun) return;
     const guns = padGuns(this.mode);
     pu.weapon = guns[Math.floor(Math.random() * guns.length)];
   }
-  pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon, crate: !!p.crate })), active: this.pickups.map(p => p.active) }; }
+  pickupList() { return { type: 'pickups', spots: this.pickups.map(p => ({ x: p.x, y: p.y, weapon: p.weapon, crate: !!p.crate, spell: p.spell })), active: this.pickups.map(p => p.active) }; }
   broadcastPickups() { this.broadcast(this.pickupList()); }
   boxList() { return { type: 'boxes', boxes: this.boxes.map(b => ({ id: b.id, x: b.x, y: b.y, z: b.z, items: b.items.map(it => it.w) })) }; }
-  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, nades: p.nades || 0, clawsOnly: this.isInfected(p) }); }
+  syncAmmo(p) { this.send(p, { type: 'inv', mag: p.mag, inv: p.inv, nades: p.nades || 0, spells: p.spells || [], clawsOnly: this.isInfected(p) }); }
 
   voteWinner() {
     const counts = {};
@@ -361,6 +371,7 @@ export class Room {
     p.hp = this.maxHp(p);
     p.nades = 0;
     p.dead = false; p.respawnAt = 0;
+    p.mana = MAX_MANA; p.hasteUntil = 0; p.wardUntil = 0; p.ward = 0;
     if (this.isInfected(p)) { p.mag = {}; p.inv = {}; }
     else if (this.mode === 'gungame') this.gunGameLoadout(p);
     else if (p.hacks) this.giveHackLoadout(p);
@@ -394,7 +405,7 @@ export class Room {
     if (!p.bot && this.list.length >= this.max) this.dropBot(); // make room for a person
     // late gun-game arrivals start level with whoever is furthest behind
     const gunLevel = this.gameOn && this.mode === 'gungame' && this.list.length ? Math.min(...this.list.map(o => o.gunLevel || 0)) : 0;
-    Object.assign(p, { room: this, kills: 0, deaths: 0, streak: 0, multi: 0, gunLevel, dead: false, ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, modeVote: p.modeVote || null, nades: 0 });
+    Object.assign(p, { room: this, kills: 0, deaths: 0, streak: 0, multi: 0, gunLevel, dead: false, spells: [], ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, modeVote: p.modeVote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
     p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : ['teams', 'hardpoint'].includes(this.mode) ? this.smallerTeam() : 0;
@@ -405,6 +416,7 @@ export class Room {
     this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: p.hp, seq: p.seq, version: VERSION });
     this.send(p, this.pickupList());
     this.send(p, this.boxList());
+    this.send(p, { type: 'builds', builds: this.buildList() });
     if (BOTS && !p.bot && this.humans.length === 1 && !this.hasBots) this.addBot();
     if (this.gameOn) this.checkPlagueWin();
     this.roster();
@@ -637,8 +649,9 @@ export class Room {
       this.plagueEndsAt = Date.now() + PLAGUE_DURATION;
     }
     const placed = [];
+    this.clearBuilds();
     for (const p of this.list) {
-      p.kills = 0; p.deaths = 0; p.ready = !!p.bot;
+      p.kills = 0; p.deaths = 0; p.ready = !!p.bot; p.spells = [];
       p.streak = 0; p.multi = 0; p.lastKillAt = 0; p.gunLevel = 0;
       this.resetPlayer(p, placed.filter(o => !isTeamMode(this.mode) || o.team !== p.team));
       placed.push(p);
@@ -735,13 +748,64 @@ export class Room {
     log(`[${this.code}] Match ended: ${reason}`);
   }
 
+  // --- spells ---
+  buildList() { return this.builds.map(b => ({ id: b.id, kind: b.kind, x: b.x, y: b.y, dir: b.dir, by: b.by })); }
+  clearBuilds() {
+    for (const b of this.builds) removeBuild(this.T, b.prev);
+    this.builds = [];
+  }
+  // a conjured wall / ramp at (x, y) facing dir, if there's room and nobody is standing there
+  addBuild(p, kind, x, y, dir) {
+    if (this.T === TERRAINS[this.level]) this.T = ownCopy(this.T); // builds never touch the shared map
+    if (!canBuild(this.T, kind, x, y, dir)) return null;
+    const probe = { kind, x, y, dir };
+    if (this.list.some(o => !o.dead && [[0, 0], [PLAYER_R, 0], [-PLAYER_R, 0], [0, PLAYER_R], [0, -PLAYER_R]]
+      .some(([dx, dy]) => touchesBuild(probe, o.x + dx, o.y + dy, o.z, 0)))) return null;
+    const b = { id: ++this.buildId, kind, x, y, dir, by: p.id, hp: BUILDS[kind].hp, until: Date.now() + BUILDS[kind].life };
+    b.prev = applyBuild(this.T, kind, x, y, dir);
+    this.builds.push(b);
+    this.broadcast({ type: 'build', id: b.id, kind, x, y, dir, by: p.id });
+    return b;
+  }
+  breakBuild(b, broken) {
+    if (!this.builds.includes(b)) return;
+    removeBuild(this.T, b.prev);
+    this.builds = this.builds.filter(o => o !== b);
+    this.broadcast({ type: 'unbuild', id: b.id, broken });
+  }
+  damageBuild(x, y, z, dmg) {
+    const b = this.builds.find(b => touchesBuild(b, x, y, z));
+    if (!b) return;
+    b.hp -= dmg;
+    if (b.hp <= 0) this.breakBuild(b, true);
+  }
+  // damage after any ward soaks some of it up
+  hurt(o, dmg, now = Date.now()) {
+    if (o.wardUntil > now && o.ward > 0) {
+      const soak = Math.min(o.ward, dmg);
+      o.ward -= soak; dmg -= soak;
+    }
+    return dmg;
+  }
+  // a stored spell takes effect on the one who cast it
+  castStored(p, spell, now) {
+    if (spell === 'heal') p.hp = Math.min(this.maxHp(p), p.hp + HEAL_SPELL);
+    else if (spell === 'haste') p.hasteUntil = now + HASTE.ms;
+    else if (spell === 'ward') { p.wardUntil = now + WARD.ms; p.ward = WARD.absorb; }
+    this.broadcast({ type: 'spell', id: p.id, spell, x: p.x, y: p.y, z: p.z });
+  }
+
   // --- per-tick: bots, pits, pickups, grenades, state broadcast ---
   tick() {
     this.checkPlagueWin(); // the timer expires before another bot or player can infect anyone
     for (const p of this.list) if (p.bot && !p.dead) botTick(this, p);
     if (this.gameOn) {
       const now = Date.now(), dt = TICK / 1000;
-      for (const p of this.list) if (p.dead && now >= p.respawnAt) this.resetPlayer(p);
+      for (const p of this.list) {
+        if (p.dead && now >= p.respawnAt) this.resetPlayer(p);
+        if (!p.dead) p.mana = Math.min(MAX_MANA, (p.mana ?? MAX_MANA) + MANA_REGEN * dt);
+      }
+      for (const b of this.builds) if (now >= b.until) this.breakBuild(b, false);
       if (this.updateHardpoint(now)) return;
       if (!this.stepZone(now, dt)) return;
       this.stepNades(dt, now);
@@ -764,6 +828,7 @@ export class Room {
     if (this.list.length < 2) return;
     const gunGame = this.mode === 'gungame';
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team,
+      mn: Math.floor(p.mana ?? MAX_MANA),
       ...(p.dead ? { dead: true } : {}), ...(gunGame ? { gl: p.gunLevel || 0 } : {}) }));
     this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs,
       hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z })) });
@@ -794,6 +859,10 @@ export class Room {
     const killer = this.players[n.by] || null;
     this.broadcast({ type: 'nadeBoom', x: n.x, y: n.y, z: n.z, id: n.id });
     if (!this.gameOn || (killer && this.isInfected(killer))) return;
+    for (const b of [...this.builds]) {
+      const d = Math.hypot(b.x - n.x, b.y - n.y);
+      if (d < NADE.radius) { b.hp -= NADE.dmg * (1 - d / NADE.radius); if (b.hp <= 0) this.breakBuild(b, true); }
+    }
     for (const o of this.list) {
       if (!this.players[o.id] || o.dead) continue;
       if (killer && isTeamMode(this.mode) && o.team === killer.team && o !== killer) continue; // no team damage except self
@@ -804,6 +873,7 @@ export class Room {
       let hit = dmg;
       if (killer && killer.hacks) hit = Math.round(hit * HACK_DMG);
       if (o.hacks) hit = 0;
+      hit = this.hurt(o, hit);
       o.hp -= hit;
       this.broadcast({ type: 'hit', who: o.id, by: n.by, dmg: hit, head: false, weapon: 'nade', x: n.x, y: n.y, z: n.z, fromX: n.x, fromY: n.y });
       if (o.hp <= 0) {
@@ -819,6 +889,16 @@ export class Room {
     if (!pu.active || Math.hypot(p.x - pu.x, p.y - pu.y) > 0.8 || p.z > 1) return;
     if (this.isInfected(p) && pu.weapon !== 'health') return;
     const maxHp = this.maxHp(p);
+    if (pu.scroll) {
+      if ((p.spells || []).length >= SPELL_SLOTS) return;
+      p.spells.push(pu.spell);
+      pu.respawnAt = now + SCROLL_RESPAWN;
+      this.syncAmmo(p);
+      pu.active = false;
+      this.broadcast({ type: 'pickup', id: p.id, weapon: 'scroll', spell: pu.spell, x: pu.x, y: pu.y, z: 0 });
+      this.broadcastPickups();
+      return;
+    }
     if (pu.weapon === 'health') {
       if (p.hp >= maxHp) return;
       p.hp = Math.min(maxHp, p.hp + HEAL);
@@ -1040,6 +1120,25 @@ Room.prototype.handlers = {
     this.broadcast({ type: 'nadeThrow', id: n.id, by: p.id, x: n.x, y: n.y, z: n.z });
   },
 
+  // spells: { build: 'wall' | 'ramp', x, y, dir } conjures one where the caster aimed it (near
+  // them); { slot } casts a stored spell
+  cast(p, msg) {
+    if (!this.gameOn || p.dead || this.isInfected(p)) return;
+    const now = Date.now();
+    if (BUILDS[msg.build]) {
+      const cost = BUILDS[msg.build].mana;
+      if (![msg.x, msg.y].every(Number.isFinite) || !Number.isInteger(msg.dir) || msg.dir < 0 || msg.dir > 3) return;
+      if (Math.hypot(msg.x - p.x, msg.y - p.y) > 4 || (p.mana ?? MAX_MANA) < cost) return;
+      if (this.addBuild(p, msg.build, msg.x, msg.y, msg.dir)) p.mana -= cost;
+      return;
+    }
+    const spell = Number.isInteger(msg.slot) && (p.spells || [])[msg.slot];
+    if (!spell) return;
+    p.spells.splice(msg.slot, 1);
+    this.castStored(p, spell, now);
+    this.syncAmmo(p);
+  },
+
   // sent when the client finishes a reload; it can't have fired that gun for the whole reload
   reload(p, msg) {
     if (this.isInfected(p) || p.dead) return;
@@ -1080,6 +1179,7 @@ Room.prototype.handlers = {
     p.lastInputAt = now;
     let maxSpeed = MOVE_SPEED_LIMIT * (this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1);
     if (p.hacks) maxSpeed *= HACK_SPEED;
+    if (p.hasteUntil > now) maxSpeed *= HASTE.speed;
     const maxStep = maxSpeed * elapsed / 1000 + 0.04;
     const dx = msg.x - p.x, dy = msg.y - p.y, distance = Math.hypot(dx, dy);
     const scale = distance > maxStep ? maxStep / distance : 1;
@@ -1120,12 +1220,19 @@ Room.prototype.handlers = {
     p.a = prevA; p.p = prevP;
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,
       rays: res.rays.map(r => ({ a: r.a, p: r.p, dist: r.dist, hit: !!r.hit })) });
+    // rounds that stopped against a conjured wall or ramp chip away at it
+    if (this.builds.length && !w.melee) for (const r of res.rays) {
+      if (r.hit) continue;
+      const d = r.dist + 0.06, eye = p.z + EYE - (p.sl ? 0.25 : 0);
+      this.damageBuild(p.x + Math.cos(r.a) * d, p.y + Math.sin(r.a) * d, eye + Math.tan(r.p) * d, w.dmg * (p.hacks ? HACK_DMG : 1));
+    }
     for (const h of res.hits) {
       const o = h.target, r = h.ray;
       if (!this.players[o.id]) continue;
       let dmg = h.dmg;
       if (p.hacks) dmg = Math.round(dmg * HACK_DMG);
       if (o.hacks) dmg = 0;
+      dmg = this.hurt(o, dmg, now);
       o.hp -= dmg;
       this.broadcast({ type: 'hit', who: o.id, by: p.id, dmg, head: h.head, weapon: msg.weapon, fromX: p.x, fromY: p.y,
         x: p.x + Math.cos(r.a) * r.dist, y: p.y + Math.sin(r.a) * r.dist,

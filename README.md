@@ -84,6 +84,12 @@ Any room can be filled out with server-side bots using the lobby's **+ BOT / −
 
 Speed, sight range, reaction time, fire rate and aim error per difficulty are in `BOT_LEVELS` at the top of `server/bot.js`.
 
+## Spells
+
+- **Stone Wall (Z)** and **Earth Ramp (X):** hold the key to see where it'll land (green if it fits, red if not), let go to conjure it. They snap to a half-square grid facing the way you look. Walls block movement and bullets; ramps are slopes you run up for height. Both cost mana (the purple bar under your health, refilling over time), can be shot or blown down, and crumble after 30 seconds. They only go on open flat ground with nobody standing there.
+- **Stored spells (4, 5, 6):** spell scrolls lie around every map. Walk over one to store its spell (up to three): **Heal** (+50 hp), **Haste** (move faster for 5 seconds) or **Ward** (soaks up 60 damage for 8 seconds). The spell bar above your speed shows what you're carrying. Bots pick them up too and use them when it makes sense.
+- The server checks every cast. A room builds on its own copy of the map, so builds never leak between rooms, and they're cleared for each new match. Costs, health, lifetimes and effects are in `shared/config.js`; wall and ramp shapes are in `shared/spells.js`. Keys can be rebound in Settings.
+
 ## Maps
 
 Seven maps, all in the lobby vote (`FEATURED_LEVELS` in `shared/levels.js`), each 80×80 and point-symmetric so both sides are fair:

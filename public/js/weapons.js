@@ -100,7 +100,7 @@ export function findUseTarget() {
     if (d <= bestD && Math.abs(me.z - floorZ) < 1.2) { best = t; bestD = d; }
   };
   S.pickupSpots.forEach((p, i) => {
-    if (!S.pickupActive[i] || p.crate || p.weapon === 'health' || p.weapon === 'ammo' || p.weapon === 'nade') return;
+    if (!S.pickupActive[i] || p.crate || p.weapon === 'health' || p.weapon === 'ammo' || p.weapon === 'nade' || p.weapon === 'scroll') return;
     consider(p, { pad: i, items: [p.weapon] });
   });
   for (const b of S.boxes) consider(b, { box: b.id, items: b.items });

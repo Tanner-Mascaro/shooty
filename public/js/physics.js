@@ -1,7 +1,7 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt, walkHeight } from '/shared/terrain.js';
-import { TICK, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED } from '/shared/config.js';
+import { TICK, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { tryJump, tryDash } from '/shared/movement.js';
@@ -208,7 +208,7 @@ export function updatePlayer(dt) {
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
-  const movementScale = (S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1) * (S.hacks ? HACK_SPEED : 1);
+  const movementScale = (S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1) * (S.hacks ? HACK_SPEED : 1) * (S.hasteUntil > performance.now() ? HASTE.speed : 1);
   const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
   const now = performance.now();
