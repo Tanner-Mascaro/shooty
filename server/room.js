@@ -1,4 +1,4 @@
-// One game room: up to MAX_PLAYERS in free-for-all or red vs blue teams. The Hub (hub.js)
+// One game room: up to MAX_PLAYERS people (more seats for bots in battle royale) in free-for-all or red vs blue teams. The Hub (hub.js)
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
 import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, HARDPOINT_ROTATION_MS, HARDPOINT_FIRST_MS, HARDPOINT_REVEAL_MS, HARDPOINT_SITE_COUNT, HARDPOINT_RADIUS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, MOVE_SPEED_LIMIT, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
@@ -7,7 +7,7 @@ import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } fro
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
-import { respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
+import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
 import { VERSION } from './version.js';
@@ -131,6 +131,7 @@ export class Room {
   get list() { return Object.values(this.players); }
   get humans() { return this.list.filter(p => !p.bot); }
   get full() { return this.humans.length >= MAX_PLAYERS; } // bots give up their seats
+  get max() { return maxPlayers(this.mode); } // seats, counting bots
   get hasBots() { return this.list.some(p => p.bot); }
   isInfected(p) { return this.mode === 'plague' && p.team === PLAGUE_TEAM; }
   maxHp(p) { return p.hacks ? HACK_HP : this.isInfected(p) ? PLAGUE_MAX_HP : MAX_HP; }
@@ -201,7 +202,7 @@ export class Room {
       if (p.modeVote && Object.hasOwn(MODE_NAMES, p.modeVote)) modeVotes[p.modeVote] = (modeVotes[p.modeVote] || 0) + 1;
     }
     this.broadcast({ type: 'room', code: this.code, private: this.private, mode: this.mode, level: this.level,
-      gameOn: this.gameOn, bots: BOTS, max: MAX_PLAYERS, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
+      gameOn: this.gameOn, bots: BOTS, max: this.max, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
       winScore: this.winScore, teamWinScore: this.teamWinScore, hardpoint: this.hardpointSnapshot(),
       players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, vote: p.vote || null, modeVote: p.modeVote || null })) });
@@ -271,6 +272,7 @@ export class Room {
     if (!Object.hasOwn(MODE_NAMES, mode) || mode === this.mode) return false;
     this.mode = mode;
     this.plagueEndsAt = 0;
+    while (this.list.length > this.max && this.dropBot()); // leaving battle royale's bigger rooms
     this.list.forEach((pl, i) => {
       pl.team = this.mode === 'plague' ? HEALTHY_TEAM : ['teams', 'hardpoint'].includes(this.mode) ? i % 2 + 1 : 0;
       pl.ready = !!pl.bot;
@@ -389,7 +391,7 @@ export class Room {
   }
 
   add(p) {
-    if (!p.bot && this.list.length >= MAX_PLAYERS) this.dropBot(); // make room for a person
+    if (!p.bot && this.list.length >= this.max) this.dropBot(); // make room for a person
     // late gun-game arrivals start level with whoever is furthest behind
     const gunLevel = this.gameOn && this.mode === 'gungame' && this.list.length ? Math.min(...this.list.map(o => o.gunLevel || 0)) : 0;
     Object.assign(p, { room: this, kills: 0, deaths: 0, streak: 0, multi: 0, gunLevel, dead: false, ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, modeVote: p.modeVote || null, nades: 0 });
@@ -429,7 +431,7 @@ export class Room {
 
   // level: 'easy' | 'medium' | 'hard' (bot.js BOT_LEVELS); each bot gets a random character + name
   addBot(level = 'medium') {
-    if (this.list.length >= MAX_PLAYERS || !BOT_LEVELS[level]) return false;
+    if (this.list.length >= this.max || !BOT_LEVELS[level]) return false;
     const id = this.hub.nextId++;
     const skin = PLAYER_SKINS[Math.floor(Math.random() * PLAYER_SKINS.length)];
     const taken = new Set(this.list.map(p => (p.name || '').toLowerCase()));
@@ -461,7 +463,7 @@ export class Room {
   }
   fillBots(level) {
     let n = 0;
-    while (this.list.length < MAX_PLAYERS) { if (!this.addBot(level)) break; n++; }
+    while (this.list.length < this.max) { if (!this.addBot(level)) break; n++; }
     return n;
   }
   clearBots() {
@@ -610,6 +612,9 @@ export class Room {
     if (mode !== this.mode) this.applyMode(mode);
     if (['teams', 'hardpoint'].includes(this.mode) && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
+    // vs bots, a battle royale fills its extra seats with more of them
+    const bot = this.list.find(p => p.bot);
+    if (this.mode === 'royale' && bot) this.fillBots(bot.level);
     const map = this.voteWinner();
     if (map !== this.level) this.setLevel(map);
     if (this.mode === 'hardpoint' && !this.hardpointSites.length) return;
@@ -936,7 +941,7 @@ Room.prototype.handlers = {
   },
 
   addBot(p, msg) {
-    const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+    const n = Math.max(1, Math.min(this.max, msg.count | 0 || 1));
     this.addBots(msg.level, n);
     this.maybeStart();
     this.roster();
@@ -951,7 +956,7 @@ Room.prototype.handlers = {
     if (msg.id != null) {
       this.dropBot(+msg.id);
     } else {
-      const n = Math.max(1, Math.min(MAX_PLAYERS, msg.count | 0 || 1));
+      const n = Math.max(1, Math.min(this.max, msg.count | 0 || 1));
       for (let i = 0; i < n; i++) if (!this.dropBot()) break;
     }
     if (this.gameOn && !this.checkPlagueWin() && !this.checkRoyaleWin() && !this.enoughPlayers()) this.endMatch('Not enough players left');

@@ -3,7 +3,7 @@
 //
 // Rooms are joined by URL: /?room=CODE joins (or creates) that private room; /?play=1 is
 // quick play (any public room with space). Bare / is the sign-in menu — no room until they pick.
-import { MAX_PLAYERS, PLAYER_SKINS, isHackName } from '../shared/config.js';
+import { PLAYER_SKINS, isHackName } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
 import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
@@ -130,7 +130,7 @@ export class Hub {
     }
     room ??= Object.values(this.rooms).find(r => !r.private && !r.full) || this.newRoom();
     room.add(p);
-    log(`${this.who(p)} joined room ${room.code}${room.private ? ' (private)' : ''} — ${room.list.length}/${MAX_PLAYERS}`);
+    log(`${this.who(p)} joined room ${room.code}${room.private ? ' (private)' : ''} — ${room.list.length}/${room.max}`);
     this.presence(p);
   }
 

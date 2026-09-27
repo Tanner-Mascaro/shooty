@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Room } from '../server/room.js';
-import { MAX_HP, RESPAWN_MS, GUN_GAME_LADDER, WEAPONS } from '../shared/config.js';
+import { MAX_HP, MAX_PLAYERS, ROYALE_MAX_PLAYERS, RESPAWN_MS, GUN_GAME_LADDER, WEAPONS } from '../shared/config.js';
 
 function game(count = 4, mode = 'ffa') {
   const messages = [];
@@ -118,4 +118,17 @@ test('the royale storm hurts only players outside it, and late arrivals spectate
   assert.ok(b.hp < hp);
   room.add({ id: hub.nextId++, name: 'Late', skin: 'witch' });
   assert.equal(room.list.at(-1).dead, true);
+});
+
+test('battle royale tops a bot room up to its bigger size, and other modes shrink it back', () => {
+  const { room } = game(1, 'ffa'); // one person can't start a match yet
+  room.fillBots('easy');
+  assert.equal(room.list.length, MAX_PLAYERS);
+  room.handlers.mode.call(room, room.list[0], { mode: 'royale' });
+  room.startGame();
+  assert.equal(room.list.length, ROYALE_MAX_PLAYERS);
+  assert.equal(room.humans.length, 1);
+  room.finish([room.list[0]], {}, 'test');
+  room.handlers.mode.call(room, room.list[0], { mode: 'ffa' });
+  assert.equal(room.list.length, MAX_PLAYERS);
 });

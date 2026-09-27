@@ -14,7 +14,9 @@ export const HARDPOINT_FIRST_MS = 5 * 1000;
 export const HARDPOINT_REVEAL_MS = 10 * 1000;
 export const HARDPOINT_SITE_COUNT = 5;
 export const HARDPOINT_RADIUS = 2.25;
-export const MAX_PLAYERS = 8;      // per room
+export const MAX_PLAYERS = 8;      // people per room (and seats, counting bots)
+export const ROYALE_MAX_PLAYERS = 16; // battle royale has room for this many, the extra seats for bots
+export const maxPlayers = mode => mode === 'royale' ? ROYALE_MAX_PLAYERS : MAX_PLAYERS;
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
 export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale' };
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
@@ -49,10 +51,10 @@ export const gunGameGun = level => GUN_GAME_LADDER[Math.max(0, Math.min(level, G
 // battle royale: no respawns, and a storm closes in. Each stage holds, then shrinks the safe
 // circle to r (a fraction of the starting radius) over `shrink` ms; outside it costs dps hp/s
 export const ROYALE_ZONE = [
-  { hold: 30000, shrink: 30000, r: 0.55, dps: 4 },
-  { hold: 25000, shrink: 25000, r: 0.3, dps: 8 },
-  { hold: 20000, shrink: 25000, r: 0.12, dps: 15 },
-  { hold: 15000, shrink: 30000, r: 0, dps: 25 },
+  { hold: 15000, shrink: 20000, r: 0.5, dps: 5 },
+  { hold: 12000, shrink: 15000, r: 0.28, dps: 10 },
+  { hold: 10000, shrink: 12000, r: 0.12, dps: 18 },
+  { hold: 8000, shrink: 15000, r: 0, dps: 30 },
 ];
 
 export const PLAYER_SKINS = ['witch', 'robotWitch', 'gothicWitch', 'infernalWitch', 'iceWitch', 'ghostWitch', 'plagueWitch'];
