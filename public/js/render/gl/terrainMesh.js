@@ -134,6 +134,7 @@ export function buildWorld(scene, T, theme, palette) {
   const rackPos = [], rackUV = [], rackCol = [], rackIdx = [];
   const rockPos = [], rockUV = [], rockCol = [], rockIdx = [];
   const cratePos = [], crateUV = [], crateCol = [], crateIdx = [];
+  const woodPos = [], woodUV = [], woodCol = [], woodIdx = [];
   const wallPos = [], wallUV = [], wallCol = [], wallIdx = [];
 
   // Emit a box only where heightmap cells are blocked. Coarse STRIDE blocks that also
@@ -146,7 +147,8 @@ export function buildWorld(scene, T, theme, palette) {
     const lit = [Math.min(1, tint[0] * 1.25), Math.min(1, tint[1] * 1.25), Math.min(1, tint[2] * 1.25)];
     if (m === MAT.RACK) addBox(rackPos, rackUV, rackCol, rackIdx, x0, y0, x1, y1, 0, maxH, lit, 1.2);
     else if (m === MAT.CRATE) addBox(cratePos, crateUV, crateCol, crateIdx, x0, y0, x1, y1, 0, maxH, lit, 1);
-    else if (m === MAT.ROCK || m === MAT.LAVA || m === MAT.BARK || m === MAT.ROOTS || m === MAT.LEAVES)
+    else if (m === MAT.BARK) addBox(woodPos, woodUV, woodCol, woodIdx, x0, y0, x1, y1, 0, maxH, lit, 1);
+    else if (m === MAT.ROCK || m === MAT.LAVA || m === MAT.ROOTS || m === MAT.LEAVES)
       addBox(rockPos, rockUV, rockCol, rockIdx, x0, y0, x1, y1, 0, maxH, lit, 0.8);
     else addBox(wallPos, wallUV, wallCol, wallIdx, x0, y0, x1, y1, 0, maxH, lit, 1);
   };
@@ -214,6 +216,7 @@ export function buildWorld(scene, T, theme, palette) {
   // castle walls get a faint torch glow so halls don't go black
   addMesh(wallPos, wallUV, wallCol, wallIdx, tex.wall, theme.id === 'castle' ? band : null);
   addMesh(rockPos, rockUV, rockCol, rockIdx, tex.rock, null);
+  addMesh(woodPos, woodUV, woodCol, woodIdx, tex.wood, null);
   addMesh(cratePos, crateUV, crateCol, crateIdx, tex.crate, null);
 
   // --- pits ---

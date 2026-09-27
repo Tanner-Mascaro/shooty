@@ -302,9 +302,22 @@ export function texturesFor(theme) {
     ctx.fillRect(w * 0.45, 0, 4, h);
     ctx.fillRect(0, h * 0.45, w, 4);
   });
+  // cottage walls and tree trunks: brown planks, the same on every map (snowy or not)
+  const wood = makeTexture((ctx, w, h) => {
+    for (let x = 0; x < w; x++) {
+      const plank = Math.floor(x / 16), seam = x % 16 < 1;
+      for (let y = 0; y < h; y++) {
+        const grain = 0.85 + 0.15 * Math.sin(y * 0.35 + plank * 2.1 + noise(plank, y * 0.02) * 4);
+        const v = seam ? 0.45 : (0.72 + 0.28 * noise(plank, 7)) * grain;
+        ctx.fillStyle = rgb(150 * v, 104 * v, 66 * v);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+  wood.repeat.set(2, 2);
   const pit = pitTexture(theme);
   pit.repeat.set(8, 8);
-  const set = { floor, wall, rock, crate, pit };
+  const set = { floor, wall, rock, wood, crate, pit };
   cache.set(theme.id, set);
   return set;
 }
@@ -314,7 +327,8 @@ export function matTexture(mats, mat) {
   if (mat === MAT.FLOOR) return mats.floor;
   if (mat === MAT.CRATE) return mats.crate;
   if (mat === MAT.RACK || mat === MAT.WALL) return mats.wall;
-  if (mat === MAT.ROCK || mat === MAT.LAVA || mat === MAT.BARK || mat === MAT.ROOTS) return mats.rock;
+  if (mat === MAT.BARK) return mats.wood;
+  if (mat === MAT.ROCK || mat === MAT.LAVA || mat === MAT.ROOTS) return mats.rock;
   if (mat === MAT.LEAVES) return mats.rock;
   return mats.floor;
 }

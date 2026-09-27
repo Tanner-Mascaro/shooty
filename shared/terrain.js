@@ -275,6 +275,14 @@ export function buildTerrain(MAP, RES, style) {
       const peak = wallH + peakH - u * (peakH + 0.25);
       return peak > wallH + 0.02 ? [peak, roofMat] : null;
     });
+    // the gable ends rise from the walls: keep them the wall's material, not the roof's
+    const ring = 0.22;
+    for (let j = Math.max(0, Math.floor(y0 * RES)); j <= Math.min(TH - 1, Math.ceil(y1 * RES)); j++)
+      for (let i = Math.max(0, Math.floor(x0 * RES)); i <= Math.min(TW - 1, Math.ceil(x1 * RES)); i++) {
+        const k = j * TW + i, px = (i + 0.5) / RES, py = (j + 0.5) / RES;
+        const onWall = px - x0 < ring || x1 - px < ring || py - y0 < ring || y1 - py < ring;
+        if (onWall && mat[k] === roofMat && hgt[k] > STEP_H) mat[k] = wallMat;
+      }
     hut.roof = wallH + peakH;
   }
 
