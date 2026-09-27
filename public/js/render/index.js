@@ -10,7 +10,7 @@ import { syncCamera } from './gl/camera.js';
 import { beginEntities, endEntities, drawPickupBillboards, drawOthersAndCorpses, drawParticlePoints } from './gl/entities.js';
 import { drawZone } from './gl/zone.js';
 import { drawBuilds } from './gl/builds.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawSpellBar } from './hud.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawHotbar } from './hud.js';
 import { updateEmbers, volcanoPlumes, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -92,13 +92,13 @@ export function render(dt) {
   drawEnemyGlows(now);
   drawNameTags();
   drawHardpointMarker();
-  if (!S.dead) drawWeaponView(now);
+  if (!S.dead && !S.buildMode) drawWeaponView(now); // build mode holsters the gun
   drawHitMarker();
   drawFlashes();
   drawDamageIndicators(now);
   drawBanner(now);
   drawMinimap(now);
-  if (!S.dead) { drawAmmo(now); drawUsePrompt(); drawSpellBar(now); }
+  if (!S.dead) { drawAmmo(now); drawUsePrompt(); drawHotbar(now); }
   drawSpectate(now);
 
   decayEffects(dt);

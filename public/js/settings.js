@@ -20,7 +20,7 @@ export const ACTIONS = {
   respawn: ['Respawn if stuck', 'KeyK'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
-  wall: ['Stone Wall (hold to aim)', 'KeyZ'], ramp: ['Earth Ramp (hold to aim)', 'KeyX'],
+  build: ['Build mode (Earth Ramp)', 'KeyX'],
   spell1: ['Spell 1', 'Digit4'], spell2: ['Spell 2', 'Digit5'], spell3: ['Spell 3', 'Digit6'],
 };
 // ads: right click scopes while held ('hold') or until clicked again ('toggle');
@@ -184,7 +184,7 @@ export function showControlsHint() {
     return;
   }
   el.textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('wall')} wall | ${k('ramp')} ramp | ${k('spell1')}-${k('spell3')} spells | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('build')} build mode | ${k('spell1')}-${k('spell3')} spells | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {

@@ -1,7 +1,9 @@
-// Casting: hold the wall / ramp key to see where it'll go, let go to conjure it; the spell keys
-// cast what's stored in those slots. The server checks mana and room and has the final say.
-import { BUILDS } from '/shared/config.js';
-import { aimBuild, canBuild } from '/shared/spells.js';
+// Casting. Build mode (its key toggles it; a weapon key, the wheel or right-click puts the gun
+// back) holsters your gun and shows where a ramp would go; click to conjure one. Stand on a ramp
+// facing the same way to stack the next one on top. The spell keys cast what's stored in those
+// slots. The server checks mana and room and has the final say.
+import { BUILDS, rampLevels } from '/shared/config.js';
+import { aimBuild, canBuild, fitsLevels } from '/shared/spells.js';
 import { S } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
@@ -9,24 +11,28 @@ import { toast } from './ui.js';
 
 const canCast = () => S.started && S.me && !S.dead && !S.clawsOnly;
 
-// where the build being aimed would land, and whether it can: { kind, x, y, dir, ok }
+// where the ramp would land and whether it can: { kind, x, y, dir, base, ok }
 export function buildPlan() {
-  const kind = S.buildAim;
-  if (!kind || !canCast()) return null;
-  const at = aimBuild(kind, S.me.x, S.me.y, S.me.a);
-  return { kind, ...at, ok: canBuild(S.T, kind, at.x, at.y, at.dir) && S.mana >= BUILDS[kind].mana };
+  if (!S.buildMode || !canCast()) return null;
+  const at = aimBuild('ramp', S.me.x, S.me.y, S.me.a, [...S.builds.values()]);
+  const ok = fitsLevels(at.base, rampLevels(S.level)) && canBuild(S.T, 'ramp', at.x, at.y, at.dir) && S.mana >= BUILDS.ramp.mana;
+  return { kind: 'ramp', ...at, ok };
 }
 
-export function aimBuildSpell(kind) { if (canCast()) S.buildAim = kind; }
+export function setBuildMode(on) {
+  on = !!on && canCast();
+  if (on === S.buildMode) return;
+  S.buildMode = on;
+  S.scoped = false; S.reloading = null; S.mouseHeld = false;
+  play('swap');
+}
 
-export function releaseBuildSpell(kind) {
-  if (S.buildAim !== kind) return;
+export function placeRamp() {
   const plan = buildPlan();
-  S.buildAim = null;
   if (!plan) return;
-  if (S.mana < BUILDS[kind].mana) { play('dry'); toast('Not enough mana'); return; }
+  if (S.mana < BUILDS.ramp.mana) { play('dry'); toast('Not enough mana'); return; }
   if (!plan.ok) { play('dry'); return; }
-  send({ type: 'cast', build: kind, x: plan.x, y: plan.y, dir: plan.dir });
+  send({ type: 'cast', build: 'ramp', x: plan.x, y: plan.y, dir: plan.dir });
 }
 
 export function castSlot(slot) {

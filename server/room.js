@@ -7,8 +7,8 @@ import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } fro
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
-import { MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN } from '../shared/config.js';
-import { canBuild, applyBuild, removeBuild, touchesBuild } from '../shared/spells.js';
+import { rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN } from '../shared/config.js';
+import { RAMP, canBuild, applyBuild, removeBuild, touchesBuild, rampUnder, fitsLevels } from '../shared/spells.js';
 import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
@@ -129,7 +129,7 @@ export class Room {
     this.nades = [];          // thrown grenades in flight
     this.nadeId = 0;
     this.zone = null;         // battle royale storm: { stages: [{ from, to, shrinkAt, doneAt, dps }] }
-    this.builds = [];         // conjured walls / ramps: { id, kind, x, y, dir, hp, until, by, prev }
+    this.builds = [];         // conjured ramps: { id, kind, x, y, dir, base, on (the ramp it stands on), hp, until, by, prev }
     this.buildId = 0;
     this.setLevel('witch');
   }
@@ -749,26 +749,30 @@ export class Room {
   }
 
   // --- spells ---
-  buildList() { return this.builds.map(b => ({ id: b.id, kind: b.kind, x: b.x, y: b.y, dir: b.dir, by: b.by })); }
+  buildList() { return this.builds.map(b => ({ id: b.id, kind: b.kind, x: b.x, y: b.y, dir: b.dir, base: b.base, on: b.on, by: b.by })); }
   clearBuilds() {
     for (const b of this.builds) removeBuild(this.T, b.prev);
     this.builds = [];
   }
-  // a conjured wall / ramp at (x, y) facing dir, if there's room and nobody is standing there
+  // a conjured ramp at (x, y) facing dir, if there's room and nobody is standing there; one that
+  // continues another ramp stacks on its top (up to the map's limit)
   addBuild(p, kind, x, y, dir) {
     if (this.T === TERRAINS[this.level]) this.T = ownCopy(this.T); // builds never touch the shared map
-    if (!canBuild(this.T, kind, x, y, dir)) return null;
-    const probe = { kind, x, y, dir };
+    const under = rampUnder(this.builds, x, y, dir), base = under ? under.base + RAMP.rise : 0;
+    if (!fitsLevels(base, rampLevels(this.level)) || !canBuild(this.T, kind, x, y, dir)) return null;
+    const probe = { kind, x, y, dir, base };
     if (this.list.some(o => !o.dead && [[0, 0], [PLAYER_R, 0], [-PLAYER_R, 0], [0, PLAYER_R], [0, -PLAYER_R]]
       .some(([dx, dy]) => touchesBuild(probe, o.x + dx, o.y + dy, o.z, 0)))) return null;
-    const b = { id: ++this.buildId, kind, x, y, dir, by: p.id, hp: BUILDS[kind].hp, until: Date.now() + BUILDS[kind].life };
-    b.prev = applyBuild(this.T, kind, x, y, dir);
+    const b = { id: ++this.buildId, kind, x, y, dir, base, on: under ? under.id : null, by: p.id, hp: BUILDS[kind].hp, until: Date.now() + BUILDS[kind].life };
+    b.prev = applyBuild(this.T, kind, x, y, dir, base);
     this.builds.push(b);
-    this.broadcast({ type: 'build', id: b.id, kind, x, y, dir, by: p.id });
+    this.broadcast({ type: 'build', id: b.id, kind, x, y, dir, base, on: b.on, by: p.id });
     return b;
   }
+  // taking a ramp down brings down whatever was stacked on it
   breakBuild(b, broken) {
     if (!this.builds.includes(b)) return;
+    for (const above of this.builds.filter(o => o.on === b.id)) this.breakBuild(above, broken);
     removeBuild(this.T, b.prev);
     this.builds = this.builds.filter(o => o !== b);
     this.broadcast({ type: 'unbuild', id: b.id, broken });
@@ -899,9 +903,12 @@ export class Room {
       this.broadcastPickups();
       return;
     }
+    let stored = false;
     if (pu.weapon === 'health') {
-      if (p.hp >= maxHp) return;
-      p.hp = Math.min(maxHp, p.hp + HEAL);
+      // a med kit goes in a free spell slot as a heal for later; with none free it heals now
+      if (!this.isInfected(p) && (p.spells || []).length < SPELL_SLOTS) { p.spells.push('heal'); stored = true; this.syncAmmo(p); }
+      else if (p.hp >= maxHp) return;
+      else p.hp = Math.min(maxHp, p.hp + HEAL);
       pu.respawnAt = now + HEAL_RESPAWN;
     } else if (pu.nade || pu.weapon === 'nade') {
       if (this.mode === 'snipers' || (p.nades || 0) >= NADE.maxCarry) return;
@@ -922,7 +929,7 @@ export class Room {
       this.syncAmmo(p);
     }
     pu.active = false;
-    this.broadcast({ type: 'pickup', id: p.id, weapon: pu.weapon, x: pu.x, y: pu.y, z: 0 });
+    this.broadcast({ type: 'pickup', id: p.id, weapon: pu.weapon, stored, x: pu.x, y: pu.y, z: 0 });
     this.broadcastPickups();
   }
 }
@@ -1120,7 +1127,7 @@ Room.prototype.handlers = {
     this.broadcast({ type: 'nadeThrow', id: n.id, by: p.id, x: n.x, y: n.y, z: n.z });
   },
 
-  // spells: { build: 'wall' | 'ramp', x, y, dir } conjures one where the caster aimed it (near
+  // spells: { build: 'ramp', x, y, dir } conjures one where the caster aimed it (near
   // them); { slot } casts a stored spell
   cast(p, msg) {
     if (!this.gameOn || p.dead || this.isInfected(p)) return;
@@ -1128,7 +1135,7 @@ Room.prototype.handlers = {
     if (BUILDS[msg.build]) {
       const cost = BUILDS[msg.build].mana;
       if (![msg.x, msg.y].every(Number.isFinite) || !Number.isInteger(msg.dir) || msg.dir < 0 || msg.dir > 3) return;
-      if (Math.hypot(msg.x - p.x, msg.y - p.y) > 4 || (p.mana ?? MAX_MANA) < cost) return;
+      if (Math.hypot(msg.x - p.x, msg.y - p.y) > 6 || (p.mana ?? MAX_MANA) < cost) return;
       if (this.addBuild(p, msg.build, msg.x, msg.y, msg.dir)) p.mana -= cost;
       return;
     }
@@ -1220,7 +1227,7 @@ Room.prototype.handlers = {
     p.a = prevA; p.p = prevP;
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,
       rays: res.rays.map(r => ({ a: r.a, p: r.p, dist: r.dist, hit: !!r.hit })) });
-    // rounds that stopped against a conjured wall or ramp chip away at it
+    // rounds that stopped against a conjured ramp chip away at it
     if (this.builds.length && !w.melee) for (const r of res.rays) {
       if (r.hit) continue;
       const d = r.dist + 0.06, eye = p.z + EYE - (p.sl ? 0.25 : 0);

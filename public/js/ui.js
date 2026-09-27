@@ -3,7 +3,6 @@ import { MAX_MANA, MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode,
 import { LEVEL_NAMES, FEATURED_LEVELS } from '/shared/levels.js';
 import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
-import { MAX_SPEED } from './constants.js';
 import { initRoom, showRoom, scrollToMap } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
@@ -317,7 +316,6 @@ export function updateHud() {
   }
   updateModeStatus();
   drawScores();
-  updateSpeedHud();
   updateAmmoHud();
   $('feed').hidden = !settings.showFeed;
   if (S.feed.length && performance.now() - S.feed[0].t > FEED_MS) { S.feed.shift(); drawFeed(); }
@@ -342,14 +340,6 @@ function updateModeStatus() {
     $('modeClock').textContent = z.shrinking ? left : '';
     $('modeObjective').textContent = z.shrinking ? 'STORM CLOSING IN' : final && !z.ms ? 'THE STORM HAS CLOSED' : 'STORM MOVES IN ' + left;
   }
-}
-
-function updateSpeedHud() {
-  const el = $('speedHud');
-  if (!el) return;
-  const n = Math.round(S.speed * 320 / MAX_SPEED);
-  el.textContent = n + ' u/s';
-  el.classList.toggle('fast', S.speed > MAX_SPEED + 0.1);
 }
 
 function updateAmmoHud() {

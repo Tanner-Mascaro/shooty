@@ -59,7 +59,7 @@ function otherSounds(o, prev, cur) {
 
 function addBuild(b) {
   if (!S.T || S.builds.has(b.id)) return;
-  S.builds.set(b.id, { ...b, prev: applyBuild(S.T, b.kind, b.x, b.y, b.dir) });
+  S.builds.set(b.id, { ...b, prev: applyBuild(S.T, b.kind, b.x, b.y, b.dir, b.base || 0) });
 }
 // the full list (joining, or a new match): take down what's gone, raise what's new
 function setBuilds(list = []) {
@@ -129,7 +129,7 @@ const handlers = {
     S.myStreak = 0; S.myGunLevel = 0;
     setZone(msg.zone, performance.now());
     setBuilds(msg.builds);
-    S.spells = []; S.hasteUntil = 0; S.wardUntil = 0;
+    S.spells = []; S.hasteUntil = 0; S.wardUntil = 0; S.buildMode = false;
     S.damageIndicators = [];
     S.myKills = 0;
     S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
@@ -182,7 +182,8 @@ const handlers = {
     const heal = msg.weapon === 'health';
     if (msg.id !== S.myId) { playAt(heal ? 'heal' : 'pickup', sp.x, sp.y); return; }
     play(heal ? 'heal' : 'pickup');
-    if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
+    if (heal && msg.stored) banner('+ MED KIT', true); // saved as a heal in a spell slot
+    else if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
     else if (msg.weapon === 'ammo') banner('+ AMMO', true);
     else if (msg.weapon === 'nade') banner('+ POTION', true);
     else if (msg.weapon === 'scroll') banner('+ ' + msg.spell.toUpperCase() + ' SPELL', true);

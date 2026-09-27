@@ -30,10 +30,10 @@ export const S = {
   clawsOnly: false, jumpsUsed: 0, jumpHeld: false,
   dashX: 0, dashY: 0, dashUntil: 0, nextDash: 0,
   reloading: null, // { w, start, until } while a reload runs
-  // spells: mana from the server, stored spells (up to SPELL_SLOTS), the build being aimed while
-  // its key is held, and how long haste / ward last (local clock)
-  mana: 100, spells: [], buildAim: null, hasteUntil: 0, wardUntil: 0,
-  builds: new Map(), // conjured walls / ramps: id -> { kind, x, y, dir, prev }
+  // spells: mana from the server, stored spells (up to SPELL_SLOTS), build mode (gun holstered,
+  // clicks place ramps), and how long haste / ward last (local clock)
+  mana: 100, spells: [], buildMode: false, hasteUntil: 0, wardUntil: 0,
+  builds: new Map(), // conjured ramps: id -> { kind, x, y, dir, base, on, prev }
   nextFire: { pistol: 0, deagle: 0, revolver: 0, rifle: 0, burst: 0, carbine: 0, sniper: 0, crossbow: 0, beam: 0, shotgun: 0, smg: 0, uzi: 0, lmg: 0, blade: 0, claws: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
 

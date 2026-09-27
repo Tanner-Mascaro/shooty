@@ -10,7 +10,7 @@ import { askMic } from './voice.js';
 import { dash } from './physics.js';
 import { send } from './net.js';
 import { cycleSpectate } from './spectate.js';
-import { aimBuildSpell, releaseBuildSpell, castSlot } from './spells.js';
+import { setBuildMode, placeRamp, castSlot } from './spells.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
@@ -35,6 +35,7 @@ export function initInput() {
     if (act === 'talk') askMic(); // first press asks for the mic
     if (act === 'slide' && !S.clawsOnly) S.slideArmed = true;
     if (!S.started || !act || S.dead) return;
+    if (act.startsWith('slot') || act === 'swap') setBuildMode(false); // back to the gun
     if (act.startsWith('slot')) switchSlot(+act.slice(4));
     if (act === 'swap') swapWeapon();
     if (act === 'use') use();
@@ -43,21 +44,18 @@ export function initInput() {
     if (act === 'slide' && S.clawsOnly && locked()) dash();
     if (act === 'nade') throwNade();
     if (act === 'respawn') send({ type: 'respawn' });
-    if (act === 'wall' || act === 'ramp') aimBuildSpell(act);
+    if (act === 'build') setBuildMode(!S.buildMode);
     if (act.startsWith('spell')) castSlot(+act.slice(5) - 1);
   });
-  window.addEventListener('keyup', e => {
-    S.keys[e.code] = false;
-    const act = actionFor(e.code);
-    if (act === 'wall' || act === 'ramp') releaseBuildSpell(act);
-  });
-  window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; S.buildAim = null; }); // don't keep running after alt-tab
+  window.addEventListener('keyup', e => { S.keys[e.code] = false; });
+  window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; }); // don't keep running after alt-tab
 
   document.addEventListener('mousemove', e => { if (locked()) { S.mouseDX += e.movementX; S.mouseDY += e.movementY; } });
   document.addEventListener('mousedown', e => {
     if (!S.started || !S.me || !locked()) return;
-    if (e.button === 2) aim(true);
     if (e.button === 0 && S.dead) return cycleSpectate(); // dead: click watches someone else
+    if (S.buildMode) { if (e.button === 0) placeRamp(); else if (e.button === 2) setBuildMode(false); return; }
+    if (e.button === 2) aim(true);
     if (e.button === 0) { S.mouseHeld = true; fire(); }
   });
   document.addEventListener('mouseup', e => {
@@ -71,6 +69,7 @@ export function initInput() {
   document.addEventListener('wheel', e => {
     // switchUntil only gates firing / nades — always allow scrolling to another gun
     if (!S.started || !locked() || settingsOpen()) return;
+    setBuildMode(false);
     cycleWeapon(e.deltaY < 0 ? -1 : 1);
   });
 }

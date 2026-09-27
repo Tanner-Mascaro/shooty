@@ -1,50 +1,74 @@
-// Conjured Stone Walls and Earth Ramps as their own meshes (the terrain mesh is built once per
-// map), plus a see-through preview of the one being aimed: green if it fits, red if it doesn't.
+// Conjured Earth Ramps as their own meshes (the terrain mesh is built once per map): a mossy
+// mound of soil and gnarled roots dotted with glowing mushrooms that rises out of the ground when
+// cast, plus a see-through preview of the one being aimed (violet if it fits, red if it doesn't).
+// Only the look lives here; the slope you walk on is the height grid (shared/spells.js).
 import * as THREE from 'three';
 import { S } from '../../state.js';
 import { getScene } from './scene.js';
 import { buildShape, DIRS, RAMP } from '/shared/spells.js';
 import { buildPlan } from '../../spells.js';
 
+const RISE_MS = 350;
 const group = new THREE.Group();
 group.name = 'builds';
-const meshes = new Map(); // build id -> mesh
-let stoneMat = null, ghost = null, ghostKey = '';
+const built = new Map(); // build id -> THREE.Group
+let mats = null, ghost = null, ghostKey = '';
 
-// grey blocks with faint violet runes
-function stoneTexture() {
+function canvasTexture(size, draw, repeat = 1) {
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const ctx = c.getContext('2d');
-  for (let y = 0; y < 128; y += 32) for (let x = -32; x < 128; x += 64) {
-    const ox = (y / 32) % 2 ? 32 : 0, v = 70 + ((x * 7 + y * 13) % 30);
-    ctx.fillStyle = `rgb(${v},${v - 4},${v + 8})`;
-    ctx.fillRect(x + ox + 1, y + 1, 62, 30);
-  }
-  ctx.strokeStyle = 'rgba(190,130,255,0.85)';
-  ctx.lineWidth = 2;
-  for (const [x, y] of [[20, 14], [84, 46], [44, 78], [100, 110]]) {
-    ctx.beginPath(); ctx.moveTo(x - 6, y + 6); ctx.lineTo(x, y - 7); ctx.lineTo(x + 6, y + 6); ctx.moveTo(x - 4, y + 1); ctx.lineTo(x + 4, y + 1); ctx.stroke();
-  }
+  c.width = c.height = size;
+  draw(c.getContext('2d'), size);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.magFilter = THREE.NearestFilter;
-  tex.repeat.set(2.5, 2.5); // about four blocks across a wall face
+  tex.repeat.set(repeat, repeat);
   return tex;
 }
+const hash = (a, b) => { const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return n - Math.floor(n); };
 
-// a wall is a box; a ramp is a wedge rising away from where it was cast
-function geometry(kind, x, y, dir) {
-  const { box, top } = buildShape(kind, x, y, dir);
-  if (kind === 'wall') {
-    const g = new THREE.BoxGeometry(box.x1 - box.x0, top, box.y1 - box.y0);
-    g.translate((box.x0 + box.x1) / 2, top / 2, (box.y0 + box.y1) / 2);
-    return g;
+// moss and dark soil with roots crawling over it and a few glowing mushroom caps
+function moss(ctx, n, glowOnly) {
+  if (!glowOnly) {
+    for (let y = 0; y < n; y += 2) for (let x = 0; x < n; x += 2) {
+      const m = hash(x >> 3, y >> 3), v = 0.7 + 0.3 * hash(x, y);
+      ctx.fillStyle = m > 0.6 ? `rgb(${56 * v | 0},${40 * v | 0},${28 * v | 0})` : `rgb(${46 * v | 0},${74 * v | 0},${34 * v | 0})`;
+      ctx.fillRect(x, y, 2, 2);
+    }
+    ctx.strokeStyle = 'rgba(60,40,24,0.95)'; ctx.lineWidth = 4;
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      let x = hash(i, 2) * n, y = 0;
+      ctx.moveTo(x, y);
+      while (y < n) { y += 10; x += (hash(i, y) - 0.5) * 16; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+  } else { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, n, n); }
+  for (let i = 0; i < 9; i++) {
+    const x = hash(i, 5) * n, y = hash(i, 6) * n, col = i % 3 ? '#c88cff' : '#8cff9c';
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
   }
+}
+
+function makeMats() {
+  const earth = canvasTexture(128, (ctx, n) => moss(ctx, n, false), 1.5);
+  const earthGlow = canvasTexture(128, (ctx, n) => moss(ctx, n, true), 1.5);
+  return {
+    earth: new THREE.MeshLambertMaterial({ map: earth, emissive: 0xffffff, emissiveMap: earthGlow, emissiveIntensity: 0.8, side: THREE.DoubleSide }),
+    stem: new THREE.MeshLambertMaterial({ color: 0xd8d0b8 }),
+    capPurple: new THREE.MeshBasicMaterial({ color: 0xb070ff }),
+    capGreen: new THREE.MeshBasicMaterial({ color: 0x70ff90 }),
+  };
+}
+
+// a wedge rising away from where it was cast (a stacked one starts at `base` and is solid down
+// to the ground)
+function geometry(kind, x, y, dir, base = 0) {
+  const { top } = buildShape(kind, x, y, dir, base);
   const [fx, fy] = DIRS[dir], sx = -fy * RAMP.width / 2, sy = fx * RAMP.width / 2;
   const nx = x - fx * RAMP.len / 2, ny = y - fy * RAMP.len / 2, far = [x + fx * RAMP.len / 2, y + fy * RAMP.len / 2];
-  const low = RAMP.rise * 0.05;
+  const low = base + RAMP.rise * 0.05;
   const P = {
     nl: [nx - sx, 0, ny - sy], nr: [nx + sx, 0, ny + sy], fl: [far[0] - sx, 0, far[1] - sy], fr: [far[0] + sx, 0, far[1] + sy],
     nlt: [nx - sx, low, ny - sy], nrt: [nx + sx, low, ny + sy], flt: [far[0] - sx, top, far[1] - sy], frt: [far[0] + sx, top, far[1] + sy],
@@ -62,31 +86,56 @@ function geometry(kind, x, y, dir) {
   return g;
 }
 
-export function drawBuilds() {
+function mushroom(obj, x, z, cap) {
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.16, 5), mats.stem);
+  stem.position.set(x, 0.08, z);
+  const top = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), cap);
+  top.position.set(x, 0.15, z);
+  obj.add(stem, top);
+}
+
+// one ramp (a mushroom at each corner of its foot if it's on the ground), in a group that grows up
+// out of the ground
+function makeBuild(b) {
+  const obj = new THREE.Group(), [fx, fy] = DIRS[b.dir];
+  obj.add(new THREE.Mesh(geometry(b.kind, b.x, b.y, b.dir, b.base || 0), mats.earth));
+  if (!b.base) {
+    const sx = -fy * RAMP.width / 2, sy = fx * RAMP.width / 2, nx = b.x - fx * (RAMP.len / 2 + 0.15), ny = b.y - fy * (RAMP.len / 2 + 0.15);
+    mushroom(obj, nx - sx, ny - sy, mats.capPurple);
+    mushroom(obj, nx + sx * 0.8, ny + sy * 0.8, mats.capGreen);
+  }
+  obj.userData.born = performance.now();
+  obj.scale.y = 0.01;
+  return obj;
+}
+
+function dispose(obj) {
+  obj.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+}
+
+export function drawBuilds(now = performance.now()) {
   const scene = getScene();
   if (!scene) return;
   if (group.parent !== scene) scene.add(group);
-  if (!stoneMat) {
-    const map = stoneTexture();
-    stoneMat = new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide, emissive: 0x6030a0, emissiveMap: map, emissiveIntensity: 0.35 });
+  if (!mats) mats = makeMats();
+  for (const [id, obj] of built) if (!S.builds.has(id)) { group.remove(obj); dispose(obj); built.delete(id); }
+  for (const [id, b] of S.builds) if (!built.has(id)) { const obj = makeBuild(b); group.add(obj); built.set(id, obj); }
+  for (const obj of built.values()) {
+    const k = Math.min(1, (now - obj.userData.born) / RISE_MS);
+    obj.scale.y = Math.max(0.01, 1 - (1 - k) ** 3); // rises fast, then settles
   }
-  for (const [id, m] of meshes) if (!S.builds.has(id)) { group.remove(m); m.geometry.dispose(); meshes.delete(id); }
-  for (const [id, b] of S.builds) if (!meshes.has(id)) {
-    const m = new THREE.Mesh(geometry(b.kind, b.x, b.y, b.dir), stoneMat);
-    group.add(m);
-    meshes.set(id, m);
-  }
+  mats.earth.emissiveIntensity = 0.65 + 0.3 * Math.sin(now / 400); // mushrooms breathe
 
   const plan = buildPlan();
-  const key = plan ? `${plan.kind}:${plan.x}:${plan.y}:${plan.dir}` : '';
+  const key = plan ? `${plan.kind}:${plan.x}:${plan.y}:${plan.dir}:${plan.base}` : '';
   if (key !== ghostKey) {
     if (ghost) { group.remove(ghost); ghost.geometry.dispose(); ghost.material.dispose(); ghost = null; }
     if (plan) {
-      ghost = new THREE.Mesh(geometry(plan.kind, plan.x, plan.y, plan.dir),
-        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
+      ghost = new THREE.Mesh(geometry(plan.kind, plan.x, plan.y, plan.dir, plan.base),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }));
       group.add(ghost);
     }
     ghostKey = key;
   }
-  if (ghost) ghost.material.color.set(plan.ok ? 0x70ff90 : 0xff5050);
+  if (ghost) ghost.material.color.set(plan.ok ? 0xa070ff : 0xff5050);
 }

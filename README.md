@@ -86,9 +86,11 @@ Speed, sight range, reaction time, fire rate and aim error per difficulty are in
 
 ## Spells
 
-- **Stone Wall (Z)** and **Earth Ramp (X):** hold the key to see where it'll land (green if it fits, red if not), let go to conjure it. They snap to a half-square grid facing the way you look. Walls block movement and bullets; ramps are slopes you run up for height. Both cost mana (the purple bar under your health, refilling over time), can be shot or blown down, and crumble after 30 seconds. They only go on open flat ground with nobody standing there.
-- **Stored spells (4, 5, 6):** spell scrolls lie around every map. Walk over one to store its spell (up to three): **Heal** (+50 hp), **Haste** (move faster for 5 seconds) or **Ward** (soaks up 60 damage for 8 seconds). The spell bar above your speed shows what you're carrying. Bots pick them up too and use them when it makes sense.
-- The server checks every cast. A room builds on its own copy of the map, so builds never leak between rooms, and they're cleared for each new match. Costs, health, lifetimes and effects are in `shared/config.js`; wall and ramp shapes are in `shared/spells.js`. Keys can be rebound in Settings.
+- **Build mode (X):** puts your gun away and shows where an **Earth Ramp** would land (violet if it fits, red if not); click to raise it. X again, a weapon key, the mouse wheel or right-click brings the gun back. Ramps snap to a half-square grid facing the way you look; they're mossy mounds of soil and roots with glowing mushrooms that rise out of the ground. Each costs mana (the purple bar under your health, refilling over time), can be shot or blown down, and crumbles after 30 seconds. They only go on open flat ground with nobody standing there.
+- **Stacking:** stand on a ramp (or just past its top) facing the same way and the next ramp continues it upward, up to three high (one in the Hexed Manor, under its ceiling). Breaking a ramp brings down the ones on top of it.
+- **Stored spells (4, 5, 6):** carry up to three. **Med kits** go in a free slot as a **Heal** (+50 hp) to use when you want; with no free slot they heal you on the spot. **Spell scrolls** around every map hold **Heal**, **Haste** (move faster for 5 seconds) or **Ward** (soaks up 60 damage for 8 seconds). The hotbar shows what you're carrying.
+- **Bots** raise ramps in fights and run up them for height (snipers most of all), and use the spells and med kits they pick up.
+- The server checks every cast. A room builds on its own copy of the map, so builds never leak between rooms, and they're cleared for each new match. Costs, health, lifetimes, stacking and effects are in `shared/config.js`; the ramp shape is in `shared/spells.js`. Keys can be rebound in Settings.
 
 ## Maps
 

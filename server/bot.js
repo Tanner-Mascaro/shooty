@@ -4,10 +4,11 @@
 // Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
 // Some (NADE_CHANCE) get endless grenades and just lob them.
 // Movement uses the same accelerate / air-strafe / hold-jump bhop model as players.
-import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
+import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, BUILDS, rampLevels, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
 import { kindAt, walkHeight, solidAt } from '../shared/terrain.js';
+import { RAMP, DIRS, aimBuild, canBuild, fitsLevels } from '../shared/spells.js';
 
 // speed: walk wish-speed (map units / s); sprint: chase wish-speed; sight/reaction/aim as before
 export const BOT_LEVELS = {
@@ -359,6 +360,19 @@ export function botTick(game, p) {
     const want = p.hp < maxHp * 0.45 ? 'heal' : foe && p.hp < maxHp * 0.8 ? 'ward' : zoneGoal || chasing ? 'haste' : null;
     if (want && p.spells.includes(want)) game.handlers.cast.call(game, p, { slot: p.spells.indexOf(want) });
   }
+  // now and then in a fight, conjure a ramp toward the foe and run up it for height (snipers
+  // love this); it also soaks up shots aimed low
+  if (foe && game.gameOn && !infected && (p.mana ?? 0) >= BUILDS.ramp.mana && now >= (b.nextRamp || 0) && dist(foe) > 5 && dist(foe) < 20) {
+    b.nextRamp = now + 6000 + Math.random() * 8000;
+    const at = aimBuild('ramp', p.x, p.y, Math.atan2(foe.y - p.y, foe.x - p.x), game.builds);
+    if (Math.random() < (P.camp ? 0.8 : 0.4) && fitsLevels(at.base, rampLevels(game.level)) && canBuild(T, 'ramp', at.x, at.y, at.dir)) {
+      const before = game.builds.length;
+      game.handlers.cast.call(game, p, { build: 'ramp', x: at.x, y: at.y, dir: at.dir });
+      const [fx, fy] = DIRS[at.dir];
+      if (game.builds.length > before) b.rampGoal = { x: at.x + fx * (RAMP.len / 2 - 0.4), y: at.y + fy * (RAMP.len / 2 - 0.4), until: now + 3000 };
+    }
+  }
+  const rampGoal = b.rampGoal && now < b.rampGoal.until ? b.rampGoal : (b.rampGoal = null);
   let tacticalGoal = null, holdInCover = false;
   b.combatSprint = false;
   if (foe && !infected && !knife && !nadeBot && selectedGun) {
@@ -431,6 +445,10 @@ export function botTick(game, p) {
     b.goal = healGoal;
     b.pickupGoal = true;
     b.combatGoal = false;
+  } else if (rampGoal) {
+    b.goal = rampGoal;
+    b.pickupGoal = false;
+    b.combatGoal = true;
   } else if (hardpointCombatGoal) {
     b.goal = hardpointCombatGoal;
     b.pickupGoal = false;
@@ -464,7 +482,7 @@ export function botTick(game, p) {
     game.dash(p, foe.x - p.x, foe.y - p.y, now);
   // move toward the current goal, picking a new one on arrival or when blocked
   let camping = false;
-  if (!zoneGoal && !healGoal && !huntGoal && !hardpointGoal && !hardpointHold && !chasing && !tacticalGoal && !gunPickup && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10 || b.pickupGoal || b.combatGoal)) {
+  if (!zoneGoal && !healGoal && !rampGoal && !huntGoal && !hardpointGoal && !hardpointHold && !chasing && !tacticalGoal && !gunPickup && (!b.goal || Math.hypot(b.goal.x - p.x, b.goal.y - p.y) < 0.3 || b.stuck > 10 || b.pickupGoal || b.combatGoal)) {
     // campers hold each spot they reach for a few seconds, scanning, before moving on
     if (P.camp && b.goal && !b.campUntil && b.stuck <= 10 && !b.pickupGoal && !b.combatGoal) b.campUntil = now + 3500 + Math.random() * 4000;
     if (P.camp && now < (b.campUntil || 0)) { b.goal = null; camping = true; }
@@ -490,7 +508,7 @@ export function botTick(game, p) {
     wx /= wl; wy /= wl;
   }
 
-  const sprinting = !!zoneGoal || !!healGoal || !!huntGoal || P.rush || !!hardpointGoal || chasing || knife || nadeBot || infected || b.pickupGoal || b.combatSprint;
+  const sprinting = !!zoneGoal || !!healGoal || !!rampGoal || !!huntGoal || P.rush || !!hardpointGoal || chasing || knife || nadeBot || infected || b.pickupGoal || b.combatSprint;
   let wishSpeed = sprinting ? L.sprint : L.speed;
   if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
   else if (knife && chasing) wishSpeed = L.sprint * 1.12;

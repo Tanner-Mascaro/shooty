@@ -18,7 +18,7 @@ export function enterSpectate(killer, respawnMs) {
   S.respawnAt = respawnMs == null ? null : performance.now() + respawnMs;
   S.deathAt = S.me ? { x: S.me.x, y: S.me.y, z: S.me.z } : null;
   S.specCam = S.me ? { x: S.me.x, y: S.me.y, z: S.me.z + EYE, orbit: S.me.a } : null;
-  S.scoped = false; S.reloading = null; S.mouseHeld = false; S.aimHeld = false;
+  S.scoped = false; S.reloading = null; S.mouseHeld = false; S.aimHeld = false; S.buildMode = false;
   S.sliding = false; S.slideDip = 0; S.vx = S.vy = S.vz = 0;
 }
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { Room } from '../server/room.js';
 import { botTick, botGun, PERSONALITIES, randomPersonality } from '../server/bot.js';
 import { MAX_HP } from '../shared/config.js';
+import { aimBuild, canBuild } from '../shared/spells.js';
+import { walkHeight, kindAt } from '../shared/terrain.js';
 
 // a match on the witch map with one bot of the given personality (the person sits it out)
 function game(personality) {
@@ -67,4 +69,29 @@ test('hunters go to where they last saw someone', () => {
   const start = Math.hypot(spot.x - bot.x, spot.y - bot.y);
   ticks(room, bot, 90);
   assert.ok(Math.hypot(spot.x - bot.x, spot.y - bot.y) < start - 2);
+});
+
+test('bots conjure ramps in a fight and run up them', () => {
+  const { room, bot, person } = game('sniper');
+  // an open run east with the target in plain sight at the far end
+  let spot = null;
+  for (let i = 0; i < 800 && !spot; i++) {
+    const s = room.spawnPos([]);
+    const at = aimBuild('ramp', s.x, s.y, 0);
+    if (!canBuild(room.T, 'ramp', at.x, at.y, 0)) continue;
+    if (Array.from({ length: 41 }, (_, n) => n / 4).every(dx => walkHeight(room.T, s.x + dx, s.y, 0) === 0 && kindAt(room.T, s.x + dx, s.y) === 0)) spot = s;
+  }
+  assert.ok(spot, 'no open run');
+  Object.assign(bot, { x: spot.x, y: spot.y, z: 0, a: 0, mana: 100, vx: 0, vy: 0, mag: { sniper: 4 }, inv: {} });
+  Object.assign(person, { dead: false, x: spot.x + 10, y: spot.y, z: 0 });
+  for (let i = 0; i < 40 && !room.builds.length; i++) {
+    Object.assign(bot, { x: spot.x, y: spot.y, z: 0, vx: 0, vy: 0 }); // hold it where the ramp fits
+    bot.brain.nextRamp = 0;
+    botTick(room, bot);
+  }
+  assert.equal(room.builds.length, 1, 'built a ramp');
+  person.dead = true; // let it climb without a gunfight
+  let top = 0;
+  for (let i = 0; i < 90; i++) { botTick(room, bot); top = Math.max(top, bot.z); }
+  assert.ok(top > 1, `climbed to ${top.toFixed(2)}`);
 });

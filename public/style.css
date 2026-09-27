@@ -32,7 +32,6 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 /* parchment scroll frame — CC0 “Scroll UI Container” by Chloe Wolfe / Cairo Creative (OpenGameArt) */
 .scroll,
 #hud,
-#speedHud,
 #controls,
 #ammoHud,
 #homePanel,
@@ -60,7 +59,6 @@ html, body { background:#000; overflow:hidden; height:100%; height:100dvh; font-
 }
 .scroll::before, .scroll::after,
 #hud::before, #hud::after,
-#speedHud::before, #speedHud::after,
 #controls::before, #controls::after,
 #ammoHud::before, #ammoHud::after,
 #homePanel::before, #homePanel::after,
@@ -197,17 +195,6 @@ body.plague #summaryBoard .team1 .name { color:#5a8a40; }
 
 /* bottom controls hint removed — keybinds live in the spell book */
 #controls { display:none !important; }
-#speedHud {
-  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
-  z-index:10; pointer-events:none;
-  padding:4px 14px;
-  --roll-h:26px; --roll-side:16px;
-  font-family:'Caslon Antique',Georgia,serif; font-size:13px; font-weight:700; letter-spacing:.1em;
-  color:var(--ink,#3a2410); font-variant-numeric:tabular-nums; text-align:center; line-height:1.3;
-}
-#speedHud.fast { color:#3a6a28; }
-body.locked #speedHud { bottom:14px; }
-body:not(.locked):not(.fs) #speedHud { bottom:14px; }
 #ammoHud {
   position:absolute; bottom:14px; right:16px; z-index:10; pointer-events:none;
   display:flex; flex-direction:column; align-items:flex-end; gap:2px;
@@ -226,7 +213,7 @@ body:not(.locked):not(.fs) #speedHud { bottom:14px; }
 #ammoCount .spare { font-size:22px; color:var(--muted,#6a4828); font-weight:500; margin-left:2px; }
 #ammoCount.low { color:#8b4a10; }
 #ammoCount.empty { color:#8b1e2d; }
-body:not(.ingame) #ammoHud, body:not(.ingame) #controls, body:not(.ingame) #speedHud,
+body:not(.ingame) #ammoHud, body:not(.ingame) #controls,
 body:not(.ingame) #hud, body:not(.ingame) #hudLeft { display:none; }
 
 /* in-game: scoreboard + kill feed stacked top-left */
@@ -924,7 +911,6 @@ body.display-dark #homePanel,
 body.display-dark #wait .card:not(.spellbook),
 body.display-dark #hud,
 body.display-dark #scores,
-body.display-dark #speedHud,
 body.display-dark #ammoHud {
   color:#3a2410;
   background:transparent;

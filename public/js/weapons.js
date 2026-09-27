@@ -157,7 +157,7 @@ const KICK = {
 };
 
 export function fire() {
-  if (!S.started || !S.me || S.dead) return;
+  if (!S.started || !S.me || S.dead || S.buildMode) return;
   const w = S.weapon;
   if (S.clawsOnly || w === 'blade') { melee(false); return; }
   const now = performance.now();
