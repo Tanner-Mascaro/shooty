@@ -32,7 +32,7 @@ const COTTAGES = {
 //   floor: the upper floor you stand on; slab: its thickness (ground floor headroom = floor - slab)
 //   top: wall height; door: doorway height; sill / lintel: window bottom / top above each floor
 //   stairs: `steps` treads of `rise` x `tread` along the back wall, climbing from the room toward the -x wall,
-//   then one more rise onto the floor
+//   then one more rise onto the floor. Collision follows a smooth ramp over the full run.
 export const HOUSE = { floor: 1.4, slab: 0.3, top: 2.55, door: 1.0, sill: 0.35, lintel: 0.8, win: 0.3,
   rise: 0.28, tread: 0.36, steps: 4, stairW: 0.75, roofT: 0.15 };
 export const CEILING_H = 2.8; // haunted house: walls go all the way up to the ceiling
@@ -556,7 +556,7 @@ export function houseSolids(p, x, y) {
   }
   const s = p.stairs;
   if (x >= s.x0 && x < s.x1 && y >= s.y0 && y < s.y1)
-    return [[0, (Math.floor((s.x1 - x) / H.tread) + 1) * H.rise], roof];
+    return [[0, H.floor * (s.x1 - x) / (s.x1 - s.x0)], roof];
   return [[H.floor - H.slab, H.floor], roof];
 }
 

@@ -1,6 +1,6 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
-import { groundAt, kindAt, walkHeight, ceilingAt } from '/shared/terrain.js';
+import { groundAt, kindAt, walkHeight, ceilingAt, houseAt } from '/shared/terrain.js';
 import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
@@ -116,20 +116,29 @@ function wallNormal(x, y) {
 // move by the velocity in small steps; on bumping into something, drop the part of the velocity
 // going into its surface and keep the rest, so you slide around trunks, cones and rough cliffs
 function slideMove(me, dt, tol) {
+  const moveTo = (x, y) => {
+    // Follow cottage ramps each collision step, so a whole frame's downhill travel
+    // doesn't exceed the ground snap distance and turn into a short fall.
+    if (S.onGround && houseAt(S.T, x, y)) {
+      const g = footGround(x, y);
+      if (Number.isFinite(g) && g >= me.z - 0.12) me.z = g;
+    }
+    me.x = x; me.y = y;
+  };
   const n = Math.max(1, Math.ceil(Math.hypot(S.vx, S.vy) * dt / 0.04));
   for (let i = 0; i < n; i++) {
     let dx = S.vx * dt / n, dy = S.vy * dt / n;
-    if (!blocked(me.x + dx, me.y + dy, me.z, tol)) { me.x += dx; me.y += dy; continue; }
+    if (!blocked(me.x + dx, me.y + dy, me.z, tol)) { moveTo(me.x + dx, me.y + dy); continue; }
     const nrm = wallNormal(me.x + dx, me.y + dy);
     if (nrm) {
       const into = S.vx * nrm.x + S.vy * nrm.y;
       if (into < 0) { S.vx -= into * nrm.x; S.vy -= into * nrm.y; }
       dx = S.vx * dt / n; dy = S.vy * dt / n;
-      if (!blocked(me.x + dx, me.y + dy, me.z, tol)) { me.x += dx; me.y += dy; continue; }
+      if (!blocked(me.x + dx, me.y + dy, me.z, tol)) { moveTo(me.x + dx, me.y + dy); continue; }
     }
     // wedged in a corner: try each axis on its own, else stop
-    if (!blocked(me.x + dx, me.y, me.z, tol)) { me.x += dx; S.vy = 0; }
-    else if (!blocked(me.x, me.y + dy, me.z, tol)) { me.y += dy; S.vx = 0; }
+    if (!blocked(me.x + dx, me.y, me.z, tol)) { moveTo(me.x + dx, me.y); S.vy = 0; }
+    else if (!blocked(me.x, me.y + dy, me.z, tol)) { moveTo(me.x, me.y + dy); S.vx = 0; }
     else { S.vx = S.vy = 0; return; }
   }
 }
@@ -231,7 +240,7 @@ export function updatePlayer(dt) {
   if (speed > speedLimit) { S.vx *= speedLimit / speed; S.vy *= speedLimit / speed; speed = speedLimit; }
   S.speed = speed;
 
-  const prevX = me.x, prevY = me.y;
+  const prevX = me.x, prevY = me.y, prevZ = me.z;
   resolveWallOverlap(me);
 
   // walls and pit edges block unless you jump over/out (in the air you can still land on a low
@@ -240,7 +249,7 @@ export function updatePlayer(dt) {
   slideMove(me, dt, tol);
 
   if (wallHitbox(me.x, me.y)) {
-    me.x = prevX; me.y = prevY;
+    me.x = prevX; me.y = prevY; me.z = prevZ;
     S.vx = 0; S.vy = 0;
     resolveWallOverlap(me);
   }
