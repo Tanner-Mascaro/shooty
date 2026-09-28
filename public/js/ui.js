@@ -3,13 +3,14 @@ import { canBuildIn, MAX_MANA, MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM,
 import { LEVEL_NAMES, FEATURED_LEVELS } from '/shared/levels.js';
 import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
-import { initRoom, showRoom, scrollToMap } from './room.js';
+import { initRoom, showRoom, updateLoadout } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
 import { initHome } from './home.js';
 import { refreshChat } from './chat.js';
 import { send } from './net.js';
-import { initAudio } from './audio.js';
+import { initAudio, syncMusic } from './audio.js';
+import { startMotes } from './motes.js';
 
 const $ = id => document.getElementById(id);
 const wait = $('wait');
@@ -25,6 +26,35 @@ export function initLobby() {
   initFriends();
   $('summaryContinue').addEventListener('click', dismissSummary);
   $('summaryRematch').addEventListener('click', rematch);
+  initRolls();
+  startMotes();
+  // browsers only allow sound after you interact: the first click or key starts the lobby music
+  for (const type of ['pointerdown', 'keydown']) addEventListener(type, initAudio, { once: true, capture: true });
+}
+
+// side cards (friends, messages, profile, leaderboard) roll up like a scroll with Shrink;
+// remembered per card in this browser
+let rolledCards = {};
+// a pointed gothic arch with a star under it: points up to roll the card up, turns over when rolled
+const ROLL_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 13 L10 5 L16.5 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="miter"/><path d="M10 14.2 l.9 1.9 1.9.9-1.9.9-.9 1.9-.9-1.9-1.9-.9 1.9-.9z" fill="currentColor"/></svg>';
+export function setRolled(card, on) {
+  card.classList.toggle('rolled', on);
+  const b = card.querySelector('.roll');
+  b.title = on ? 'Unroll' : 'Roll up';
+  b.setAttribute('aria-label', b.title);
+  b.setAttribute('aria-expanded', String(!on));
+  if (!on) card.dispatchEvent(new Event('unroll'));
+  rolledCards[card.id] = on;
+  try { localStorage.setItem('shooty.rolled', JSON.stringify(rolledCards)); } catch {}
+}
+function initRolls() {
+  try { rolledCards = JSON.parse(localStorage.getItem('shooty.rolled')) || {}; } catch {}
+  document.querySelectorAll('.card .roll').forEach(b => {
+    const card = b.closest('.card');
+    b.innerHTML = ROLL_ICON; b.title = 'Roll up'; b.setAttribute('aria-label', b.title);
+    b.addEventListener('click', () => setRolled(card, !card.classList.contains('rolled')));
+    if (rolledCards[card.id]) setRolled(card, true);
+  });
 }
 
 export function setWaitText(text) { $('waitMsg').textContent = text; }
@@ -37,6 +67,8 @@ export function showWait(result) {
   refreshChat();
   $('result').textContent = result || '';
   showRoom();
+  syncMusic();
+  startMotes();
   if (document.pointerLockElement) document.exitPointerLock();
 }
 export function hideWait() {
@@ -45,13 +77,15 @@ export function hideWait() {
   refreshChat();
   $('result').textContent = '';
   $('msg').style.opacity = 0;
+  $('picker').hidden = true;
   hideSummary(true);
+  syncMusic(); // the lobby tune fades out for the match
 }
 
 export function applyLevelUI(name, _theme) {
   // leading = what the room is on / will play; sel/voted = what you picked (set in showRoom)
   document.querySelectorAll('#levels button').forEach(b => b.classList.toggle('leading', b.dataset.level === name));
-  scrollToMap(name); // the picked map slides to the middle of the carousel
+  if (S.room) updateLoadout(); // the lobby summary shows the leading realm
   // keep lobby chrome fixed — no map-name title or accent wash per level
   for (const el of [wait, $('corner'), summary]) {
     el?.style.removeProperty('--accent');
@@ -233,7 +267,7 @@ function drawFeed() {
 
 // everyone in the room with their kills, most first
 // (gun game: which gun they're on instead of kills)
-function scoreRows() {
+export function scoreRows() {
   if (!S.room) return [];
   const gunGame = S.room.mode === 'gungame';
   return S.room.players.map(p => {

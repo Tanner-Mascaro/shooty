@@ -25,3 +25,7 @@ export const savedSkin = () => {
   return PLAYER_SKINS.includes(s) ? s : 'witch';
 };
 export const saveSkin = skin => set('shooty.skin', PLAYER_SKINS.includes(skin) ? skin : 'witch');
+
+// set once you sign in or continue as a guest; the sign-in screen is skipped from then on
+export const hasEntered = () => !!get('shooty.entered');
+export const setEntered = on => { try { on ? localStorage.setItem('shooty.entered', '1') : localStorage.removeItem('shooty.entered'); } catch {} };

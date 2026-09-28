@@ -48,6 +48,170 @@ export function applyVolume() {
   if (!actx) return;
   master.gain.setTargetAtTime(0.6 * settings.volume, actx.currentTime, 0.05);
   if (S.theme) droneGain.gain.setTargetAtTime(0.05 * (S.theme.droneVol ?? 1) * settings.ambient, actx.currentTime, 0.05);
+  syncMusic();
+}
+
+// --- lobby music: a few spooky tunes, one picked at random, with the odd witch cackle ---
+// Plays on the home screen and in the lobby, fades out while a match is on.
+const midi = n => 440 * Math.pow(2, (n - 69) / 12);
+let musicGain = null, musicTimer = 0, nextNote = 0, step = 0, track = null;
+
+function voiced(out, o) { // a sung vowel: sawtooth through "ah" formants, with vibrato
+  const t = o.t, s = actx.createOscillator(); s.type = 'sawtooth';
+  s.frequency.setValueAtTime(o.f, t);
+  s.frequency.linearRampToValueAtTime(o.f * 1.12, t + o.dur * 0.25);
+  s.frequency.exponentialRampToValueAtTime(o.to, t + o.dur);
+  const lfo = actx.createOscillator(), lg = actx.createGain();
+  lfo.frequency.value = o.vibHz || 7; lg.gain.value = o.vib || 10; lfo.connect(lg); lg.connect(s.frequency);
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(o.vol, t + 0.012);
+  g.gain.setValueAtTime(o.vol, t + o.dur * 0.55);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
+  for (const [freq, q, amp] of [[850, 6, 1], [1250, 7, 0.6], [2700, 9, 0.35]]) {
+    const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const a = actx.createGain(); a.gain.value = amp;
+    s.connect(f); f.connect(a); a.connect(g);
+  }
+  g.connect(out);
+  s.start(t); lfo.start(t); s.stop(t + o.dur + 0.05); lfo.stop(t + o.dur + 0.05);
+}
+// "ah-HA-ha-ha-ha-ha-haaaa": breathy hits sliding down, then a long wavering one
+function laugh(out, delay = 0) {
+  let t = actx.currentTime + delay, f = 640 + Math.random() * 80;
+  for (let i = 0; i < 7; i++) {
+    noise(out, { filter:'bandpass', freq:1900, q:1, dur:0.05, vol:0.25, delay:t - actx.currentTime });
+    voiced(out, { t: t + 0.025, f, to: f * 0.86, dur: 0.1, vol: 0.5 });
+    t += 0.12 + i * 0.012; f *= 0.955;
+  }
+  voiced(out, { t: t + 0.05, f: f * 1.25, to: f * 0.62, dur: 0.95, vol: 0.45, vib: 28, vibHz: 6 });
+}
+
+// a soft held chord tone: two slightly detuned triangles through a low-pass, swelling in and out
+function pad(freq, dur, vol, t, attack = 1) {
+  const at = actx.currentTime + t, f = actx.createBiquadFilter(), g = actx.createGain();
+  f.type = 'lowpass'; f.frequency.value = 900; f.Q.value = 0.5;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at + attack);
+  g.gain.setValueAtTime(vol, at + Math.max(attack, dur - 1.2));
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  for (const d of [-4, 4]) {
+    const o = actx.createOscillator(); o.type = 'triangle'; o.frequency.value = freq; o.detune.value = d;
+    o.connect(f); o.start(at); o.stop(at + dur + 0.05);
+  }
+  f.connect(g); g.connect(musicGain);
+}
+
+// each track: the length of one step, and what plays on step n (t = seconds from now)
+const TRACKS = [
+  { // Music box: D minor i-VI-iv-V, six eighths a bar, over an organ
+    step: 0.32,
+    play(n, t) {
+      const CH = [[38, [62, 65, 69, 74]], [34, [58, 62, 65, 70]], [43, [55, 58, 62, 67]], [33, [57, 61, 64, 69]]];
+      const bar = Math.floor(n / 6), i = n % 6, [bass, notes] = CH[Math.floor(bar / 2) % 4];
+      const f = midi(notes[[0, 1, 2, 3, 2, 1][i]] + 12);
+      tone(musicGain, { type:'triangle', freq:f, dur:1.1, vol:0.16, delay:t, attack:0.004 });
+      tone(musicGain, { freq:f * 2, dur:0.5, vol:0.05, delay:t, attack:0.004 });
+      if (i === 0 && bar % 2 === 0) {
+        pad(midi(bass + 12), 3.8, 0.09, t, 0.5);
+        pad(midi(bass + 19), 3.8, 0.04, t, 0.8);
+      }
+      if (i === 0 && bar % 8 === 0) tone(musicGain, { freq:midi(86), dur:3, vol:0.07, delay:t, attack:0.01 });
+      return i === 0 && bar % 8 === 7;
+    },
+  },
+  { // Witch's waltz: A minor oom-pah-pah on soft plucks, a tune that sits on each chord
+    step: 0.26,
+    play(n, t) {
+      // eight bars of three beats: Am E Am Dm Am E Am Am
+      const CH = [[45, [57, 60, 64]], [40, [56, 59, 62]], [45, [57, 60, 64]], [38, [57, 62, 65]], [45, [57, 60, 64]], [40, [56, 59, 62]], [45, [57, 60, 64]], [45, [57, 60, 64]]];
+      const MEL = [76, 0, 72, 71, 0, 68, 69, 72, 76, 77, 0, 74, 76, 0, 72, 71, 74, 71, 69, 0, 0, 0, 0, 0];
+      const bar = Math.floor(n / 3) % 8, beat = n % 3, [bass, chord] = CH[bar];
+      if (beat === 0) tone(musicGain, { type:'triangle', freq:midi(bass - 12), dur:0.7, vol:0.2, delay:t });
+      else chord.forEach(c => tone(musicGain, { type:'triangle', freq:midi(c), dur:0.22, vol:0.035, delay:t, attack:0.003 }));
+      const m = MEL[n % MEL.length];
+      if (m) {
+        tone(musicGain, { type:'triangle', freq:midi(m), dur:0.55, vol:0.1, delay:t, attack:0.01 });
+        tone(musicGain, { freq:midi(m) * 2, dur:0.3, vol:0.025, delay:t, attack:0.01 });
+      }
+      return beat === 0 && bar === 7;
+    },
+  },
+  { // Cauldron: a slow heartbeat drum under a wavering theremin, E phrygian
+    step: 0.5,
+    play(n, t) {
+      const MEL = [64, 65, 67, 65, 64, 0, 62, 60, 59, 0, 60, 62, 64, 0, 0, 0];
+      if (n % 4 === 0) { // lub-dub, with enough body and skin to hear on laptop speakers
+        for (const [dt, v] of [[0, 1], [0.24, 0.65]]) {
+          tone(musicGain, { freq:120, to:55, dur:0.3, vol:0.35 * v, delay:t + dt });
+          noise(musicGain, { freq:900, to:200, dur:0.12, vol:0.25 * v, delay:t + dt });
+        }
+      }
+      if (n % 16 === 0) { pad(midi(52), 8, 0.08, t, 2); pad(midi(59), 8, 0.04, t, 2.5); }
+      const m = MEL[n % MEL.length];
+      if (m) {
+        const s = actx.createOscillator(), g = actx.createGain(), lfo = actx.createOscillator(), lg = actx.createGain(), at = actx.currentTime + t;
+        s.frequency.setValueAtTime(midi(m) * 0.97, at); s.frequency.exponentialRampToValueAtTime(midi(m), at + 0.15);
+        lfo.frequency.value = 5.5; lg.gain.value = 6; lfo.connect(lg); lg.connect(s.frequency);
+        g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(0.16, at + 0.12); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.95);
+        s.connect(g); g.connect(musicGain); s.start(at); lfo.start(at); s.stop(at + 1); lfo.stop(at + 1);
+      }
+      return n % 32 === 30;
+    },
+  },
+  { // Coven bells: bells on a minor pentatonic, a low toll, and a chanting pad
+    step: 0.4,
+    play(n, t) {
+      const SCALE = [69, 72, 74, 76, 79, 81, 84];
+      if (n % 2 === 0 || Math.random() < 0.3) {
+        const f = midi(SCALE[(n * 3 + Math.floor(n / 8)) % SCALE.length]);
+        tone(musicGain, { freq:f, dur:2.2, vol:0.06, delay:t, attack:0.003 });
+        tone(musicGain, { freq:f * 2.76, dur:0.9, vol:0.018, delay:t, attack:0.003 }); // the bell's clang
+      }
+      if (n % 8 === 0) tone(musicGain, { freq:midi(45), dur:4, vol:0.14, delay:t, attack:0.005 });
+      if (n % 16 === 0) [57, 60, 64].forEach(c => pad(midi(c), 6, 0.035, t, 1.5));
+      return n % 32 === 28;
+    },
+  },
+];
+
+function scheduleMusic() {
+  while (nextNote < actx.currentTime + 0.4) {
+    if (track.play(step, nextNote - actx.currentTime) && Math.random() < 0.35) laugh(musicGain, nextNote - actx.currentTime + track.step * 2); // now and then…
+    nextNote += track.step; step++;
+  }
+}
+
+// a different tune: picked at random each time the music starts, and again when you sign in
+export function newTrack() {
+  const others = TRACKS.filter(x => x !== track);
+  track = others[Math.floor(Math.random() * others.length)];
+  step = 0;
+  if (actx) nextNote = Math.max(nextNote, actx.currentTime + 0.1);
+}
+
+export function syncMusic() {
+  if (!actx) return;
+  if (!musicGain) {
+    musicGain = actx.createGain(); musicGain.gain.value = 0;
+    musicGain.connect(master);
+    const wet = actx.createGain(); wet.gain.value = 0.5; musicGain.connect(wet); wet.connect(verb);
+  }
+  const on = !S.started && settings.music > 0;
+  musicGain.gain.setTargetAtTime(on ? 0.5 * settings.music : 0, actx.currentTime, on ? 0.6 : 0.25);
+  if (on && !musicTimer) {
+    newTrack();
+    nextNote = actx.currentTime + 0.1;
+    musicTimer = setInterval(scheduleMusic, 120);
+  } else if (!on && musicTimer) {
+    clearInterval(musicTimer); musicTimer = 0;
+  }
+}
+
+// the lobby's own cackle (I'm Ready), on the music volume
+export function cackle() {
+  if (!actx || !musicGain || settings.music <= 0) return;
+  laugh(musicGain);
 }
 
 function setLoop(g, v) { if (g) g.gain.setTargetAtTime(v, actx.currentTime, 0.1); }

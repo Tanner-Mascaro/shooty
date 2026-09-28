@@ -33,7 +33,7 @@ const failedLogin = (ip, username) => {
 const successfulLogin = (ip, username) => { failsByIp.delete(ip); failsByAccount.delete(username.toLowerCase()); };
 const cleanName = name => String(name ?? '').replace(/[^\w .-]/g, '').trim().slice(0, 16);
 
-const AUTH = ['register', 'login', 'logout'];
+const AUTH = ['register', 'login', 'logout', 'password'];
 const INVITE_GAP = 10000; // ms between invites to the same friend
 const CHAT_MAX = 140; // same cap as room chat / public/js/chat.js
 const DEV_CHEATS = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_CHEATS === '1';
@@ -202,7 +202,10 @@ export class Hub {
   async sendBoard(to) {
     await this.saving;
     try {
-      const data = JSON.stringify({ type: 'leaderboard', rows: await this.profiles.board() });
+      // usernames stay on the server: rows say only whether it's an account you can friend,
+      // and a friend request names the row (see friendAdd)
+      this.board = await this.profiles.board();
+      const data = JSON.stringify({ type: 'leaderboard', rows: this.board.map(({ username, ...r }) => ({ ...r, account: !!username })) });
       for (const p of to ? [to] : Object.values(this.conns)) this.sendRaw(p, data);
     } catch (e) { log('Could not load leaderboard: ' + e.message); }
   }
@@ -290,6 +293,7 @@ Hub.prototype.handlers = {
     this.send(p, { type: 'auth', ok: true });
     await this.sendProfile(p);
     this.sendFriends(p);
+    if (p.room) p.room.roster(); // the room list shows who can be added as a friend
   },
 
   // sign in on this browser: it gets a new token tied to the account's profile
@@ -312,6 +316,23 @@ Hub.prototype.handlers = {
     p.tokenHash = hashToken(token);
     this.send(p, { type: 'auth', ok: true, token });
     if (await this.useProfile(p, acct.id, null)) log(`${before} signed in as ${p.username}`);
+    if (p.room) p.room.roster();
+  },
+
+  // change your password: needs the current one
+  async password(p, msg) {
+    if (!p.username) return;
+    const current = String(msg.current ?? '').slice(0, 72), next = String(msg.password ?? '');
+    if (next.length < 15 || next.length > 72) return this.send(p, { type: 'auth', error: 'New password: 15-72 characters' });
+    if (lockedOut(failsByAccount, p.username.toLowerCase(), 10)) return this.send(p, { type: 'auth', error: 'Too many tries — wait a minute' });
+    const acct = await this.profiles.account(p.username);
+    if (!acct || !await checkPassword(current, acct.passHash)) {
+      failedLogin(p.ip, p.username);
+      return this.send(p, { type: 'auth', error: 'Current password is wrong' });
+    }
+    await this.profiles.setPassword(acct.id, await hashPassword(next));
+    log(`${this.who(p)} changed their password`);
+    this.send(p, { type: 'auth', ok: true, passwordChanged: true });
   },
 
   // the browser throws its token away and starts over as a new guest
@@ -323,13 +344,25 @@ Hub.prototype.handlers = {
     p.username = null;
     this.send(p, { type: 'auth', ok: true, signedOut: true });
     this.send(p, { type: 'friends', list: null });
+    if (p.room) p.room.roster();
   },
 
+  // by username, or { player: id } for someone in your room, or { board: index, name } for a
+  // leaderboard row — those two are looked up here so usernames aren't shared
   async friendAdd(p, msg) {
-    const t = await this.target(p, msg.username);
+    let username = msg.username, them = String(msg.username ?? '').trim();
+    if (msg.player != null) {
+      const o = p.room && p.room.players[msg.player];
+      if (!o || !o.username) return this.notice(p, "That player isn't signed in");
+      username = o.username; them = this.name(o);
+    } else if (msg.board != null) {
+      const row = (this.board || [])[msg.board];
+      if (!row || row.name !== msg.name || !row.username) return this.notice(p, "Couldn't find that player — try again");
+      username = row.username; them = row.name;
+    }
+    const t = await this.target(p, username);
     if (!t) return;
     const res = await this.profiles.friendRequest(p.pid, t.id);
-    const them = String(msg.username).trim();
     if (res === 'limit') return this.notice(p, 'Your friends list is full');
     if (res === 'already') return this.notice(p, `You've already added ${them}`);
     log(`${this.who(p)} ${res === 'accepted' ? 'is now friends with' : 'sent a friend request to'} ${them}`);

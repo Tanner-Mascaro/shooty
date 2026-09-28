@@ -2,14 +2,20 @@
 // and where, invite them to your room or join theirs. Plus the invite popup you get from a friend.
 import { S } from './state.js';
 import { send } from './net.js';
-import { goToRoom } from './room.js';
-import { openDm } from './chat.js';
+import { goToRoom, showRoom } from './room.js';
+import { drawBoard } from './account.js';
+import { openDm, setDmFriends } from './chat.js';
 import { homeOpen } from './home.js';
 import { MODE_NAMES } from '/shared/config.js';
 
 const $ = id => document.getElementById(id);
 let invite = null; // the invite on screen
 let pendingFriends = undefined; // held while home is open
+let friendList = null; // latest list; null while signed out
+
+// signed in, and this name isn't already a friend or a request — the room list and the
+// leaderboard show a + Friend button for accounts that pass
+export const canFriend = name => !!friendList && !friendList.some(f => f.name === name);
 
 export function initFriends() {
   $('friendForm').addEventListener('submit', e => {
@@ -34,6 +40,9 @@ const button = (label, onClick, cls) => {
 export function showFriends(list) {
   if (homeOpen()) { pendingFriends = list; return; }
   pendingFriends = undefined;
+  friendList = list;
+  setDmFriends(list);
+  showRoom(); drawBoard(); // their + Friend buttons depend on the list
   $('friendsGuest').hidden = !!list;
   $('friendForm').hidden = !list;
   $('friendList').replaceChildren(...(list || []).map(f => {

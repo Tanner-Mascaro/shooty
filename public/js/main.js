@@ -16,12 +16,14 @@ import { warmLobby } from './room.js';
 import { flushFriends } from './friends.js';
 import { ensureCanvas } from './render/canvas.js';
 import { S } from './state.js';
+import { initMap } from './mapview.js';
 
 initLobby();
 initSettings();
 initChat();
 initVoice();
 initInput();
+initMap();
 connect();
 
 const fpsEl = document.getElementById('fps');

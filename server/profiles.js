@@ -50,8 +50,9 @@ export async function openProfiles(root) {
 //   saveSettings(id, obj)    -> stores the player's game settings (public/js/settings.js; null until saved)
 //   claim(id, username, passHash) -> false if the username is taken or the profile already has one
 //   account(username)        -> { id, passHash } or null
+//   setPassword(id, passHash)
 //   addSession(tokenHash, id) / removeSession(tokenHash)
-//   board()                  -> top players [{ name, kills, deaths, wins, losses }]
+//   board()                  -> top players [{ name, username, kills, deaths, wins, losses }] (the hub hides usernames)
 //   rank(stats)              -> 1-based leaderboard position for these stats, or null if unranked
 //   friendRequest(from, to)  -> 'sent' | 'accepted' (they'd already asked you) | 'already' | 'limit'
 //   friendAccept(me, from)   -> false if there was no such request
@@ -97,6 +98,7 @@ async function postgresStore(url) {
         return r.rowCount === 1;
       } catch (e) { if (e.code === '23505') return false; throw e; } // unique violation: name taken
     },
+    async setPassword(id, passHash) { await db.query('UPDATE profiles SET pass_hash = $2 WHERE id = $1', [id, passHash]); },
     async account(username) {
       const r = await one('SELECT id, pass_hash FROM profiles WHERE lower(username) = lower($1)', [username]);
       return r ? { id: r.id, passHash: r.pass_hash } : null;
@@ -106,7 +108,7 @@ async function postgresStore(url) {
     },
     async removeSession(tokenHash) { await db.query('DELETE FROM sessions WHERE token_hash = $1', [tokenHash]); },
     async board() {
-      return (await db.query(`SELECT name, ${STATS.join(', ')} FROM profiles WHERE wins + losses > 0
+      return (await db.query(`SELECT name, username, ${STATS.join(', ')} FROM profiles WHERE wins + losses > 0
         ORDER BY wins DESC, kills DESC, deaths ASC LIMIT ${BOARD_SIZE}`)).rows;
     },
     async rank(s) {
@@ -179,6 +181,7 @@ function fileStore(file) {
       save();
       return true;
     },
+    async setPassword(id, passHash) { if (all[id]) { all[id].passHash = passHash; save(); } },
     async account(username) {
       const lower = username.toLowerCase();
       const id = Object.keys(all).find(k => all[k].username && all[k].username.toLowerCase() === lower);
@@ -186,7 +189,7 @@ function fileStore(file) {
     },
     async addSession(tokenHash, id) { data.sessions[tokenHash] = id; save(); },
     async removeSession(tokenHash) { delete data.sessions[tokenHash]; save(); },
-    async board() { return Object.values(all).filter(ranked).sort((a, b) => ahead(b, a)).slice(0, BOARD_SIZE).map(pick).map(({ username, ...p }) => p); },
+    async board() { return Object.values(all).filter(ranked).sort((a, b) => ahead(b, a)).slice(0, BOARD_SIZE).map(pick); },
     async rank(s) { return ranked(s) ? 1 + Object.values(all).filter(p => ranked(p) && ahead(p, s) > 0).length : null; },
     async friendRequest(from, to) {
       const rev = data.friends.find(f => f.a === to && f.b === from);

@@ -211,7 +211,7 @@ export class Room {
       gameOn: this.gameOn, bots: BOTS, max: this.max, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
       winScore: this.winScore, teamWinScore: this.teamWinScore, hardpoint: this.hardpointSnapshot(),
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, account: !!p.username, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
   }
 
   // --- level / pickups ---

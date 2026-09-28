@@ -19,7 +19,7 @@ export const ACTIONS = {
   slot1: ['Gun 1', 'Digit1'], slot2: ['Gun 2', 'Digit2'], slot3: ['Blade', 'Digit3'],
   respawn: ['Respawn if stuck', 'KeyK'],
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
-  fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'],
+  fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'], map: ['Map & standings', 'KeyM'],
   build: ['Build mode (Earth Ramp)', 'KeyX'],
   spell1: ['Spell 1', 'Digit4'], spell2: ['Spell 2', 'Digit5'], spell3: ['Spell 3', 'Digit6'],
 };
@@ -27,7 +27,7 @@ export const ACTIONS = {
 // voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
 const DEFAULTS = {
   fps: 0, showFps: false, fov: 1, crosshair: 1, showMinimap: true, showFeed: true, displayTheme: 'light',
-  volume: 1, sfx: 1, ambient: 1, voice: 'ptt', voiceVol: 1, sens: 1, invertY: false, ads: 'toggle',
+  volume: 1, sfx: 1, ambient: 1, music: 0.6, voice: 'ptt', voiceVol: 1, sens: 1, invertY: false, ads: 'toggle',
   keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])),
 };
 const FPS_CHOICES = [0, 30, 60, 90, 120, 144, 165, 240]; // 0 = as fast as the display refreshes
@@ -51,7 +51,7 @@ function normalize(saved) {
     showFeed: typeof saved.showFeed === 'boolean' ? saved.showFeed : DEFAULTS.showFeed,
     displayTheme: ['light', 'dark', 'system'].includes(saved.displayTheme) ? saved.displayTheme : DEFAULTS.displayTheme,
     volume: num(saved.volume, 0, 1, DEFAULTS.volume), sfx: num(saved.sfx, 0, 1, DEFAULTS.sfx),
-    ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient),
+    ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient), music: num(saved.music, 0, 1, DEFAULTS.music),
     sens: num(saved.sens, 0.2, 3, DEFAULTS.sens),
     invertY: typeof saved.invertY === 'boolean' ? saved.invertY : DEFAULTS.invertY,
     ads: ['toggle', 'hold'].includes(saved.ads) ? saved.ads : DEFAULTS.ads,
@@ -113,9 +113,13 @@ export function keyName(code) {
 }
 
 // --- fullscreen: the whole screen is the game, no browser tabs or bars ---
+// Chrome's keyboard lock makes a tap of Esc reach the game (menus, freeing the mouse) instead of
+// dropping fullscreen; holding Esc still exits
 export function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
-  else document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  else document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => navigator.keyboard?.lock?.(['Escape']).catch(() => {}))
+    .catch(() => {});
 }
 
 // --- panel ---
@@ -159,7 +163,7 @@ function render() {
   $('invertY').checked = settings.invertY;
   $('ads').value = settings.ads;
   $('voiceMode').value = settings.voice;
-  for (const k of ['volume', 'sfx', 'ambient', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
+  for (const k of ['volume', 'sfx', 'ambient', 'music', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
   $('sensVal').textContent = settings.sens.toFixed(2) + '×';
   $('fovVal').textContent = Math.round(settings.fov * 100) + '%';
   $('crosshairVal').textContent = settings.crosshair.toFixed(1) + '×';
@@ -194,7 +198,7 @@ export function initSettings() {
     settings.voice = e.target.value; save(); syncVoice();
     if (settings.voice === 'open') askMic(); // this change is a click: the browser may ask now
   });
-  for (const k of ['volume', 'sfx', 'ambient', 'voiceVol'])
+  for (const k of ['volume', 'sfx', 'ambient', 'music', 'voiceVol'])
     $(k).addEventListener('input', e => { settings[k] = +e.target.value; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; save(); });
   $('fpsCap').addEventListener('change', e => { settings.fps = +e.target.value; save(); });
   $('showFps').addEventListener('change', e => { settings.showFps = e.target.checked; save(); });

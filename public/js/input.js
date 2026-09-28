@@ -11,6 +11,7 @@ import { dash } from './physics.js';
 import { send } from './net.js';
 import { cycleSpectate } from './spectate.js';
 import { setBuildMode, placeRamp, castSlot } from './spells.js';
+import { toggleMap } from './mapview.js';
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
@@ -31,6 +32,7 @@ export function initInput() {
     if (e.repeat) return;
     if (act === 'fullscreen') return toggleFullscreen();
     if (act === 'settings') return openSettings();
+    if (act === 'map') return toggleMap();
     if (act === 'chat') { e.preventDefault(); return openChat(); }
     if (act === 'talk') askMic(); // first press asks for the mic
     if (act === 'slide' && !S.clawsOnly) S.slideArmed = true;

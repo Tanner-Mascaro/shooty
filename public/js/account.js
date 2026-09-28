@@ -1,8 +1,9 @@
 // Lobby profile panel: your name and stats, sign in / create account / sign out, leaderboard.
 // The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
-import { token, setToken, clearToken, savedName, saveName, savedSkin } from './profile.js';
-import { homeProfile, homeAuth, homeOpen } from './home.js';
+import { token, setToken, clearToken, savedName, saveName, savedSkin, setEntered } from './profile.js';
+import { homeProfile, homeAuth, homeOpen, showHome } from './home.js';
+import { canFriend } from './friends.js';
 
 const $ = id => document.getElementById(id);
 let me = {}; // latest profile message, merged (stat-only updates arrive after every kill)
@@ -17,7 +18,27 @@ export function initAccount() {
   nameInput.addEventListener('change', () => { saveName(nameInput.value.trim()); sendHello(); });
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
 
-  $('showAuth').addEventListener('click', () => { form.hidden = false; $('signedOut').hidden = true; $('authUser').focus(); });
+  // the Account popup: name, sign in / create account, password, sign out
+  const modal = $('accountModal');
+  const close = () => { modal.hidden = true; $('openAccount').focus(); };
+  $('openAccount').addEventListener('click', () => {
+    $('authErr').textContent = ''; $('pwMsg').textContent = '';
+    modal.hidden = false;
+    modal.querySelector('.modalClose').focus();
+  });
+  modal.querySelector('.modalClose').addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || modal.hidden) return;
+    e.stopImmediatePropagation();
+    close();
+  }, true);
+  $('pwForm').addEventListener('submit', e => {
+    e.preventDefault();
+    $('pwMsg').textContent = '';
+    if ($('pwNew').value.length < 15) { $('pwMsg').textContent = 'Choose a new password with at least 15 characters'; return; }
+    send({ type: 'password', current: $('pwCurrent').value, password: $('pwNew').value });
+  });
   const submit = type => {
     $('authErr').textContent = '';
     if (type === 'register' && $('authPass').value.length < 15) {
@@ -29,6 +50,13 @@ export function initAccount() {
   form.addEventListener('submit', e => { e.preventDefault(); submit('login'); });
   $('registerBtn').addEventListener('click', () => submit('register'));
   $('logoutBtn').addEventListener('click', () => send({ type: 'logout' }));
+  $('board').addEventListener('click', e => {
+    const b = e.target.closest('[data-friend-row]');
+    if (!b) return;
+    const row = board[+b.dataset.friendRow];
+    if (row) send({ type: 'friendAdd', board: +b.dataset.friendRow, name: row.name });
+    b.disabled = true;
+  });
 }
 
 export function showProfile(msg) {
@@ -55,9 +83,11 @@ export function showProfile(msg) {
     return tile;
   }));
 
-  $('signedIn').hidden = !me.username;
-  $('signedOut').hidden = !!me.username;
+  $('acctIn').hidden = !me.username;
+  $('acctOut').hidden = !!me.username;
   $('acctName').textContent = me.username || '';
+  $('profileName').textContent = me.name || '';
+  $('acctLine').textContent = me.username ? '@' + me.username : 'Guest — sign in from Account (top right) to keep your stats';
   drawBoard(); // your highlighted row may have changed
 }
 
@@ -65,14 +95,22 @@ export function showProfile(msg) {
 export function onAuth(msg) {
   homeAuth(msg);
   if (homeOpen()) return; // homeAuth already handled the home form
-  if (msg.error) { $('authErr').textContent = msg.error; return; }
+  const signedIn = !$('acctIn').hidden; // errors go under the form you were using
+  if (msg.error) { $(signedIn ? 'pwMsg' : 'authErr').textContent = msg.error; return; }
+  if (msg.passwordChanged) {
+    $('pwCurrent').value = ''; $('pwNew').value = '';
+    $('pwMsg').textContent = 'Password changed';
+    return;
+  }
   $('authPass').value = '';
-  $('authForm').hidden = true; // the next profile message shows signed in / signed out
   if (msg.token) setToken(msg.token); // signed in: this browser now belongs to the account
+  if (!msg.signedOut) $('accountModal').hidden = true; // signed in: the next profile message fills in the rest
   if (msg.signedOut) {
+    $('accountModal').hidden = true;
     clearToken(); saveName('');
+    setEntered(false);
     me = {};
-    sendHello(); // start over as a new guest
+    showHome(); // back to the sign-in screen (it reconnects as a new guest)
   }
 }
 
@@ -81,13 +119,21 @@ export function showBoard(rows) {
   if (!homeOpen()) drawBoard();
 }
 
-function drawBoard() {
+export function drawBoard() {
   const body = $('board').tBodies[0];
   body.replaceChildren(...board.map((r, i) => {
     const tr = document.createElement('tr');
-    if (i + 1 === me.rank && r.name === me.name) tr.className = 'you';
+    const mine = r.name === me.name && (i + 1 === me.rank || !!me.username);
+    if (mine) tr.className = 'you';
     const kd = r.deaths ? (r.kills / r.deaths).toFixed(2) : String(r.kills);
     for (const v of [i + 1, r.name, r.wins, r.losses, r.kills, kd]) tr.appendChild(document.createElement('td')).textContent = v;
+    const add = tr.appendChild(document.createElement('td'));
+    if (r.account && !mine && canFriend(r.name)) {
+      const b = add.appendChild(document.createElement('button'));
+      b.type = 'button'; b.className = 'add-friend'; b.dataset.friendRow = i;
+      b.textContent = '+'; b.title = 'Add ' + r.name + ' as a friend';
+      b.setAttribute('aria-label', b.title);
+    }
     return tr;
   }));
   $('boardCard').hidden = board.length === 0;

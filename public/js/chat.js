@@ -5,7 +5,7 @@ import { S } from './state.js';
 import { isTeamMode } from '/shared/config.js';
 import { send } from './net.js';
 import { settings, keyName } from './settings.js';
-import { toast } from './ui.js';
+import { toast, setRolled } from './ui.js';
 
 const $ = id => document.getElementById(id);
 const KEEP = 50, FADE_MS = 8000;
@@ -18,7 +18,7 @@ export const chatOpen = () => wantChat || document.activeElement === $('chatInpu
 
 function placeChat() {
   const chat = $('chat');
-  const home = S.started ? document.body : $('chatCard');
+  const home = S.started ? document.body : $('chatHome');
   if (home && chat.parentNode !== home) home.append(chat);
 }
 
@@ -49,7 +49,53 @@ export function openChat() {
   showHint();
 }
 
+// while the lobby Messages card is rolled up, new messages count on its label
+let unread = 0;
+const chatRolled = () => $('chatCard').classList.contains('rolled');
+
+// lobby tabs: Room (the room's chat and events) and Private (DMs with friends)
+let tab = 'room', friends = [];
+const tabUnread = { room: 0, dm: 0 };
+function showTabs() {
+  document.querySelectorAll('#chatTabs button').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('sel', on);
+    b.setAttribute('aria-selected', String(on));
+    b.querySelector('.tabCount').textContent = tabUnread[b.dataset.tab] ? '(' + tabUnread[b.dataset.tab] + ')' : '';
+  });
+  $('chatLog').className = 'tab-' + tab;
+  $('dmBar').hidden = tab !== 'dm';
+  $('dmPick').disabled = !friends.length;
+}
+function setTab(next) {
+  tab = next;
+  tabUnread[tab] = 0;
+  if (tab === 'room') dmTo = null;
+  else {
+    const u = $('dmPick').value, f = friends.find(x => x.username === u);
+    dmTo = f ? { username: f.username, name: f.name } : null;
+  }
+  showTabs();
+  showHint();
+}
+// accepted friends, for the Private tab's To list (friends.js keeps it current)
+export function setDmFriends(list) {
+  friends = (list || []).filter(f => f.status === 'friend');
+  const pick = $('dmPick'), keep = pick.value;
+  pick.replaceChildren(...friends.map(f => new Option(f.name + ' (@' + f.username + ')', f.username)));
+  if (!friends.length) pick.append(new Option('No friends yet', ''));
+  if (friends.some(f => f.username === keep)) pick.value = keep;
+  if (tab === 'dm') setTab('dm');
+  else showTabs();
+}
+
 export function openDm(username, name) {
+  if (chatRolled()) setRolled($('chatCard'), false);
+  if (!S.started) {
+    if (![...$('dmPick').options].some(o => o.value === username)) $('dmPick').append(new Option(name || username, username));
+    $('dmPick').value = username;
+    setTab('dm');
+  }
   dmTo = { username, name: name || username };
   openChat();
   toast('Private message to ' + dmTo.name);
@@ -64,7 +110,7 @@ function relock() {
 function closeChat() {
   const input = $('chatInput');
   wantChat = false;
-  dmTo = null;
+  if (S.started || tab !== 'dm') dmTo = null;
   input.value = '';
   input.blur();
   document.body.classList.remove('chatting');
@@ -74,7 +120,8 @@ function closeChat() {
 
 function showHint() {
   const input = $('chatInput');
-  if (dmTo) input.placeholder = `DM ${dmTo.name}… (Esc clears)`;
+  if (!S.started && tab === 'dm') input.placeholder = dmTo ? `Message ${dmTo.name} privately…` : 'Add a friend to message them privately';
+  else if (dmTo) input.placeholder = `DM ${dmTo.name}… (Esc clears)`;
   else if (S.started) input.placeholder = wantChat ? 'Message the room… (Esc closes)' : `Press ${keyName(settings.keys.chat)} to chat`;
   else input.placeholder = 'Type a message… (/w user text for DM)';
   placeChat();
@@ -91,6 +138,11 @@ function pushLine(line) {
   log.scrollTop = log.scrollHeight;
   // new messages should be readable in-game even if you weren't chatting
   if (S.started) line.classList.remove('old');
+  else if (!line.classList.contains('sys')) {
+    if (chatRolled()) $('chatUnread').textContent = ++unread + ' new';
+    const lineTab = line.classList.contains('dm') ? 'dm' : 'room';
+    if (lineTab !== tab) { tabUnread[lineTab]++; showTabs(); }
+  }
 }
 
 // a message from the server: { id, name, team, text }
@@ -151,17 +203,23 @@ function sendLine(raw) {
 }
 
 export function initChat() {
+  $('chatCard').addEventListener('unroll', () => { unread = 0; $('chatUnread').textContent = ''; });
+  document.querySelectorAll('#chatTabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  $('dmPick').addEventListener('change', () => setTab('dm'));
+  setDmFriends(null);
   const input = $('chatInput');
   input.maxLength = CHAT_MAX + 24; // room for "/w name " prefix
   input.addEventListener('keydown', e => {
     e.stopPropagation(); // the game's key handler ignores typing anyway; keep Enter/Esc here
     if (e.key === 'Enter') {
       e.preventDefault();
+      if (!S.started && tab === 'dm' && !dmTo) return;
       sendLine(input.value);
-      closeChat();
+      if (S.started) closeChat();
+      else input.value = ''; // lobby: stay in the box (and on the same tab / friend)
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      if (dmTo) { dmTo = null; input.value = ''; showHint(); focusInput(); return; }
+      if (dmTo && S.started) { dmTo = null; input.value = ''; showHint(); focusInput(); return; }
       closeChat();
     }
   });

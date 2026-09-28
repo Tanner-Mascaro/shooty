@@ -26,21 +26,41 @@ export function send(msg) {
 }
 
 // ?room=ABCDE joins a private room, ?play=1 joins quick play, and bare / stays in the menu.
-export function connect() {
-  const query = new URLSearchParams(location.search), code = query.get('room');
-  const route = code ? '?room=' + encodeURIComponent(code) : query.get('play') === '1' ? '?play=1' : '';
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + route);
-  ws.onopen = () => sendHello();
-  ws.onclose = () => { S.disconnected = true; setWaitText('Disconnected — refresh to reconnect.'); };
-  ws.onerror = () => { S.disconnected = true; setWaitText('Connection failed — refresh to retry.'); };
-  ws.onmessage = e => {
+function open(route) {
+  const sock = ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + route);
+  S.disconnected = false;
+  sock.onopen = () => sendHello();
+  sock.onclose = () => { if (sock !== ws) return; S.disconnected = true; setWaitText('Disconnected — refresh to reconnect.'); };
+  sock.onerror = () => { if (sock !== ws) return; S.disconnected = true; setWaitText('Connection failed — refresh to retry.'); };
+  sock.onmessage = e => {
+    if (sock !== ws) return;
     const msg = JSON.parse(e.data);
     const h = handlers[msg.type];
     if (h) h(msg, performance.now());
   };
-  // leaving the page (e.g. switching rooms): hang up, or the browser may keep this page and
-  // its connection alive in the back/forward cache, leaving a ghost player in the old room
-  addEventListener('pagehide', () => ws.close());
+}
+
+// change rooms on this page instead of navigating, so fullscreen (and the page) stays put.
+// route: '?room=CODE', '?play=1', or '' for the bare menu connection
+export function switchRoom(route) {
+  const old = ws;
+  ws = null;
+  old?.close();
+  history.replaceState(null, '', route || location.pathname);
+  S.started = false; S.dead = false; S.room = null; S.others = {};
+  S.zone = null; S.hardpoint = null; S.corpses = []; S.thrown = [];
+  setBuilds([]);
+  syncVoice(); // no room: hang up every voice peer
+  showWait();
+  setWaitText('Connecting...');
+  open(route);
+}
+export function connect() {
+  const query = new URLSearchParams(location.search), code = query.get('room');
+  open(code ? '?room=' + encodeURIComponent(code) : query.get('play') === '1' ? '?play=1' : '');
+  // leaving the page: hang up, or the browser may keep this page and its connection alive in
+  // the back/forward cache, leaving a ghost player in the old room
+  addEventListener('pagehide', () => ws && ws.close());
   addEventListener('pageshow', e => { if (e.persisted) location.reload(); }); // came back via Back: reconnect
 }
 
