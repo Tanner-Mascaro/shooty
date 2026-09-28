@@ -15,7 +15,7 @@ function castShot(T, shooter, a, pch, targets) {
     const rx = shooter.x + cos * d, ry = shooter.y + sin * d, rz = eye + slope * d;
     const floor = solidAt(T, rx, ry, rz);
     if (rz < floor) { r.dist = d; return r; }
-    const ceil = ceilingAt(T, rx, ry);
+    const ceil = ceilingAt(T, rx, ry, rz);
     if (ceil != null && rz > ceil) { r.dist = d; return r; }
     for (const o of targets) {
       const h = o.sl ? BODY_H * SLIDE.crouch : BODY_H; // sliding players are lower

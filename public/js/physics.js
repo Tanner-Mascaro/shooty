@@ -1,7 +1,7 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
-import { groundAt, kindAt, walkHeight } from '/shared/terrain.js';
-import { TICK, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE } from '/shared/config.js';
+import { groundAt, kindAt, walkHeight, ceilingAt } from '/shared/terrain.js';
+import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { tryJump, tryDash } from '/shared/movement.js';
@@ -253,6 +253,8 @@ export function updatePlayer(dt) {
   if (!S.onGround) {
     S.vz -= GRAVITY * dt;
     me.z += S.vz * dt;
+    const ceil = ceilingAt(S.T, me.x, me.y, me.z + 0.05); // cottage floors and roofs overhead
+    if (S.vz > 0 && ceil != null && me.z + BODY_H > ceil) { me.z = Math.max(g, ceil - BODY_H); S.vz = 0; }
     if (me.z <= g) { me.z = g; S.vz = 0; S.onGround = true; play('land'); }
   }
 

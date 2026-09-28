@@ -7,28 +7,50 @@
 
 const W = 20, H = 30;
 const FLIP = { C: 'B', u: 't' };
+const HIP = 21, HEAD = 14, LIFT = 2; // walk frames lift the legs below HIP; the back view hides the face above HEAD
 
-function build({ rows, colors, emit = '', glint }) {
-  if (rows.length !== H) throw new Error('character needs ' + H + ' rows, has ' + rows.length);
-  const grid = new Uint8Array(W * H), letters = ['.', 'A', 'B', 'C', ...Object.keys(colors).filter(k => !'ABC'.includes(k))];
+function build({ rows, back, float, colors, emit = '', glint }) {
+  const letters = ['.', 'A', 'B', 'C', ...Object.keys(colors).filter(k => !'ABC'.includes(k))];
   const pal = letters.map(k => colors[k] || null);
   const GLINT = pal.push([255, 255, 255]) - 1;
-  rows.forEach((r, y) => {
-    const full = r.length === W ? r : r.length === W / 2 ? r + [...r].reverse().map(c => FLIP[c] || c).join('') : null;
-    if (!full) throw new Error(`row ${y} is ${r.length} wide: "${r}"`);
-    for (let x = 0; x < W; x++) {
-      const i = letters.indexOf(full[x]);
-      if (i < 0) throw new Error(`row ${y}: no color for "${full[x]}"`);
-      grid[y * W + x] = i;
-    }
-  });
+  const toGrid = rows => {
+    if (rows.length !== H) throw new Error('character needs ' + H + ' rows, has ' + rows.length);
+    const grid = new Uint8Array(W * H);
+    rows.forEach((r, y) => {
+      const full = r.length === W ? r : r.length === W / 2 ? r + [...r].reverse().map(c => FLIP[c] || c).join('') : null;
+      if (!full) throw new Error(`row ${y} is ${r.length} wide: "${r}"`);
+      for (let x = 0; x < W; x++) {
+        const i = letters.indexOf(full[x]);
+        if (i < 0) throw new Error(`row ${y}: no color for "${full[x]}"`);
+        grid[y * W + x] = i;
+      }
+    });
+    return grid;
+  };
+  const grid = toGrid(rows), backGrid = back && toGrid(back);
   const px = (u, v, glint) => {
     const x = Math.min(W - 1, u * W | 0), y = Math.min(H - 1, v * H | 0);
     if (glint && GLINT_AT && y - GLINT_AT[0] >> 1 === 0 && x - GLINT_AT[1] >> 1 === 0) return GLINT;
     return grid[y * W + x];
   };
   const GLINT_AT = glint;
-  return { px, pal, emit: [...emit].map(k => letters.indexOf(k)).concat(GLINT) };
+  // Characters without drawn `back` rows fake it: the face (eyes, mouth, mustache, skin) in the head rows
+  // turns into hair, and the art is mirrored.
+  const hair = letters.indexOf(letters.includes('h') ? 'h' : 'A');
+  const FACE = ['e', 'm', 'w', 'x', ...(letters.includes('h') ? ['s', 't', 'u'] : [])].map(k => letters.indexOf(k)).filter(i => i > 0);
+  // back: view from behind; stride: 0 standing, 1 left leg up, 2 right leg up (hips down, the leg lifts LIFT px).
+  // `float` characters have no legs to lift.
+  const poses = [];
+  const pose = (isBack, stride) => poses[+isBack * 3 + stride] ??= (u, v) => {
+    let x = Math.min(W - 1, u * W | 0), y = Math.min(H - 1, v * H | 0);
+    const fake = isBack && !backGrid;
+    if (fake) x = W - 1 - x;
+    if (stride && !float && y >= HIP && (x < W / 2) === (stride === 1)) y += LIFT;
+    if (y >= H) return 0;
+    const i = (isBack && backGrid ? backGrid : grid)[y * W + x];
+    return fake && y < HEAD && FACE.includes(i) ? hair : i;
+  };
+  return { px, pal, pose, emit: [...emit].map(k => letters.indexOf(k)).concat(GLINT) };
 }
 
 // shared bits
@@ -46,6 +68,70 @@ const LEGS = [
   '...oKKKKKo',
   '...oooooo.',
 ];
+
+// Witch parts shared by a front and a back. Full 20-wide rows; backOf flips a lopsided row for the view from behind.
+const backOf = r => r.length === W ? [...r].reverse().join('') : r;
+const SWAMP_HAT = [
+  '.............oo.....',
+  '...........ooAo.....',
+  '..........oCAo......',
+  '.........oCAAo......',
+  '........oCAAAo......',
+  '.......oCAAAAAo.....',
+  '......oCAAAAAAo.....',
+  '.....oppppyppppo....',
+  '..ooCCAAAAAAAAABBoo.',
+];
+const SWAMP_SKIRT = ['....oCAAAA', '...oCAAAAA', '...oCAAAAA', '..oCAAAAAA', '..oCAAAAAA', '.oCAAAAAAA', '.oBBoBBBBB',
+  '..o..okkko', '.....oooo.'];
+const ROBOT_HAT = ['........or', '.........j', '.........j', '......oooo', '.....oCAAA', '.....oCjjj', '.....oCAAA',
+  '..oooCAAAA', '..oBBBBBBB'];
+const ROBOT_LEGS = ['....oCAAAA', '...oCAAAAA', '...oBBBBBB', '....oCAo..', '....ojjo..', '....oCAo..', '....oCAo..',
+  '...oCAAAo.', '...ooooo..'];
+const GOTHIC_HAT = ['..........', '..........', '......oooo', '.....oCAAA', '.....oCAAA', '.....orrrr', '.ooooCAAAA',
+  'oCCAAAAAAA', '.oBBBBBBBB'];
+const GOTHIC_GOWN = ['...oCAAAAA', '...oCAAAAA', '..oCAAAAAA', '..oCAAAAAA', '.oCAAAAAAA', '.oCAAAAAAA', 'oCAAAAAAAA',
+  'oBBBBBBBBB', 'oooooooooo'];
+const INFERNAL_HAT = [
+  '............oo......',
+  '...........oCo......',
+  '..........oCAo......',
+  '.g......oCAAAo....g.',
+  '.gg.....oCAAAo...gg.',
+  '..gg...oCAAAAo..gg..',
+  '...gg.offFfffFogg...',
+  '..ooCCAAAAAAAAABBoo.',
+];
+const INFERNAL_SKIRT = ['....oCAAAA', '...oCAAAAA', '...oCAAAAA', '..oCAAAAAA', '..oCABAABA', '.oCABBABBA', '.oBBfBBBfB',
+  '.ofo.fFof.', '..f..okkko', '.....oooo.'];
+const ICE_CROWN = ['..........', '.........L', '....L....L', '....l.L..l', '....olloll', '....olllll'];
+const ICE_SKIRT = ['...oCAAAAA', '...oCAAAAA', '..oCAAAAAA', '..oCAAAAAA', '.oCAAAAAAA', '.oBBBBBBBB', '.olLolLolL',
+  '..l..lokko', '.....okko.', '.....ooo..'];
+const GHOST_HAT = [
+  '....................',
+  '.......ooooo........',
+  '......oCAAAAoo......',
+  '.....oCAAAAAAAoo....',
+  '.....oCAAAoooAAAo...',
+  '....oCAAAo...oAAo...',
+  '....owwwwwwwwo.oAo..',
+  '..ooCCAAAAAAAABBoo..',
+];
+const GHOST_TAIL = [
+  '.....oCAAAAAABo.....',
+  '.....oCAAAAAABo.....',
+  '.....oCAAAAAABo.....',
+  '......oCAAAABo......',
+  '......oCAAAABo......',
+  '.......oCAABo.......',
+  '.......oCAABo.......',
+  '........oCAo........',
+  '.........oCAo.......',
+  '..........oo........',
+];
+const PLAGUE_HAT = ['..........', '.....ooooo', '.....ohhhh', '.....ohhhh', '.....ohhhh', '.....oyyyy', 'ooooohhhhh', '.ooooooooo'];
+const PLAGUE_COAT = ['.oo.oCAAAA', '....oCAAAA', '....oCAAAA', '...oCAAAAo', '...oCAAAAo', '...oCAAAAo', '...oBBBBBo',
+  '....okkko.', '...okkkko.', '...oooooo.'];
 
 const ART = {
   demon: { glint: [6, 6], emit: 'e', rows: [
@@ -116,123 +202,116 @@ const ART = {
   ], colors: { A: [150, 160, 175], B: [82, 88, 100], C: [198, 208, 218], j: [45, 48, 56], e: [255, 40, 30], r: [255, 40, 30],
     g: [30, 32, 38], l: [40, 220, 255], o: [14, 16, 20] } },
 
+  // Swamp Witch: crooked hat with a buckle, green skin and a hooked nose, long orange hair, tattered hem
   witch: { glint: [10, 7], emit: 'e', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......oppppppppo....',
-    '..ooCCAAAAAAAAAABoo.',
-    '....ohhsss',
-    '....ohsess',
-    '....ohssss',
-    '....ohsssm',
-    '.....ohtts',
-    '....ooAAAA',
-    '...oCAAAAA',
-    '..oCAoCAAA',
-    '..oCAoCApp',
-    '.oCABoCAAA',
-    '.ossooCAAA',
-    '..oo.oCAAA',
-    '....oCAAAA',
-    '....oCAAAA',
-    '...oCAAAAA',
-    '...oCAAAAA',
-    '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooookko',
-    '......ooo.',
-  ], colors: { A: [56, 36, 72], B: [30, 18, 40], C: [88, 60, 110], p: [165, 55, 205], h: [205, 95, 40], s: [104, 184, 74],
-    t: [66, 132, 50], e: [255, 240, 80], m: [40, 20, 30], k: [20, 14, 20], o: [10, 6, 14] } },
+    ...SWAMP_HAT,
+    '...ohhssss',
+    '...ohhsess',
+    '...ohhsssn',
+    '...ohhssmm',
+    '..ohhhhott',
+    '..ohhoCAAA',
+    '.ohhoCAAAA',
+    '.oCAoCAAAA',
+    '.oCAoCAApp',
+    'oCABoCAAAA',
+    'ossooCAAAA',
+    '.oo.oCAAAA',
+    ...SWAMP_SKIRT,
+  ], back: [
+    ...SWAMP_HAT.map(backOf).map(r => r.replace('y', 'p')), // no buckle at the back
+    '...ohhhhhh',
+    '...ohhhhhh',
+    '...ohhhhhh',
+    '...ohhhhhh',
+    '..ohhhhhhh',
+    '..ohhhhhhh',
+    '.ohhhhhhhh',
+    '.oCAohhhhh',
+    '.oCAoAhhhh',
+    'oCABoAAhhh',
+    'ossooAAAhh',
+    '.oo.oCAppp',
+    ...SWAMP_SKIRT,
+  ], colors: { A: [56, 36, 72], B: [30, 18, 40], C: [88, 60, 110], p: [165, 55, 205], y: [232, 190, 60], h: [205, 95, 40],
+    s: [104, 184, 74], t: [66, 132, 50], n: [48, 104, 40], e: [255, 240, 80], m: [40, 20, 30], k: [20, 14, 20], o: [10, 6, 14] } },
 
-  robotWitch: { glint: [10, 7], emit: 'el', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......ojjjjjjjjo....',
-    '..ooCCAAAAAAAAAABoo.',
+  // Robot Witch: short boxy hat with a blinking antenna, visor, shoulder pads, short skirt on piston legs
+  robotWitch: { glint: [10, 7], emit: 'elr', rows: [
+    ...ROBOT_HAT,
     '....ojjjjj',
+    '....ojllll',
     '....ojleel',
+    '....ojllll',
+    '....ojjmjm',
+    '......ojjj',
+    '.ooooCAAAA',
+    'oCAAoCAyAA',
+    'oBBBoCAAAA',
+    '.oCAoCAjll',
+    '.oCAoCAjjj',
+    '.ojjoCAAAA',
+    ...ROBOT_LEGS,
+  ], back: [
+    ...ROBOT_HAT,
     '....ojjjjj',
-    '....ojjjjm',
-    '.....ojjjj',
-    '....ooAAAA',
-    '...oCAAAAA',
-    '..oCAoCAjj',
-    '..oCAoCAll',
-    '.oCABoCAjj',
-    '.ojjjoCAAA',
-    '..oo.oCAAA',
-    '....oCAAAA',
-    '....ojjjjA',
-    '...oCAAAAA',
-    '...oCAjjjA',
-    '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooojjjo',
-    '......ooo.',
+    '....ojjjjj',
+    '....ojBBBB',
+    '....ojjjjj',
+    '....ojBBBB',
+    '......ojjj',
+    '.ooooCAAAA',
+    'oCAAoCjjjj',
+    'oBBBoCjllj',
+    '.oCAoCjllj',
+    '.oCAoCjjjj',
+    '.ojjoCAAAA',
+    ...ROBOT_LEGS,
   ], colors: { A: [120, 130, 145], B: [70, 76, 90], C: [180, 190, 205], j: [40, 44, 52], e: [255, 50, 40],
-    l: [40, 230, 255], m: [20, 24, 28], o: [12, 14, 18] } },
+    l: [40, 230, 255], r: [255, 60, 40], y: [230, 180, 40], m: [20, 24, 28], o: [12, 14, 18] } },
 
+  // Gothic Witch: low wide-brimmed hat, veil over the eyes, lace ruff, laced corset, floor-length gown
   gothicWitch: { glint: [10, 7], emit: 'e', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......orrrrrrrro....',
-    '..ooCCAAAAAAAAAABoo.',
-    '....ohhsss',
-    '....ohsess',
+    ...GOTHIC_HAT,
+    '....ovvvvv',
+    '....ovvevv',
     '....ohssss',
     '....ohsssm',
-    '.....ohtts',
-    '....ooAAAA',
-    '...oCAAAAA',
-    '..oCAoCAAA',
-    '..oCAoCArr',
-    '.oCABoCAAA',
-    '.ossooCAAA',
-    '..oo.oCAAA',
-    '....oCAAAA',
-    '....oCAAAA',
-    '...oCAAAAA',
-    '...oCAAAAA',
-    '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooookko',
-    '......ooo.',
-  ], colors: { A: [28, 24, 36], B: [14, 12, 20], C: [52, 44, 64], r: [140, 28, 48], h: [40, 32, 48], s: [220, 205, 195],
-    t: [180, 160, 150], e: [200, 40, 60], m: [60, 20, 30], k: [16, 12, 18], o: [6, 4, 10] } },
+    '....ohhtts',
+    '...owwwwww',
+    '..ohoCAAAr',
+    '.oCAoCAArA',
+    '.oCAoCAAAr',
+    'oCABoCAArA',
+    'ossooCAAAr',
+    '.oo.oCAAAA',
+    ...GOTHIC_GOWN,
+  ], back: [
+    ...GOTHIC_HAT,
+    '....ohhhhh',
+    '....ohhhhh',
+    '....ohhhhh',
+    '....ohhhhh',
+    '....ohhhhh',
+    '...owwwwww',
+    '..ohohhhhh',
+    '.oCAohhhhh',
+    '.oCAoChhhh',
+    'oCABoCArAr',
+    'ossooCAArA',
+    '.oo.oCArrr',
+    ...GOTHIC_GOWN,
+  ], colors: { A: [28, 24, 36], B: [14, 12, 20], C: [52, 44, 64], r: [150, 28, 52], v: [58, 48, 72], w: [205, 195, 205],
+    h: [46, 30, 56], s: [220, 205, 195], t: [180, 160, 150], e: [230, 50, 70], m: [120, 20, 40], o: [6, 4, 10] } },
 
-  infernalWitch: { glint: [10, 7], emit: 'ef', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......offffffffo....',
-    '..ooCCAAAAAAAAAABoo.',
-    '....ohhsss',
-    '....ohsess',
-    '....ohssss',
-    '....ohsssm',
-    '.....ohtts',
+  // Infernal Witch: horns through a crooked hat, flame hair, burning hem, and a devil tail behind
+  infernalWitch: { glint: [10, 7], emit: 'efFh', rows: [
+    ...INFERNAL_HAT,
+    '..hohhssss',
+    '..hhohsess',
+    '.hhohhssss',
+    '..hohhssmm',
+    '...hohhtts',
     '....ooAAAA',
     '...oCAAAAA',
     '..oCAoCAAA',
@@ -240,119 +319,137 @@ const ART = {
     '.oCABoCAAA',
     '.ossooCAAA',
     '..oo.oCAAA',
-    '....oCAAAA',
-    '....oCAAAA',
-    '...oCAAAAA',
-    '...oCAAAAA',
-    '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooookko',
-    '......ooo.',
-  ], colors: { A: [120, 28, 22], B: [70, 12, 12], C: [180, 50, 35], f: [255, 130, 30], h: [255, 90, 20], s: [60, 28, 24],
-    t: [40, 16, 14], e: [255, 220, 60], m: [30, 8, 8], k: [24, 10, 8], o: [12, 4, 4] } },
-
-  iceWitch: { glint: [10, 7], emit: 'el', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......ollllllllo....',
-    '..ooCCAAAAAAAAAABoo.',
-    '....ohhsss',
-    '....ohsess',
-    '....ohssss',
-    '....ohsssm',
-    '.....ohtts',
+    ...INFERNAL_SKIRT,
+  ], back: [
+    ...INFERNAL_HAT.map(backOf),
+    '..hohhhfhh',
+    '..hhohfhhf',
+    '.hhohhfhFh',
+    '..hohfhhfh',
+    '...hohhfhh',
     '....ooAAAA',
     '...oCAAAAA',
     '..oCAoCAAA',
-    '..oCAoCAll',
+    '..oCAoCAff',
     '.oCABoCAAA',
     '.ossooCAAA',
     '..oo.oCAAA',
-    '....oCAAAA',
-    '....oCAAAA',
-    '...oCAAAAA',
-    '...oCAAAAA',
-    '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooookko',
-    '......ooo.',
-  ], colors: { A: [170, 200, 230], B: [110, 140, 175], C: [220, 240, 255], l: [100, 210, 255], h: [200, 230, 255], s: [210, 230, 245],
-    t: [160, 190, 220], e: [80, 200, 255], m: [40, 60, 90], k: [90, 120, 150], o: [20, 30, 45] } },
+    '....oCAAAAAAAABo.oo.',
+    '...oCAAAAAAAAAABooAo',
+    '...oCAAAAAAAAAABo.o.',
+    '..oCAAAAAAAAAAAABoo.',
+    ...INFERNAL_SKIRT.slice(4),
+  ], colors: { A: [120, 28, 22], B: [70, 12, 12], C: [180, 50, 35], f: [255, 130, 30], F: [255, 214, 90], h: [255, 90, 20],
+    g: [232, 214, 176], s: [60, 28, 24], t: [40, 16, 14], e: [255, 220, 60], m: [30, 8, 8], k: [24, 10, 8], o: [12, 4, 4] } },
 
-  ghostWitch: { glint: [10, 7], emit: 'e', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......owwwwwwwwo....',
-    '..ooCCAAAAAAAAAABoo.',
-    '....ohhsss',
-    '....ohsess',
+  // Ice Witch: an ice crown instead of a hat, spiked cape collar, long white hair, snowflake, icicle hem
+  iceWitch: { glint: [8, 7], emit: 'elL', rows: [
+    ...ICE_CROWN,
+    '.L.ohhssss',
+    '.lLohssess',
+    '.llohhssss',
+    '.llohhsssm',
+    '.llohhhott',
+    '..lohhhoAA',
+    '..ohhoCALA',
+    '.ohhoCAAAL',
+    '.ohhoCAALA',
+    'oCAAoCAAAA',
+    'oCAAoCAAAA',
+    'oCABoCAAAA',
+    'ossooCAAAA',
+    '.oo.oCAAAA',
+    ...ICE_SKIRT,
+  ], back: [
+    ...ICE_CROWN,
+    '.L.ohhhhhh',
+    '.lLohhhhhh',
+    '.llohhhhhh',
+    '.llohhhhhh',
+    '.llohhhhhh',
+    '..lohhhhhh',
+    '..oCAoCAhh',
+    '.oCAAoCAhh',
+    '.oCAAoCAAh',
+    'oCAAoCAAAh',
+    'oCAAoCAAAh',
+    'oCABoCAAAL',
+    'ossooCAAAA',
+    '.oo.oCAAAA',
+    '...oCAAALA',
+    '...oCAAAAL',
+    '..oCAAAALA',
+    ...ICE_SKIRT.slice(3),
+  ], colors: { A: [170, 200, 230], B: [110, 140, 175], C: [220, 240, 255], l: [100, 210, 255], L: [215, 248, 255],
+    h: [236, 244, 255], s: [210, 230, 245], t: [160, 190, 220], e: [60, 190, 255], m: [90, 110, 150], k: [90, 120, 150], o: [20, 30, 45] } },
+
+  // Ghost Witch: a floppy hat with the tip hanging down, hollow eyes, ragged sleeves, no legs: it floats
+  ghostWitch: { glint: [10, 7], emit: 'e', float: true, rows: [
+    ...GHOST_HAT,
     '....ohssss',
-    '....ohsssm',
-    '.....ohtts',
+    '....ohsdes',
+    '....ohsdds',
+    '....ohssss',
+    '.....ohssd',
+    '......ohtt',
     '....ooAAAA',
     '...oCAAAAA',
     '..oCAoCAAA',
-    '..oCAoCAww',
-    '.oCABoCAAA',
-    '.ossooCAAA',
-    '..oo.oCAAA',
-    '....oCAAAA',
-    '....oCAAAA',
-    '...oCAAAAA',
-    '...oCAAAAA',
-    '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooowwwo',
-    '......ooo.',
-  ], colors: { A: [200, 205, 220], B: [140, 148, 170], C: [235, 240, 255], w: [180, 190, 220], h: [160, 170, 200], s: [230, 235, 245],
-    t: [190, 200, 220], e: [120, 200, 255], m: [80, 90, 120], o: [40, 45, 60] } },
-
-  plagueWitch: { glint: [10, 7], emit: 'e', rows: [
-    '.............oo.....',
-    '............oAo.....',
-    '...........oCAo.....',
-    '..........oCAo......',
-    '.........oCAAo......',
-    '........oCAAAo......',
-    '.......oCAAAAAo.....',
-    '......oggggggggo....',
-    '..ooCCAAAAAAAAAABoo.',
-    '....ohhsss',
-    '....ohsess',
-    '....ohssss',
-    '....ohsssm',
-    '.....ohtts',
+    '.oCAAoCAAA',
+    'oAoAooCAAA',
+    '.o.o.oCAAA',
+    ...GHOST_TAIL,
+  ], back: [
+    ...GHOST_HAT.map(backOf),
+    '....ohhhhh',
+    '....ohhhhh',
+    '....ohhhhh',
+    '....ohhhhh',
+    '.....ohhhh',
+    '......ohhh',
     '....ooAAAA',
     '...oCAAAAA',
     '..oCAoCAAA',
-    '..oCAoCAgg',
-    '.oCABoCAAA',
-    '.ossooCAAA',
-    '..oo.oCAAA',
-    '....oCAAAA',
-    '....oCAAAA',
-    '...oCAAAAA',
+    '.oCAAoCAAA',
+    'oAoAooCAAA',
+    '.o.o.oCAAA',
+    ...GHOST_TAIL.map(backOf),
+  ], colors: { A: [200, 205, 220], B: [140, 148, 170], C: [235, 240, 255], w: [150, 160, 200], h: [168, 178, 208],
+    s: [230, 235, 245], t: [190, 200, 220], d: [96, 104, 140], e: [120, 200, 255], o: [40, 45, 60] } },
+
+  // Plague Witch: tall flat-brimmed hat, beaked mask with glowing goggles, long coat, belt of potion vials
+  plagueWitch: { glint: [9, 6], emit: 'eg', rows: [
+    ...PLAGUE_HAT,
+    '....owwwww',
+    '....oweeww',
+    '....owwwww',
+    '.....owwww',
+    '......owwW',
+    '.......owW',
+    '...oCAAowW',
+    '..oCAAAAoW',
+    '.oCAoCAAAA',
+    '.oCAoyyyyy',
+    'oCABoCgAgA',
+    'ohhooCAAAA',
+    ...PLAGUE_COAT,
+  ], back: [
+    ...PLAGUE_HAT,
+    '....oAAAAA',
+    '....oyyyyy',
+    '....oAAAAA',
+    '.....oAAAA',
+    '......oAAA',
+    '.......oAA',
     '...oCAAAAA',
     '..oCAAAAAA',
-    '..oCAABAAB',
-    '..oBBBBBBB',
-    '..oooookko',
-    '......ooo.',
-  ], colors: { A: [40, 70, 28], B: [22, 40, 16], C: [70, 110, 45], g: [140, 230, 70], h: [90, 130, 40], s: [90, 140, 60],
-    t: [55, 95, 40], e: [200, 255, 80], m: [30, 40, 20], k: [18, 28, 12], o: [8, 14, 6] } },
+    '.oCAoCAAAA',
+    '.oCAoyyyyy',
+    'oCABoCAhhh',
+    'ohhooCAhhh',
+    ...PLAGUE_COAT,
+  ], colors: { A: [54, 62, 40], B: [30, 36, 22], C: [84, 96, 60], h: [30, 32, 26], w: [225, 215, 185], W: [170, 160, 130],
+    y: [200, 160, 60], g: [140, 230, 70], e: [200, 255, 80], k: [22, 18, 14], o: [8, 10, 6] } },
 
   cowboy: { glint: [9, 7], rows: [
     '..........',

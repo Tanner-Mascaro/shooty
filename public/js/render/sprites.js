@@ -89,68 +89,6 @@ const SCROLL_SPRITE = {
 const NADE_SPRITE = { w: 0.55, h: 0.55, src: '/img/potion.png' };
 const AMMO_CRATE = { w: 0.5, h: 0.5, src: '/img/ammo.png' };
 
-// --- hut roof billboard (collision-free; walls are terrain) ---
-// Sprite v=0 is the top of the billboard, v=1 the bottom (sits on the walls).
-const HUT_ROOF = {
-  witch: {
-    w: 2.55, h: 1.05, emit: [],
-    pal: [null, [28, 55, 22], [48, 88, 36], [70, 50, 28], [90, 70, 40]],
-    px(u, v) {
-      const half = Math.abs(u - 0.5) * 2;
-      const vTop = 0.06 + half * 0.72; // peak up top-center; eaves down at the sides
-      const vBot = 0.94;
-      if (v < vTop || v > vBot) return 0;
-      if (v > vBot - 0.1) return 3;
-      return ((u * 14 | 0) ^ (v * 10 | 0)) & 1 ? 1 : 2;
-    },
-  },
-  ice: {
-    w: 2.55, h: 1.0, emit: [3],
-    pal: [null, [170, 200, 230], [140, 175, 210], [220, 240, 255], [200, 220, 245]],
-    px(u, v) {
-      const half = Math.abs(u - 0.5) * 2;
-      const vTop = 0.05 + half * 0.7, vBot = 0.94;
-      if (v < vTop || v > vBot) return 0;
-      if (half < 0.08 && v < vTop + 0.25) return 3; // ice spike on the ridge
-      return v > vBot - 0.12 ? 3 : ((u * 12 | 0) + (v * 8 | 0)) & 1 ? 1 : 2;
-    },
-  },
-  hell: {
-    w: 2.55, h: 1.0, emit: [3],
-    pal: [null, [70, 32, 24], [48, 22, 18], [255, 90, 20], [110, 50, 35]],
-    px(u, v) {
-      const half = Math.abs(u - 0.5) * 2;
-      const vTop = 0.05 + half * 0.7, vBot = 0.94;
-      if (v < vTop || v > vBot) return 0;
-      if (u > 0.62 && u < 0.8 && v < vTop + 0.2) return 3; // vent glow near ridge
-      return ((u * 11 | 0) ^ (v * 9 | 0)) & 1 ? 1 : 2;
-    },
-  },
-};
-export function hutRoofSprite(style) {
-  return HUT_ROOF[style] || HUT_ROOF.witch;
-}
-
-// --- swamp tree canopies: a lumpy blob of leaves with moss hanging off the bottom ---
-const canopyCache = [];
-export function canopySprite(variant) {
-  return canopyCache[variant] || (canopyCache[variant] = {
-    w: 1, h: 1, emit: [],
-    pal: [null, [22, 48, 20], [34, 70, 28], [58, 104, 40], [80, 96, 64]],
-    px(u, v) {
-      const dx = (u - 0.5) * 2, dy = (v - 0.45) * 2.3, a = Math.atan2(dy, dx), d = Math.hypot(dx, dy);
-      const edge = 0.82 + 0.1 * Math.sin(a * 5 + variant * 2.1) + 0.06 * Math.sin(a * 11 + variant);
-      if (d < edge) {
-        const lump = Math.sin(u * 23 + variant) * Math.sin(v * 19 - variant * 3);
-        return lump > 0.55 ? 3 : dy > 0.35 || lump < -0.6 ? 1 : 2; // light tops, shaded underside
-      }
-      // Spanish moss strands hanging below
-      if (v > 0.55 && Math.abs(dx) < 0.7 && Math.sin(u * 60 + variant * 4) > 0.82 && v < 0.62 + 0.35 * Math.abs(Math.sin(u * 17 + variant))) return 4;
-      return 0;
-    },
-  });
-}
-
 // --- loot cauldron billboard (Cozy Witchcraft 32×32 at /img/cauldron.png) ---
 export function boxSprite() {
   return { w: 0.72, h: 0.72, src: '/img/cauldron.png' };

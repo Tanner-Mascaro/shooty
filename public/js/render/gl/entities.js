@@ -5,7 +5,7 @@ import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
 import { ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, GUN_COLOR } from '../../constants.js';
 import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
-import { getScene } from './scene.js';
+import { getScene, getCamera } from './scene.js';
 
 const spriteCache = new Map();
 const entityRoot = new THREE.Group();
@@ -208,29 +208,57 @@ function glowFor(o) {
   return { col: !teams ? [220, 210, 190] : ally ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR };
 }
 
-function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline) {
+const STRIDE_LEN = 0.55;   // metres walked per leg swap
+const STRIDES = [1, 0, 2, 0]; // left up, both down, right up, both down
+const KICK_MS = 110;       // recoil after a shot
+
+// Which way we see someone, how their legs are, and whether their gun just kicked.
+function poseFor(o, now) {
+  const e = o.now, cam = getCamera();
+  // back view when they face away from the camera (their yaw vs the direction from them to us)
+  const toCam = Math.atan2(cam.position.z - e.y, cam.position.x - e.x);
+  const back = Math.cos(toCam - (e.a || 0)) < -0.2;
+  // walk cycle driven by distance actually covered, so it matches their speed
+  const moved = o.lastX === undefined ? 0 : Math.hypot(e.x - o.lastX, e.y - o.lastY);
+  o.lastX = e.x; o.lastY = e.y;
+  if (moved > 0.002 && moved < 2 && !e.sl) { o.walk = (o.walk || 0) + moved; o.walkT = now; }
+  const walking = now - (o.walkT || 0) < 150;
+  const stride = walking ? STRIDES[Math.floor((o.walk || 0) / STRIDE_LEN) % 4] : 0;
+  const kick = Math.max(0, 1 - (now - o.flashT) / KICK_MS);
+  return { back, stride, bob: stride ? 0.04 : 0, kick, a: e.a || 0 };
+}
+
+function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline, pose) {
   const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
+  const px = pose ? s.pose(pose.back, pose.stride) : s.px;
+  const poseKey = pose ? (pose.back ? 'b' : 'f') + pose.stride : '';
+  if (pose) {
+    // recoil: pushed back against where they aim, a little squashed
+    x -= Math.cos(pose.a) * 0.08 * pose.kick; y -= Math.sin(pose.a) * 0.08 * pose.kick;
+    z += pose.bob;
+    hScale *= 1 - 0.05 * pose.kick; wScale *= 1 + 0.06 * pose.kick;
+  }
   let pal = s.pal;
   if (tint || flash) {
     pal = tintPalette(s.pal.map(c => c && c.slice()), tint);
     if (flash) for (let i = 1; i < pal.length; i++) if (pal[i]) pal[i] = pal[i].map(v => Math.min(255, v + 80));
   }
-  const skinKey = skin || 'witch';
+  const skinKey = (skin || 'witch') + poseKey;
   const h = (BODY_H + 0.12) * hScale;
   const bw = 0.6 * wScale;
 
   if (outline) {
-    const otex = outlineTexture(s.px, outline.col, 32, 48, skinKey);
+    const otex = outlineTexture(px, outline.col, 32, 48, skinKey);
     const ospr = acquire(playerPool, makeSprite);
     setBillboard(ospr, otex, x, y, z, bw * 1.12, h * 1.12, false);
-    const gtex = spriteTexture(s.px, [null, outline.col, outline.col, outline.col, outline.col, outline.col], 32, 48, 'glowfill|' + skinKey + '|' + outline.col.join(','));
+    const gtex = spriteTexture(px, [null, outline.col, outline.col, outline.col, outline.col, outline.col], 32, 48, 'glowfill|' + skinKey + '|' + outline.col.join(','));
     const gspr = acquire(playerPool, makeSprite);
     setBillboard(gspr, gtex, x, y, z, bw * 1.06, h * 1.06, false, true);
     gspr.material.opacity = 0.28;
     gspr.material.alphaTest = 0.05;
   }
 
-  const tex = spriteTexture(s.px, pal, 32, 48, skinKey + (tint ? tint.join(',') : '') + (flash ? 'f' : ''));
+  const tex = spriteTexture(px, pal, 32, 48, skinKey + (tint ? tint.join(',') : '') + (flash ? 'f' : ''));
   const spr = acquire(playerPool, makeSprite);
   setBillboard(spr, tex, x, y, z, bw, h, false);
   spr.material.opacity = 1;
@@ -298,7 +326,7 @@ export function drawOthersAndCorpses(now) {
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,
       o.now.sl ? 1.15 : 1,
-      now - o.hitT < 90, tint, player && player.skin, glowFor(o)
+      now - o.hitT < 90, tint, player && player.skin, glowFor(o), poseFor(o, now)
     );
   }
 }

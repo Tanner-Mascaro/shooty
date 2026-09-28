@@ -315,9 +315,43 @@ export function texturesFor(theme) {
     }
   });
   wood.repeat.set(2, 2);
+  // tree bark: dark vertical furrows between ridges (wraps around trunks, so it tiles sideways)
+  const bark = makeTexture((ctx, w, h) => {
+    for (let x = 0; x < w; x++) {
+      const ridge = Math.abs(Math.sin(x * Math.PI / 16 + noise(x >> 4, 1) * 1.5));
+      for (let y = 0; y < h; y++) {
+        const wobble = Math.abs(Math.sin((x + 4 * Math.sin(y * 0.09 + (x >> 4))) * Math.PI / 16));
+        const v = (0.35 + 0.65 * Math.min(ridge, wobble) ** 0.6) * (0.8 + 0.2 * noise(x, y >> 2));
+        ctx.fillStyle = rgb(118 * v, 84 * v, 60 * v);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+  bark.repeat.set(2, 2);
+  // cottage upper storeys: rough lime plaster, near white so the cottage colour tints it
+  const plaster = makeTexture((ctx, w, h) => {
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const v = 0.86 + 0.1 * noise(x >> 1, y >> 1) + 0.04 * noise(x, y);
+      ctx.fillStyle = rgb(255 * v, 250 * v, 240 * v);
+      ctx.fillRect(x, y, 1, 1);
+    }
+  });
+  // cottage roofs: rows of overlapping shingles, grey so the roof colour tints it
+  const shingle = makeTexture((ctx, w, h) => {
+    const rowH = 16, tileW = 22;
+    for (let y = 0; y < h; y++) {
+      const row = Math.floor(y / rowH), fy = (y % rowH) / rowH;
+      for (let x = 0; x < w; x++) {
+        const xx = x + (row % 2) * tileW / 2, tile = Math.floor(xx / tileW), edge = xx % tileW < 1.5;
+        const v = edge ? 0.45 : (0.95 - 0.35 * fy) * (0.85 + 0.15 * noise(tile, row));
+        ctx.fillStyle = rgb(255 * v, 255 * v, 255 * v);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
   const pit = pitTexture(theme);
   pit.repeat.set(8, 8);
-  const set = { floor, wall, rock, wood, crate, pit };
+  const set = { floor, wall, rock, wood, bark, plaster, shingle, crate, pit };
   cache.set(theme.id, set);
   return set;
 }

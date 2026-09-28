@@ -85,7 +85,7 @@ export function drawEnemyGlows(now) {
     const e = o.now;
     if (!e || e.dead) continue;
     if (now - o.flashT < 70) {
-      const p = project(e.x, e.y, e.z + EYE - 0.1);
+      const p = project(e.x + Math.cos(e.a || 0) * 0.4, e.y + Math.sin(e.a || 0) * 0.4, e.z + EYE - 0.25); // at the gun, out front
       if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 160 / p.f + 20, 'rgba(255,210,90,0.9)');
     }
     if (e.sc) {

@@ -5,8 +5,8 @@
 //   hell   # clusters -> volcano cones with a lava crater, + -> boulders, B -> lava-ruin huts,
 //          edge -> jagged cliffs
 //   ice    # clusters -> icebergs (no lava), + -> ice chunks, B -> ice lodges, edge -> frozen cliffs
-//   witch  # -> trees (trunk here; the canopy is a sprite drawn by the client), + -> bushes,
-//          B -> cottages, edge -> a thick hedge with trees
+//   witch  # -> trees (collision here; the client draws the tree over it), + -> bushes,
+//          B -> two-storey cottages, edge -> a thick hedge with trees
 //   robot  # -> server racks (touching # join into one row), + -> crates, edge -> metal wall
 //   haunt  # -> full-height walls under a ceiling (CEILING_H)
 //   castle # -> stone walls of uneven height: curtain walls + taller corner/keep towers
@@ -17,17 +17,24 @@
 //
 // kind: 0 = ground (walkable, may slope), 1 = blocked (anything taller than STEP_H), 2 = pit
 // mat:  what a sample is made of, for the client's colors (MAT below)
-// props: things the client draws or animates on top: trees (canopies), volcano craters, huts
+// props: things the client draws or animates on top: trees, volcano craters, cottages (huts)
 
 export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10, STONE: 11 }; // STONE: conjured ramps (shared/spells.js)
 
-// enterable cottages: walls, roof and wall height per map style (touching B squares make one)
+// enterable cottages: walls, roof and roof pitch per map style (touching B squares make one)
 const COTTAGES = {
-  witch: { wall: MAT.BARK, roof: MAT.LEAVES, h: 1.7, peak: 0.7 },
-  nuke: { wall: MAT.BARK, roof: MAT.CRATE, h: 2.0, peak: 1.15 },
-  hell: { wall: MAT.ROCK, roof: MAT.ROCK, h: 1.75, peak: 0.8 },
-  ice: { wall: MAT.BARK, roof: MAT.ROCK, h: 1.7, peak: 0.95 },
+  witch: { wall: MAT.BARK, roof: MAT.LEAVES, peak: 0.9 },
+  nuke: { wall: MAT.BARK, roof: MAT.CRATE, peak: 1.15 },
+  hell: { wall: MAT.ROCK, roof: MAT.ROCK, peak: 0.9 },
+  ice: { wall: MAT.BARK, roof: MAT.ROCK, peak: 1.0 },
 };
+// Every cottage has two storeys. Players are 0.8 tall, jump ~0.43 and step up 0.3.
+//   floor: the upper floor you stand on; slab: its thickness (ground floor headroom = floor - slab)
+//   top: wall height; door: doorway height; sill / lintel: window bottom / top above each floor
+//   stairs: `steps` treads of `rise` x `tread` along the back wall, climbing from the room toward the -x wall,
+//   then one more rise onto the floor
+export const HOUSE = { floor: 1.4, slab: 0.3, top: 2.55, door: 1.0, sill: 0.35, lintel: 0.8, win: 0.3,
+  rise: 0.28, tread: 0.36, steps: 4, stairW: 0.75, roofT: 0.15 };
 export const CEILING_H = 2.8; // haunted house: walls go all the way up to the ceiling
 const STEP_H = 0.3; // taller than this can't be walked onto (matches the client's step height)
 
@@ -111,7 +118,7 @@ export function buildTerrain(MAP, RES, style) {
       const minY = Math.min(...cells.map(c => c[1])), maxY = Math.max(...cells.map(c => c[1]));
       const x0 = minX, y0 = minY, x1 = maxX + 1, y1 = maxY + 1;
       const W = x1 - x0, D = y1 - y0;
-      const look = COTTAGES[style], wallH = look.h, t = style === 'witch' ? 0.16 : 0.18;
+      const look = COTTAGES[style], wallH = HOUSE.top, t = style === 'witch' ? 0.16 : 0.18;
       const wallMat = look.wall;
       const midY = (minY + maxY) * 0.5;
       const doorDir = midY < MH / 2 ? 1 : -1; // door toward mid-map
@@ -147,12 +154,10 @@ export function buildTerrain(MAP, RES, style) {
         box(x0 + t, y0, doorL, y0 + t, wallH, wallMat);
         box(doorR, y0, x1 - t, y0 + t, wallH, wallMat);
       }
-      // chimney (brimstone cottages vent lava)
-      if (style === 'witch') box(x1 - 0.4, y0 + 0.18, x1 - 0.18, y0 + 0.4, wallH + 0.9, MAT.ROCK);
-      else box(x1 - 0.55, y0 + 0.25, x1 - 0.25, y0 + 0.55, wallH + 0.7, style === 'hell' ? MAT.LAVA : MAT.ROCK);
-      // interior cover so fights inside aren't empty boxes
-      if (W > 3.5 && D > 2.5) box(x0 + W * 0.38, y0 + D * 0.4, x0 + W * 0.62, y0 + D * 0.58, 0.55, MAT.CRATE);
-      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, style, doorDir, doorHalf });
+      // stairs up the back wall (away from the door): the bottom step faces into the room, the top is at the -x wall
+      const sx = x0 + t + 0.05, sy = doorDir > 0 ? y0 + t : y1 - t - HOUSE.stairW;
+      const stairs = { x0: sx, x1: sx + HOUSE.steps * HOUSE.tread, y0: sy, y1: sy + HOUSE.stairW };
+      props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, t, peak: look.peak, style, doorDir, doorHalf, stairs });
       continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
@@ -247,6 +252,8 @@ export function buildTerrain(MAP, RES, style) {
     const hw = (hut.w || 2.2) / 2, hd = (hut.d || 2.2) / 2, t = 0.16;
     const wallH = hut.h, doorDir = hut.doorDir || 1;
     const look = COTTAGES[hut.style] || COTTAGES.witch, wallMat = look.wall, roofMat = look.roof;
+    // (the heightmap only keeps a rough outline for things like the camera; walkHeight / ceilingAt
+    // answer from houseSolids below)
     const x0 = hut.x - hw, y0 = hut.y - hd, x1 = hut.x + hw, y1 = hut.y + hd;
     const clear = (xa, ya, xb, yb) => {
       const i0 = Math.max(0, Math.floor(xa * RES)), i1 = Math.min(TW - 1, Math.ceil(xb * RES));
@@ -269,10 +276,9 @@ export function buildTerrain(MAP, RES, style) {
     }
     // A-frame roof peaked along X (ridge runs parallel to the doorway wall)
     const peakH = look.peak;
-    raise(x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, (px, py) => {
-      const u = Math.abs(px - hut.x) / (hw + 0.06), v = Math.abs(py - hut.y) / (hd + 0.06);
-      if (u > 1 || v > 1) return null;
-      const peak = wallH + peakH - u * (peakH + 0.25);
+    raise(x0, y0, x1, y1, (px, py) => {
+      if (px < x0 || px >= x1 || py < y0 || py >= y1) return null;
+      const peak = wallH + peakH * (1 - Math.abs(px - hut.x) / hw);
       return peak > wallH + 0.02 ? [peak, roofMat] : null;
     });
     // the gable ends rise from the walls: keep them the wall's material, not the roof's
@@ -292,7 +298,7 @@ export function buildTerrain(MAP, RES, style) {
   for (const hut of props) {
     if (hut.type !== 'hut') continue;
     // inset past wall thickness so side walls stay kind=1 (don't hollow them out)
-    const hw = (hut.w || 2.2) / 2 - 0.32, hd = (hut.d || 2.2) / 2 - 0.32;
+    const hw = hut.w / 2 - hut.t - 0.04, hd = hut.d / 2 - hut.t - 0.04;
     const i0 = Math.max(0, Math.floor((hut.x - hw) * RES)), i1 = Math.min(TW - 1, Math.ceil((hut.x + hw) * RES));
     const j0 = Math.max(0, Math.floor((hut.y - hd) * RES)), j1 = Math.min(TH - 1, Math.ceil((hut.y + hd) * RES));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
@@ -487,61 +493,96 @@ function openGroundAt(T, x, y) {
   return h00 * (1 - u) * (1 - v) + h10 * u * (1 - v) + h01 * (1 - u) * v + h11 * u * v;
 }
 
-// just the huts, cached on the terrain: walkHeight runs this thousands of times a tick and
-// swamp maps have hundreds of trees in props
-function hutsOf(T) {
-  return T.huts ||= (T.props || []).filter(p => p.type === 'hut');
-}
-
-function underHutFloor(T, x, y) {
-  for (const p of hutsOf(T)) {
-    // inset past wall thickness so side walls stay solid for bullets / walking
-    const hw = (p.w || 2.2) / 2 - 0.28, hd = (p.d || 2.2) / 2 - 0.28;
-    const fullHd = (p.d || 2.2) / 2;
-    const doorHalf = p.doorHalf || Math.min((p.w || 2.2) / 2 * 0.5, 1.2);
-    const doorDir = p.doorDir || 1;
-    const inside = Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd;
-    const inDoor = Math.abs(x - p.x) < doorHalf && (
-      doorDir > 0 ? (y >= p.y + fullHd - 0.55 && y <= p.y + fullHd + 1.15)
-                  : (y <= p.y - fullHd + 0.55 && y >= p.y - fullHd - 1.15)
-    );
-    if ((inside || inDoor) && kindAt(T, x, y) !== 1) return p;
+// Cottages are two storeys, which one height per spot can't hold, so inside a cottage's footprint
+// walkHeight / ceilingAt ask houseSolids instead of the heightmap: the solid layers stacked at a spot
+// (walls with the doorway and windows cut out, stairs, the upper floor, the roof), sorted bottom up.
+// The ground floor is at 0 (cottage footprints are flattened).
+function houseGrid(T) {
+  if (T.houseGrid) return T.houseGrid;
+  const MW = T.TW / T.RES, g = T.houseGrid = new Array(MW * (T.TH / T.RES));
+  for (const p of T.props || []) {
+    if (p.type !== 'hut') continue;
+    for (let cy = p.y - p.d / 2; cy < p.y + p.d / 2; cy++) for (let cx = p.x - p.w / 2; cx < p.x + p.w / 2; cx++)
+      g[Math.floor(cy) * MW + Math.floor(cx)] = p;
   }
-  return null;
+  return g;
 }
 
-function underHutRoof(T, x, y) {
-  for (const p of hutsOf(T)) {
-    // slightly past the walls so eaves still count as a ceiling
-    const hw = (p.w || 2.2) / 2 + 0.1, hd = (p.d || 2.2) / 2 + 0.1;
-    if (Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hd) return p;
+export function houseAt(T, x, y) {
+  const MW = T.TW / T.RES, cx = Math.floor(x), cy = Math.floor(y);
+  if (cx < 0 || cy < 0 || cx >= MW || cy >= T.TH / T.RES) return null;
+  return houseGrid(T)[cy * MW + cx] || null;
+}
+
+// Every window in cottage p. wall: 'side' (the x walls) or 'end' (the y walls, the door is in one);
+// dir: which of the two (sign of x or y from the middle); at: its middle along the wall from the
+// house middle; z: [bottom, top]. Both floors on the sides, upstairs pairs front and back, downstairs
+// either side of the door and at the back (not behind the stairs, which are at the -x end).
+export function houseWindows(p) {
+  if (p.windows) return p.windows;
+  const H = HOUSE, up = [H.floor + H.sill, H.floor + H.lintel], down = [H.sill, H.lintel];
+  const pair = p.w / 2 * 0.55, low = p.doorHalf + 0.25 + H.win, list = [];
+  for (const dir of [-1, 1]) {
+    list.push({ wall: 'side', dir, at: 0, z: down }, { wall: 'side', dir, at: 0, z: up });
+    for (const at of [-pair, pair]) list.push({ wall: 'end', dir, at, z: up });
   }
-  return null;
+  if (low + H.win < p.w / 2 - p.t) for (const at of [-low, low]) list.push({ wall: 'end', dir: p.doorDir, at, z: down });
+  list.push({ wall: 'end', dir: -p.doorDir, at: pair, z: down });
+  return p.windows = list;
 }
 
-// floor you stand on: under a hut roof (or in its doorway) this is the ground, not the roof heightmap
+// window openings [bottom, top] in the wall at (x, y)
+function windowsAt(p, x, y, side) {
+  const dx = x - p.x, dy = y - p.y, out = [];
+  for (const w of houseWindows(p))
+    if ((w.wall === 'side') === side && Math.sign(side ? dx : dy) === w.dir && Math.abs((side ? dy : dx) - w.at) < HOUSE.win) out.push(w.z);
+  return out;
+}
+
+// [[bottom, top], ...] solid layers at (x, y) inside cottage p, bottom up and not overlapping
+export function houseSolids(p, x, y) {
+  const H = HOUSE, hw = p.w / 2, hd = p.d / 2, ax = Math.abs(x - p.x), ay = Math.abs(y - p.y);
+  const roofZ = p.h + p.peak * (1 - ax / hw); // ridge runs along y through the middle
+  const roof = [roofZ - H.roofT, roofZ];
+  const side = ax >= hw - p.t, endWall = ay >= hd - p.t;
+  if (side || endWall) {
+    // walls run up to the roof (into the gable on the end walls); the doorway is in the end wall facing mid-map
+    let solids = [[0, roofZ]];
+    const open = windowsAt(p, x, y, side);
+    if (endWall && !side && (y - p.y) * p.doorDir > 0 && ax < p.doorHalf) open.push([0, H.door]);
+    for (const [a, b] of open)
+      solids = solids.flatMap(([lo, hi]) => b <= lo || a >= hi ? [[lo, hi]] : [[lo, a], [b, hi]].filter(([l, h]) => h > l));
+    return solids;
+  }
+  const s = p.stairs;
+  if (x >= s.x0 && x < s.x1 && y >= s.y0 && y < s.y1)
+    return [[0, (Math.floor((s.x1 - x) / H.tread) + 1) * H.rise], roof];
+  return [[H.floor - H.slab, H.floor], roof];
+}
+
+// floor you stand on with feet at z: the top of the highest solid layer starting at or below z
 export function walkHeight(T, x, y, z = 0) {
-  const hut = underHutFloor(T, x, y);
-  if (hut) {
-    const roof = Math.max(hut.roof || 0, groundAt(T, x, y));
-    // anywhere under the roof volume is floor 0 — eaves / door skirts used to sit at ~0.7 and eat bullets
-    if (z < roof - 0.1) return 0;
+  const p = houseAt(T, x, y);
+  if (p) {
+    let floor = 0;
+    for (const [lo, hi] of houseSolids(p, x, y)) { if (lo > z) break; floor = hi; }
+    return floor;
   }
   if (kindAt(T, x, y) === 1) return groundAt(T, x, y);
   return openGroundAt(T, x, y);
 }
 
-// solid height for bullets / LOS / nades: floor under a roof, otherwise open ground (no wall bleed)
+// solid height for bullets / LOS / nades: same as the floor you'd stand on
 export function solidAt(T, x, y, z = 0) {
   return walkHeight(T, x, y, z);
 }
 
-// underside of a hut roof at (x,y), or null if not under one (for ceiling hits)
-export function ceilingAt(T, x, y) {
-  const hut = underHutRoof(T, x, y);
-  if (!hut) return null;
-  const g = groundAt(T, x, y);
-  return g > 1.2 ? g : (hut.roof || null);
+// bottom of the next solid above z (a cottage ceiling, lintel or roof), or null in the open
+export function ceilingAt(T, x, y, z = 0) {
+  const p = houseAt(T, x, y);
+  if (!p) return null;
+  for (const [lo] of houseSolids(p, x, y)) if (lo > z) return lo;
+  return null;
 }
 
 export function kindAt(T, x, y) {
