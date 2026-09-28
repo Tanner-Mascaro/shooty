@@ -320,11 +320,6 @@ body:not(.ingame) #hud, body:not(.ingame) #hudLeft { display:none; }
 #homeAlt .ghost:hover { border-color:var(--accent); color:var(--accent); }
 #home .link { background:none; border:none; color:#6a4028; text-decoration:underline; cursor:pointer; font:inherit; padding:0; }
 #homeSigned { flex-direction:row; align-items:baseline; justify-content:space-between; gap:12px; }
-#homeBotLevel button {
-  background:rgba(90,60,30,0.08); border:1px solid #8a7048; color:var(--ink);
-  font:inherit; padding:8px 10px; cursor:pointer;
-}
-#homeBotLevel button.sel { background:rgba(139,30,45,0.18); border-color:var(--accent); }
 body.on-home #wait { display:none !important; }
 body.on-home #c, body.on-home #gl, body.on-home #hud, body.on-home #hudLeft,
 body.on-home #toasts, body.on-home #msg, body.on-home #controls, body.on-home #talking,
@@ -404,12 +399,12 @@ body.on-home #corner { z-index:210; }
 
 /* mode + map + team pickers */
 .choice { display:flex; gap:6px; }
-.choice button, #botCtl button {
+.choice button, #botCtl > button {
   flex:1; font-size:12px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:10px 12px;
   border-radius:0; cursor:pointer; background:rgba(90,60,30,0.08); color:var(--ink); border:1px solid var(--line);
   transition:border-color .12s, background .12s, color .12s;
 }
-.choice button:hover, #botCtl button:hover { border-color:#5a4428; color:#1a1008; background:rgba(90,60,30,0.14); }
+.choice button:hover, #botCtl > button:hover { border-color:#5a4428; color:#1a1008; background:rgba(90,60,30,0.14); }
 .seg {
   background:rgba(90,60,30,0.1); padding:3px; border-radius:0;
   border:1.5px solid #5a3820;
@@ -752,7 +747,7 @@ body.ingame #chatLog > div.dm { color:#c8b0d8; }
 body.ingame #chat .dm-tag { color:#9a78b8; }
 body.ingame #chat { pointer-events:none; }
 body.chatting #chat { pointer-events:auto; }
-body.chatting #chatLog { background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:0; padding:6px 8px; }
+body.ingame.chatting #chatLog { background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:0; padding:6px 8px; }
 #chat .other { color:#4a6080; font-weight:700; }
 #chat .me { color:#8b1e2d; font-weight:700; }
 #chat .ally { color:#5a3a70; font-weight:700; }
@@ -937,9 +932,8 @@ body.display-dark #nameInput {
 }
 body.display-dark #homeAuth input::placeholder, body.display-dark #homeName::placeholder { color:#9a8060; }
 body.display-dark #homeAuthBtns button:not([type=submit]),
-body.display-dark #homeBotLevel button,
 body.display-dark .choice button:not(.sel),
-body.display-dark #botCtl button:not(.sel),
+body.display-dark #botCtl > button:not(.sel),
 body.display-dark .seg,
 body.display-dark #authForm button:not([type=submit]),
 body.display-dark #friendForm button,
@@ -961,10 +955,10 @@ body.display-dark .skin-arrow, body.display-dark #chooseSkin {
   color:#3a2414; background:rgba(90,60,30,0.1); border-color:#8a7048;
 }
 body.display-dark #roomCode { color:#3a2414; }
-body.display-dark #chatCard #chatLog, body.display-dark.chatting #chatLog { background:rgba(4,6,10,0.76); border-color:#29313d; }
+body.display-dark.ingame.chatting #chatLog { background:rgba(4,6,10,0.76); border-color:#29313d; }
 body.display-dark #corner .ghost { background:rgba(8,10,14,0.94); color:#e4e9f1; border-color:#29313d; }
 body.display-dark #invite #inviteDismiss { color:#c7cfda; background:#080a0e; border-color:#29313d; }
-body.display-dark #chatInput {
+body.display-dark.ingame #chatInput {
   color:#e4e9f1; background-color:#080a0e; border-color:#29313d;
 }
 body.display-dark #settings .spellbook {
