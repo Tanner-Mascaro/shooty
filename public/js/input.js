@@ -18,7 +18,7 @@ const typing = e => e.target.matches('input:not([type]), input[type=text], input
 
 export function initInput() {
   canvas.addEventListener('click', () => {
-    if (!S.started || chatOpen()) return;
+    if (!S.started || chatOpen() || S.touch) return; // touch screens aim by dragging (touch.js), no mouse lock
     initAudio();
     canvas.requestPointerLock();
   });

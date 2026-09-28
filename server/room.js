@@ -12,6 +12,7 @@ import { RAMP, canBuild, applyBuild, removeBuild, touchesBuild, rampUnder, fitsL
 import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
+import { XP, levelFor, skinUnlocked } from '../shared/progression.js';
 import { VERSION } from './version.js';
 
 const CHAT_MAX = 140; // as in public/js/chat.js
@@ -493,7 +494,7 @@ export class Room {
     const infected = this.mode === 'plague' && killer && killer.team === PLAGUE_TEAM && victim.team === HEALTHY_TEAM;
     if (killer) killer.kills++;
     victim.deaths = (victim.deaths || 0) + 1;
-    this.hub.record(killer, { kills: 1 });
+    this.hub.record(killer, { kills: 1, xp: XP.kill });
     this.hub.record(victim, { deaths: 1 });
 
     // streaks: kills in a row without dying, and multi-kills in quick succession
@@ -732,7 +733,7 @@ export class Room {
     this.zone = null;
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast(Object.assign({ type: 'win', mode: this.mode, level: this.level, scores: this.scoreboard() }, result));
-    for (const p of this.humans) this.hub.record(p, winners.includes(p) ? { wins: 1 } : { losses: 1 });
+    for (const p of this.humans) this.hub.record(p, winners.includes(p) ? { wins: 1, xp: XP.match + XP.win } : { losses: 1, xp: XP.match });
     log(`[${this.code}] ${label} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
     this.hub.afterMatch(this);
     this.roster();
@@ -938,6 +939,7 @@ export class Room {
 Room.prototype.handlers = {
   skin(p, msg) {
     if (this.gameOn || !PLAYER_SKINS.includes(msg.skin) || p.skin === msg.skin) return;
+    if (!skinUnlocked(msg.skin, levelFor(p.stats?.xp || 0))) return this.roster(); // locked: the roster puts your old skin back
     p.skin = msg.skin;
     p.ready = !!p.bot;
     this.roster();
@@ -1026,6 +1028,13 @@ Room.prototype.handlers = {
     p.ready = true;
     log(`[${this.code}] ${this.hub.who(p)} is ready`);
     if (!this.maybeStart()) this.roster();
+  },
+
+  // changed your mind on the loading screen: not ready after all
+  unready(p) {
+    if (this.gameOn || !p.ready) return;
+    p.ready = false;
+    this.roster();
   },
 
   addBot(p, msg) {

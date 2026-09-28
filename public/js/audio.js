@@ -200,7 +200,7 @@ export function syncMusic() {
   const on = !S.started && settings.music > 0;
   musicGain.gain.setTargetAtTime(on ? 0.5 * settings.music : 0, actx.currentTime, on ? 0.6 : 0.25);
   if (on && !musicTimer) {
-    newTrack();
+    if (!track) newTrack(); // back from a match: carry on with the same tune where it left off
     nextNote = actx.currentTime + 0.1;
     musicTimer = setInterval(scheduleMusic, 120);
   } else if (!on && musicTimer) {

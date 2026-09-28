@@ -10,6 +10,8 @@ export const PLAYER_SKINS = Object.keys(PLAYER_SPRITES);
 export const PLAYER_SKIN_NAMES = {
   witch: 'Swamp Witch', robotWitch: 'Robot Witch', gothicWitch: 'Gothic Witch',
   infernalWitch: 'Infernal Witch', iceWitch: 'Ice Witch', ghostWitch: 'Ghost Witch', plagueWitch: 'Plague Witch',
+  zombie: 'Risen Corpse', mummy: 'Cursed Mummy', werewolf: 'Werewolf', vampire: 'Vampire Count', knight: 'Hexed Knight',
+  ninja: 'Shadow Ninja', nun: 'Unholy Nun', demon: 'Brimstone Demon', slime: 'Cauldron Slime', goose: 'Familiar Goose',
 };
 
 // --- pickups ---

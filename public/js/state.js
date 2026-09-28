@@ -13,6 +13,8 @@ export const S = {
   myStreak: 0, myGunLevel: 0, // kills since you last died; your gun game rung
   // the room from the server: { code, private, mode, level, gameOn, bots, max, players: [{ id, name, team, ready, bot }] }
   room: null,
+  xp: 0, // your saved XP (levels and skin unlocks: shared/progression.js); xpStart: what it was when the match began
+  xpStart: null,
 
   // you: position is client-authoritative; seq changes when the server respawns you
   me: null, mySeq: 0, pitch: 0,
@@ -36,6 +38,8 @@ export const S = {
   builds: new Map(), // conjured ramps: id -> { kind, x, y, dir, base, on, prev }
   nextFire: { pistol: 0, deagle: 0, revolver: 0, rifle: 0, burst: 0, carbine: 0, sniper: 0, crossbow: 0, beam: 0, shotgun: 0, smg: 0, uzi: 0, lmg: 0, blade: 0, claws: 0 },
   keys: {}, mouseDX: 0, mouseDY: 0,
+  // touch screens (touch.js): the joystick's analog walk (x strafe, y forward, -1..1) and where the hotbar slots are
+  touch: false, touchMove: { x: 0, y: 0 }, hotbarHits: [],
 
   // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick
   // behind, interpolated from prev to cur (`now` is this frame's position)

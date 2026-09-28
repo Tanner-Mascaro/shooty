@@ -17,6 +17,7 @@ import { flushFriends } from './friends.js';
 import { ensureCanvas } from './render/canvas.js';
 import { S } from './state.js';
 import { initMap } from './mapview.js';
+import { initTouch } from './touch.js';
 
 initLobby();
 initSettings();
@@ -24,6 +25,7 @@ initChat();
 initVoice();
 initInput();
 initMap();
+initTouch();
 connect();
 
 const fpsEl = document.getElementById('fps');

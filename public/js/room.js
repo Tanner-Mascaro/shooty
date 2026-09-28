@@ -13,6 +13,7 @@ import { buildTerrain, MAT, noise } from '/shared/terrain.js';
 import { THEMES } from './themes.js';
 import { muted, toggleMute, voiceOn } from './voice.js';
 import { canFriend } from './friends.js';
+import { levelFor, unlockLevel, skinUnlocked } from '/shared/progression.js';
 
 const $ = id => document.getElementById(id);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -49,15 +50,18 @@ const skinCards = () => [...document.querySelectorAll('#skins button')];
 function updateSkinUI() {
   const skin = savedSkin(), name = PLAYER_SKIN_NAMES[skin] || skin;
   $('skinStatus').textContent = 'Playing as ' + name;
+  const level = levelFor(S.xp);
   skinCards().forEach(b => {
+    const locked = !skinUnlocked(b.dataset.skin, level);
     b.classList.toggle('sel', b.dataset.skin === skin);
+    b.classList.toggle('locked', locked);
     b.disabled = !!(S.room && S.room.gameOn);
   });
   $('loSkin').textContent = name;
 }
 
 function pickSkin(skin) {
-  if (S.room && S.room.gameOn) return;
+  if (S.room && S.room.gameOn || !skinUnlocked(skin, levelFor(S.xp))) return;
   if (savedSkin() !== skin) {
     saveSkin(skin);
     send({ type: 'skin', skin });
@@ -81,7 +85,16 @@ function initSkinGrid() {
     title.className = 'skin-name';
     title.textContent = PLAYER_SKIN_NAMES[skin] || skin;
     b.append(art, title);
-    b.addEventListener('click', () => setDraft(skin));
+    if (unlockLevel(skin) > 1) {
+      const lock = document.createElement('span');
+      lock.className = 'skin-lock';
+      lock.textContent = 'Level ' + unlockLevel(skin);
+      b.append(lock);
+    }
+    b.addEventListener('click', () => {
+      if (!skinUnlocked(skin, levelFor(S.xp))) return toast(`${PLAYER_SKIN_NAMES[skin] || skin} unlocks at level ${unlockLevel(skin)}`);
+      setDraft(skin);
+    });
     return b;
   }));
   updateSkinUI();
@@ -258,6 +271,16 @@ function closePicker() {
   pickerFrom?.focus();
 }
 
+// after I'm Ready: a loading screen until the match starts, so waiting doesn't look like a glitch
+let loadingOn = false;
+function showLoading(on, status) {
+  loadingOn = on;
+  $('loading').hidden = !on;
+  if (status !== undefined) $('loadingStatus').textContent = status;
+  else if (on && !$('loadingStatus').textContent) $('loadingStatus').textContent = 'Brewing the realm…';
+}
+export const hideLoading = () => showLoading(false);
+
 export const inviteLink = code => location.origin + location.pathname + '?room=' + code;
 export const newCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 export const goToRoom = code => switchRoom(code ? '?room=' + code : '');
@@ -272,7 +295,8 @@ export function initRoom() {
     e.stopImmediatePropagation();
     closePicker();
   }, true);
-  $('readyBtn').addEventListener('click', () => { initAudio(); cackle(); send({ type: 'ready' }); });
+  $('readyBtn').addEventListener('click', () => { initAudio(); cackle(); send({ type: 'ready' }); showLoading(true); });
+  $('loadingCancel').addEventListener('click', () => { send({ type: 'unready' }); showLoading(false); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => setDraft(b.dataset.level)));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setDraft(b.dataset.mode)));
   document.querySelectorAll('#scorePick button, #teamScorePick button').forEach(b => b.addEventListener('click', () => {
@@ -464,6 +488,12 @@ export function showRoom() {
   const bots = r.players.filter(p => p.bot);
   const humanReady = humans.filter(p => p.ready).length;
   const aloneWithBots = humans.length === 1 && bots.length > 0;
+  // the loading screen follows your ready state; it says who we're still waiting on
+  if (me && me.ready && !r.gameOn && !S.started) {
+    const left = humans.length - humanReady;
+    showLoading(true, aloneWithBots || left <= 0 ? 'Brewing the realm…'
+      : `Waiting for ${left} of ${humans.length} player${humans.length === 1 ? '' : 's'} to be ready`);
+  } else if (loadingOn && (!me || !me.ready)) showLoading(false);
   const btn = $('readyBtn');
   btn.disabled = !me || me.ready || r.gameOn || S.disconnected || r.plagueSetupValid === false || r.players.length < 2;
   btn.textContent = me && me.ready

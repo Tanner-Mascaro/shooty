@@ -18,6 +18,7 @@ import { fromProfile, showControlsHint } from './settings.js';
 import { addChat, addDm, addSystem, refreshChat } from './chat.js';
 import { LEVEL_NAMES } from '/shared/levels.js';
 import { syncVoice, onSignal } from './voice.js';
+import { resetTouch } from './touch.js';
 
 let ws = null;
 
@@ -152,6 +153,8 @@ const handlers = {
     S.spells = []; S.hasteUntil = 0; S.wardUntil = 0; S.buildMode = false;
     S.damageIndicators = [];
     S.myKills = 0;
+    S.xpStart = S.xp; // the summary shows what this match earned
+    resetTouch();
     S.weapon = S.clawsOnly ? 'claws' : gunSlots()[0] || 'blade'; S.lastWeapon = S.clawsOnly ? 'claws' : 'blade'; S.scoped = false; S.reloading = null;
     S.jumpsUsed = 0; S.jumpHeld = false; S.quickUntil = 0;
     S.dashUntil = 0; S.nextDash = 0;

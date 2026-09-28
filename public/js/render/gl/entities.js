@@ -243,6 +243,14 @@ function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline
     pal = tintPalette(s.pal.map(c => c && c.slice()), tint);
     if (flash) for (let i = 1; i < pal.length; i++) if (pal[i]) pal[i] = pal[i].map(v => Math.min(255, v + 80));
   }
+  // a flat cutout wider than the body cuts into a wall its owner is hugging: slide it toward the
+  // camera by a little less than the body radius (0.22), so it stays in front of the wall surface
+  // without ever poking through to the far side
+  const cam = getCamera();
+  if (cam) {
+    const dx = cam.position.x - x, dy = cam.position.z - y, d = Math.hypot(dx, dy);
+    if (d > 0.5) { const pull = 0.2 / d; x += dx * pull; y += dy * pull; }
+  }
   const skinKey = (skin || 'witch') + poseKey;
   const h = (BODY_H + 0.12) * hScale;
   const bw = 0.6 * wScale;

@@ -4,6 +4,11 @@ import { send } from './net.js';
 import { token, setToken, clearToken, savedName, saveName, savedSkin, setEntered } from './profile.js';
 import { homeProfile, homeAuth, homeOpen, showHome } from './home.js';
 import { canFriend } from './friends.js';
+import { levelInfo, skinsUnlockedBetween } from '/shared/progression.js';
+import { S } from './state.js';
+import { updateLoadout } from './room.js';
+import { banner, toast, showXpGain } from './ui.js';
+import { PLAYER_SKIN_NAMES } from './render/sprites.js';
 
 const $ = id => document.getElementById(id);
 let me = {}; // latest profile message, merged (stat-only updates arrive after every kill)
@@ -59,8 +64,29 @@ export function initAccount() {
   });
 }
 
+// XP and level: the profile card's bar, a banner when you level up (naming any skins it unlocks),
+// and the XP gained on the match summary
+function showXp() {
+  const xp = me.xp || 0, before = S.xp, { level, into, need } = levelInfo(xp);
+  S.xp = xp;
+  $('levelNum').textContent = 'Level ' + level;
+  $('xpFill').style.width = Math.round(100 * into / need) + '%';
+  $('xpText').textContent = into + ' / ' + need + ' XP';
+  const was = levelInfo(before).level;
+  if (xpSeen && level > was) {
+    const skins = skinsUnlockedBetween(was, level).map(s => PLAYER_SKIN_NAMES[s] || s);
+    const text = 'LEVEL ' + level + (skins.length ? ' — ' + skins.join(', ') + ' unlocked' : '');
+    if (S.started) banner(text, true); else toast(text);
+  }
+  xpSeen = true;
+  showXpGain();
+  updateLoadout(); // locked / unlocked character cards
+}
+let xpSeen = false;
+
 export function showProfile(msg) {
   me = Object.assign(me, msg);
+  if ('xp' in msg) showXp();
   if (me.username) saveName(me.name); // signed in: the account's name wins over what this browser had
   homeProfile(me);
   if (homeOpen()) return; // home has its own auth UI — skip rebuilding the hidden lobby panel

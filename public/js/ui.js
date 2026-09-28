@@ -1,9 +1,10 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
 import { canBuildIn, MAX_MANA, MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS, GUN_GAME_LADDER, gunGameGun } from '/shared/config.js';
 import { LEVEL_NAMES, FEATURED_LEVELS } from '/shared/levels.js';
+import { levelFor } from '/shared/progression.js';
 import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
-import { initRoom, showRoom, updateLoadout } from './room.js';
+import { initRoom, showRoom, updateLoadout, hideLoading } from './room.js';
 import { initAccount } from './account.js';
 import { initFriends } from './friends.js';
 import { initHome } from './home.js';
@@ -78,6 +79,7 @@ export function hideWait() {
   $('result').textContent = '';
   $('msg').style.opacity = 0;
   $('picker').hidden = true;
+  hideLoading();
   hideSummary(true);
   syncMusic(); // the lobby tune fades out for the match
 }
@@ -146,6 +148,7 @@ export function showSummary({ headline, rematch, scores, mode, level, won, hardp
   rematchAsked = false;
   summary.hidden = false;
   updateRematch();
+  showXpGain();
   summaryTimer = setTimeout(dismissSummary, 12000);
 }
 
@@ -202,6 +205,15 @@ function dismissSummary() {
   const next = summaryNext;
   hideSummary(true);
   showWait(next);
+}
+
+// "+45 XP · Level 3" on the match summary; the award lands a moment after the result, so this
+// runs again when the new XP arrives
+export function showXpGain() {
+  const el = $('summaryXp');
+  if (!el || summary.hidden || S.xpStart === null) return;
+  const gained = S.xp - S.xpStart;
+  el.textContent = gained > 0 ? `+${gained} XP · Level ${levelFor(S.xp)}` : '';
 }
 
 function hideSummary(silent) {

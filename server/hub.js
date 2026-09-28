@@ -7,6 +7,7 @@ import { PLAYER_SKINS, isHackName } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
 import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
+import { levelFor, skinUnlocked } from '../shared/progression.js';
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L mix-ups
 const randomCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
@@ -184,7 +185,8 @@ export class Hub {
     if (!this.conns[p.id]) return false;
     this.setProfile(p, pid);
     p.name = saved.name; p.username = saved.username;
-    p.stats = Object.fromEntries(STATS.map(s => [s, saved[s]]));
+    p.stats = Object.fromEntries(STATS.map(s => [s, saved[s] || 0]));
+    if (!skinUnlocked(p.skin, levelFor(p.stats.xp))) p.skin = 'witch'; // a skin this profile hasn't unlocked yet
     this.send(p, { type: 'settings', settings: saved.settings }); // null: the browser sends its own
     await this.sendProfile(p);
     this.sendFriends(p);

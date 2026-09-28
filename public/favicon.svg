@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff8a9c"/><stop offset=".45" stop-color="#c8182f"/><stop offset="1" stop-color="#5a0612"/>
+    </linearGradient>
+  </defs>
+  <!-- a cut ruby: table on top, facets down to the point -->
+  <path d="M18 8h28l14 16-28 34L4 24z" fill="url(#g)" stroke="#c9a24a" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M4 24h56M18 8l6 16 8-16 8 16 6-16M24 24l8 34 8-34" fill="none" stroke="#ffd0d8" stroke-opacity=".55" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M20 11l-9 11h11z" fill="#fff" fill-opacity=".45"/>
+</svg>

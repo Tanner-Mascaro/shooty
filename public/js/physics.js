@@ -169,8 +169,8 @@ function applyFriction(dt, scale = 1) {
 
 export function dash() {
   if (!S.started || !S.me || !S.clawsOnly) return;
-  const forward = Number(held('forward')) - Number(held('back'));
-  const side = Number(held('right')) - Number(held('left'));
+  const forward = Number(held('forward')) - Number(held('back')) + S.touchMove.y;
+  const side = Number(held('right')) - Number(held('left')) + S.touchMove.x;
   const cos = Math.cos(S.me.a), sin = Math.sin(S.me.a);
   const dx = forward || side ? cos * forward - sin * side : cos;
   const dy = forward || side ? sin * forward + cos * side : sin;
@@ -214,6 +214,7 @@ export function updatePlayer(dt) {
   if (held('back')) fx--;
   if (held('right')) sx++;
   if (held('left')) sx--;
+  fx += S.touchMove.y; sx += S.touchMove.x; // the touch joystick
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }

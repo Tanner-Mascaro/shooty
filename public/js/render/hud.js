@@ -5,14 +5,14 @@ import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS, NADE } from '/sha
 import { S, spare, isEnemy, nameOf } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, SPELL_LOOK, MAX_SPEED } from '../constants.js';
 import { pickupSprite } from './sprites.js';
-import { buildingAllowed } from '../spells.js';
+import { buildingAllowed, setBuildMode, castSlot } from '../spells.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { mini } from '../level.js';
 import { walkHeight } from '/shared/terrain.js';
 import { inPit } from '../physics.js';
 import { settings, keyName } from '../settings.js';
-import { slotWeapon, gunToDrop } from '../weapons.js';
+import { slotWeapon, gunToDrop, switchSlot, throwNade } from '../weapons.js';
 import { drawViewmodel, aimAmount } from './viewmodel.js';
 
 const key = a => keyName(settings.keys[a]);
@@ -307,16 +307,41 @@ export function drawFlashes() {
 }
 
 // kill / pickup banner: pops in, holds, fades
+// a parchment plaque (chamfered corners, gold inner line) centered on (x, y), for banners and the death screen
+function parchment(x, y, w, h, notched) {
+  const l = x - w / 2, r = x + w / 2, t = y - h / 2, b = y + h / 2, c = notched ? h / 2 - 2 : 6;
+  ctx.beginPath();
+  if (notched) { // a ribbon: ends cut in like a swallowtail
+    ctx.moveTo(l, t); ctx.lineTo(r, t); ctx.lineTo(r - 16, y); ctx.lineTo(r, b); ctx.lineTo(l, b); ctx.lineTo(l + 16, y);
+  } else {
+    ctx.moveTo(l + c, t); ctx.lineTo(r - c, t); ctx.lineTo(r, t + c); ctx.lineTo(r, b - c); ctx.lineTo(r - c, b);
+    ctx.lineTo(l + c, b); ctx.lineTo(l, b - c); ctx.lineTo(l, t + c);
+  }
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, t, 0, b);
+  g.addColorStop(0, '#f6e8c4'); g.addColorStop(0.55, '#e6cf9e'); g.addColorStop(1, '#cfb07a');
+  ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = g; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  ctx.lineWidth = 2.5; ctx.strokeStyle = '#5a3820'; ctx.stroke();
+  ctx.save(); ctx.translate(x, y); ctx.scale((w - 10) / w, (h - 10) / h); ctx.translate(-x, -y);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(196,160,96,0.9)'; ctx.stroke();
+  ctx.restore();
+}
+
+// pickups, kills, mode starts: a parchment ribbon with the words in ruby (kills) or amethyst (good news)
 export function drawBanner(now) {
   drawCallout(now);
   const age = now - S.bannerT;
   if (age >= 1600) return;
-  const a = age < 1200 ? 1 : 1 - (age - 1200) / 400, sc = 1 + Math.max(0, 1 - age / 150) * 0.5;
-  ctx.save(); ctx.translate(view.W / 2, view.H * 0.3); ctx.scale(sc, sc);
-  ctx.font = 'bold 40px Courier New'; ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgb(' + S.theme.accent + ')'; ctx.shadowBlur = 20;
-  ctx.fillStyle = S.bannerGold ? 'rgba(122,80,136,' + a + ')' : 'rgba(168,64,64,' + a + ')';
-  ctx.fillText(S.bannerText, 0, 0);
+  const a = age < 1200 ? 1 : 1 - (age - 1200) / 400, sc = 1 + Math.max(0, 1 - age / 150) * 0.35;
+  ctx.save(); ctx.translate(view.W / 2, view.H * 0.3); ctx.scale(sc, sc); ctx.globalAlpha = a;
+  ctx.font = '700 30px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const text = '✦  ' + S.bannerText + '  ✦', w = ctx.measureText(text).width + 80;
+  parchment(0, 0, w, 52, true);
+  ctx.fillStyle = S.bannerGold ? '#5a2a90' : '#9a1628';
+  ctx.shadowColor = S.bannerGold ? 'rgba(150,90,220,0.45)' : 'rgba(200,30,50,0.45)'; ctx.shadowBlur = 10;
+  ctx.fillText(text, 0, 2);
   ctx.restore();
 }
 
@@ -477,11 +502,12 @@ function drawCallout(now) {
   const age = now - S.calloutT;
   if (age >= 2200 || !S.calloutText) return;
   const a = age < 1700 ? 1 : 1 - (age - 1700) / 500, sc = 1 + Math.max(0, 1 - age / 180) * 0.6;
-  ctx.save(); ctx.translate(view.W / 2, view.H * 0.3 + 46); ctx.scale(sc, sc);
-  ctx.font = '700 26px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
-  ctx.fillStyle = 'rgba(230,180,80,' + a + ')';
-  ctx.fillText(S.calloutText, 0, 0);
+  ctx.save(); ctx.translate(view.W / 2, view.H * 0.3 + 58); ctx.scale(sc, sc); ctx.globalAlpha = a;
+  ctx.font = '700 26px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(40,14,10,0.85)'; ctx.lineJoin = 'round';
+  ctx.strokeText(S.calloutText, 0, 0);
+  ctx.shadowColor = 'rgba(230,170,40,0.6)'; ctx.shadowBlur = 12;
+  ctx.fillStyle = '#f2c85a'; ctx.fillText(S.calloutText, 0, 0);
   ctx.restore();
 }
 
@@ -490,15 +516,24 @@ export function drawSpectate(now) {
   const { W, H } = view;
   ctx.textAlign = 'center';
   if (S.dead) {
-    const out = S.respawnAt === null, y = H - 150;
-    ctx.fillStyle = 'rgba(20,14,8,0.55)'; ctx.fillRect(W / 2 - 190, y - 34, 380, 84);
-    ctx.font = '700 22px Caslon Antique, Georgia, serif';
-    ctx.fillStyle = out ? '#c05050' : '#e8dcc8';
-    ctx.fillText(out ? 'ELIMINATED' : 'YOU DIED', W / 2, y - 6);
-    ctx.font = '700 14px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#c8b898';
+    const out = S.respawnAt === null, y = H - 160;
+    // a crimson vignette closes in while you're down
+    const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.75);
+    v.addColorStop(0, 'rgba(90,0,15,0)'); v.addColorStop(1, 'rgba(90,0,15,0.55)');
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    parchment(W / 2, y, 400, 96, false);
+    ctx.textBaseline = 'middle';
+    ctx.font = '700 30px Caslon Antique, Georgia, serif';
+    ctx.fillStyle = '#9a1628'; ctx.shadowColor = 'rgba(200,30,50,0.45)'; ctx.shadowBlur = 10;
+    ctx.fillText('ᛟ  ' + (out ? 'ELIMINATED' : 'YOU DIED') + '  ᛟ', W / 2, y - 14);
+    ctx.shadowBlur = 0;
+    ctx.font = 'italic 700 15px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#4a3420';
     const watching = S.spectateId != null ? 'Watching ' + nameOf(S.spectateId) : '';
     const left = out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
-    ctx.fillText([watching, left].filter(Boolean).join(' · '), W / 2, y + 20);
+    ctx.fillText([watching, left].filter(Boolean).join(' · '), W / 2, y + 22);
+    ctx.restore();
+    ctx.textAlign = 'center';
   } else if (inStorm()) {
     ctx.font = '700 18px Caslon Antique, Georgia, serif';
     ctx.fillStyle = 'rgba(230,200,255,' + (0.75 + 0.25 * Math.sin(now / 180)) + ')';
@@ -533,14 +568,24 @@ function weaponIcon(w) {
   return icons[w] = c;
 }
 
-function slotBox(x, y, bw, bh, { keyName, col, on, selected, held }) {
-  ctx.fillStyle = selected ? 'rgba(90,64,40,0.88)' : held ? 'rgba(80,50,110,0.85)' : 'rgba(26,20,14,0.7)';
-  ctx.fillRect(x, y, bw, bh);
-  ctx.strokeStyle = selected ? '#e8c060' : `rgba(${col.join(',')},${on ? 0.9 : 0.3})`;
-  ctx.lineWidth = selected || held ? 2 : 1;
-  ctx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
-  ctx.font = '700 10px Caslon Antique, Georgia, serif'; ctx.fillStyle = 'rgba(232,212,170,0.75)';
-  ctx.textAlign = 'left'; ctx.fillText(keyName, x + 4, y + 11);
+// a parchment tile with cut corners, like the lobby's boxes; the one in hand gets a gold rim and an
+// amethyst glow, build mode a violet wash
+function slotBox(x, y, bw, bh, { keyName, on, selected, held }) {
+  const c = 6;
+  ctx.beginPath();
+  ctx.moveTo(x + c, y); ctx.lineTo(x + bw - c, y); ctx.lineTo(x + bw, y + c); ctx.lineTo(x + bw, y + bh - c);
+  ctx.lineTo(x + bw - c, y + bh); ctx.lineTo(x + c, y + bh); ctx.lineTo(x, y + bh - c); ctx.lineTo(x, y + c); ctx.closePath();
+  const g = ctx.createLinearGradient(0, y, 0, y + bh);
+  g.addColorStop(0, selected ? '#fbf0d2' : '#efe0bb'); g.addColorStop(1, selected ? '#e2c890' : '#cfb482');
+  ctx.save();
+  ctx.globalAlpha = selected ? 0.97 : on ? 0.86 : 0.62;
+  if (selected) { ctx.shadowColor = 'rgba(170,100,240,0.85)'; ctx.shadowBlur = 14; }
+  ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+  if (held) { ctx.fillStyle = 'rgba(122,63,192,0.28)'; ctx.fill(); }
+  ctx.strokeStyle = selected ? '#c9a24a' : '#5a3820'; ctx.lineWidth = selected ? 2.5 : 1.5; ctx.stroke();
+  ctx.font = '700 10px Caslon Antique, Georgia, serif'; ctx.fillStyle = selected ? '#5a2a90' : '#6a4a28';
+  ctx.textAlign = 'left'; ctx.fillText(keyName, x + 5, y + 12);
 }
 
 function drawIcon(image, x, y, bw, bh, dim) {
@@ -571,28 +616,37 @@ export function drawHotbar(now) {
   ];
   const count = groups.flat().length;
   const total = count * bw + (count - groups.length) * gap + (groups.length - 1) * groupGap;
-  const sc = Math.min(1, (W - 24) / total);
+  const sc = Math.min(1, (W - 24) / total), left = (W - total * sc) / 2, top = H - (bh + 14) * sc;
   ctx.save();
-  ctx.translate((W - total * sc) / 2, H - (bh + 14) * sc);
+  ctx.translate(left, top);
   ctx.scale(sc, sc);
   let x = 0;
+  const hits = []; // where each slot is on screen, for taps on touch screens (touch.js)
   groups.forEach((group, g) => {
     if (g) x += groupGap - gap;
-    for (const s of group) {
+    group.forEach((s, i) => {
+      const act = g === 0 ? () => { setBuildMode(false); switchSlot(i + 1); }
+        : s.potion ? throwNade
+        : s.label === 'RAMP' ? () => setBuildMode(!S.buildMode)
+        : () => castSlot(i);
+      hits.push({ x: left + x * sc, y: top, w: bw * sc, h: bh * sc, act });
       slotBox(x, 0, bw, bh, s);
       if (s.weapon) drawIcon(weaponIcon(s.weapon), x, 0, bw, bh, false);
       else if (s.potion) drawIcon(potionImg, x, 0, bw, bh, !s.on);
       else {
         ctx.font = '700 12px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
-        ctx.fillStyle = s.on ? `rgb(${s.col.join(',')})` : 'rgba(150,140,125,0.6)';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,20,10,0.75)'; ctx.lineJoin = 'round';
+        if (s.on) ctx.strokeText(s.label, x + bw / 2, 30);
+        ctx.fillStyle = s.on ? `rgb(${s.col.join(',')})` : 'rgba(110,90,70,0.6)';
         ctx.fillText(s.label, x + bw / 2, 30);
       }
-      ctx.font = '9px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
-      ctx.fillStyle = s.selected ? '#f0e0b0' : 'rgba(200,185,150,0.7)';
+      ctx.font = '700 9px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = s.selected ? '#3a1a5a' : '#4a3420';
       ctx.fillText(s.sub, x + bw / 2, bh - 5);
       x += bw + gap;
-    }
+    });
   });
+  S.hotbarHits = hits;
   ctx.restore();
   if (S.buildMode) {
     ctx.font = '700 15px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c8a0ff';

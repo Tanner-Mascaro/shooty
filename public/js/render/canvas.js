@@ -9,7 +9,7 @@ canvas.style.zIndex = '1';
 canvas.style.background = 'transparent';
 
 // W/H: screen size. RW/RH aliases for HUD/viewmodel. GL_SCALE < 1 renders cheaper.
-export const GL_SCALE = 0.75;
+export const GL_SCALE = matchMedia('(pointer: coarse)').matches ? 0.6 : 0.75; // phones: fewer pixels, steadier frames
 export const view = { W: 0, H: 0, RW: 0, RH: 0, sc: 1, gW: 0, gH: 0 };
 
 export function resize() {

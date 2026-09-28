@@ -6,6 +6,7 @@
 <title>Pistols and Potion</title>
 <meta name="description" content="Fast multiplayer arena shooter in your browser. Free-for-all or teams, invite friends with a link.">
 <meta name="theme-color" content="#12100e">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <!-- Link previews for Discord, iMessage, Slack, and other sharing apps. -->
 <meta property="og:type" content="website">
@@ -35,7 +36,7 @@
 <div id="home">
   <div class="smoke" aria-hidden="true"><i></i><i></i><i></i></div>
   <div id="homeInner">
-    <div id="homeBrand">PISTOLS &amp; POTION</div>
+    <div id="homeBrand" class="title">PISTOLS <span class="amp">&amp;</span> POTION</div>
     <p id="homeTag">Sign the coven scroll to keep your stats and add friends — or play as a guest.</p>
 
     <div id="homePanel">
@@ -57,7 +58,7 @@
 <div id="wait">
   <div class="smoke" aria-hidden="true"><i></i><i></i><i></i></div>
   <header id="lobbyHead">
-    <div id="brand">PISTOLS &amp; POTION</div>
+    <div id="brand" class="title">PISTOLS <span class="amp">&amp;</span> POTION</div>
     <p id="tagline">Choose your realm and coven form — then seal the match.</p>
   </header>
   <div id="lobby">
@@ -148,6 +149,7 @@
         <div class="cardHead"><div class="label">PROFILE</div><button type="button" class="ghost roll" aria-expanded="true" aria-label="Roll up"></button></div>
         <div class="rollBody"><div>
           <div id="profileWho"><b id="profileName"></b><small id="acctLine"></small></div>
+          <div id="levelRow"><b id="levelNum">Level 1</b><span class="xpBar"><i id="xpFill"></i></span><small id="xpText"></small></div>
           <div id="stats"></div>
         </div></div>
       </div>
@@ -161,6 +163,14 @@
         </div></div>
       </div>
     </section>
+  </div>
+  <div id="loading" class="modal" hidden>
+    <div class="loadingCard" role="status" aria-live="polite">
+      <div class="runeRing" aria-hidden="true"><span>ᚠ</span><span>ᚱ</span><span>ᛉ</span><span>ᛟ</span><span>ᚷ</span><span>ᛞ</span><span>ᛗ</span><span>ᛝ</span></div>
+      <b id="loadingTitle">Summoning the match…</b>
+      <small id="loadingStatus"></small>
+      <button type="button" id="loadingCancel" class="ghost">Cancel</button>
+    </div>
   </div>
   <div id="accountModal" class="modal" hidden>
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
@@ -277,6 +287,7 @@
       <div class="svLabel">NEXT MAP</div><div id="summaryMaps" class="svRow"></div>
       <div class="svLabel">NEXT MODE</div><div id="summaryModes" class="svRow"></div>
     </div>
+    <div id="summaryXp"></div>
     <div id="summaryWait"></div>
     <div id="summaryActions">
       <button type="button" id="summaryRematch">REMATCH</button>

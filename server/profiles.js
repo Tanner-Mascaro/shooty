@@ -14,7 +14,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { log } from './log.js';
 
-export const STATS = ['kills', 'deaths', 'wins', 'losses'];
+export const STATS = ['kills', 'deaths', 'wins', 'losses', 'xp'];
 const BOARD_SIZE = 10;
 const MAX_FRIENDS = 100; // friends + pending requests per player
 
@@ -68,6 +68,7 @@ async function postgresStore(url) {
     created_at timestamptz NOT NULL DEFAULT now(), last_seen timestamptz NOT NULL DEFAULT now())`);
   await db.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS username text, ADD COLUMN IF NOT EXISTS pass_hash text`);
   await db.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS settings jsonb`);
+  await db.query(`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS xp int NOT NULL DEFAULT 0`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS profiles_username ON profiles (lower(username))`);
   await db.query(`CREATE TABLE IF NOT EXISTS sessions (
     token_hash text PRIMARY KEY, profile_id text NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -162,7 +163,8 @@ function fileStore(file) {
   return {
     async resolve(tokenHash) { return data.sessions[tokenHash] || tokenHash; },
     async load(id, name, fallback) {
-      const p = all[id] ??= { name: name || fallback, kills: 0, deaths: 0, wins: 0, losses: 0, created: new Date().toISOString() };
+      const p = all[id] ??= { name: name || fallback, kills: 0, deaths: 0, wins: 0, losses: 0, xp: 0, created: new Date().toISOString() };
+      p.xp ??= 0; // saved before XP existed
       if (name) p.name = name;
       p.lastSeen = new Date().toISOString();
       save();
@@ -171,7 +173,7 @@ function fileStore(file) {
     async saveSettings(id, settings) { if (all[id]) { all[id].settings = settings; save(); } },
     async add(id, delta) {
       if (!all[id]) return;
-      for (const s of STATS) all[id][s] += delta[s] || 0;
+      for (const s of STATS) all[id][s] = (all[id][s] || 0) + (delta[s] || 0);
       save();
     },
     async claim(id, username, passHash) {
