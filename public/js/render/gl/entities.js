@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { S } from '../../state.js';
 import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode, redBlue } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
-import { ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, GUN_COLOR } from '../../constants.js';
+import { GUN_COLOR } from '../../constants.js';
 import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
 import { getScene, getCamera } from './scene.js';
 
@@ -13,6 +13,9 @@ entityRoot.name = 'entities';
 let attached = false;
 
 const TEAM_TINT = { 1: [180, 50, 50], 2: [110, 70, 150] };
+const BLADE_COLOR = [200, 205, 215];
+const HELD_SCALE = 0.7; // held guns are drawn smaller than the ones on pads
+const HAND = 0.2, GRIP = 0.3; // hand's distance from the body's middle; where along the gun it's held
 const PLAGUE_TINT = [70, 140, 55];
 
 // pools
@@ -213,13 +216,6 @@ export function drawPickupBillboards(now) {
   }
 }
 
-function glowFor(o) {
-  const teams = S.room && isTeamMode(S.room.mode);
-  const ally = teams && o.now.team === S.myTeam;
-  // Visible glow only — never draws through walls.
-  return { col: !teams ? [220, 210, 190] : ally ? ALLY_OUTLINE_COLOR : ENEMY_OUTLINE_COLOR };
-}
-
 const STRIDE_LEN = 0.55;   // metres walked per leg swap
 const STRIDES = [1, 0, 2, 0]; // left up, both down, right up, both down
 const KICK_MS = 110;       // recoil after a shot
@@ -343,13 +339,43 @@ export function drawOthersAndCorpses(now) {
     const team = player ? player.team : o.now.team;
     const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM
       ? PLAGUE_TINT : (S.room && redBlue(S.room.mode)) ? TEAM_TINT[team] : null;
+    const pose = poseFor(o, now);
     drawPlayerBillboard(
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,
       o.now.sl ? 1.15 : 1,
-      now - o.hitT < 90, tint, player && player.skin, o.cur?.iv && !killer ? null : killer ? { col: [255, 70, 90] } : glowFor(o), poseFor(o, now),
+      now - o.hitT < 90, tint, player && player.skin, killer ? { col: [255, 70, 90] } : null, pose, // only the killcam outlines anyone
       o.cur?.iv && !killer ? 0.12 : 1, // Invisibility: a faint shimmer
       killer
     );
+    if (o.now.w && (!o.cur?.iv || killer)) drawHeldGun(o.now, o.now.sl ? SLIDE.crouch : 1, pose, killer);
   }
+}
+
+// the gun in someone's hand: a side view beside them, muzzle toward whichever side of the screen
+// they aim, in front of the body when they face you and behind it when they face away
+const camRight = new THREE.Vector3();
+function drawHeldGun(e, hScale, pose, xray) {
+  const cam = getCamera();
+  if (!cam) return;
+  camRight.setFromMatrixColumn(cam.matrixWorld, 0);
+  const ax = Math.cos(e.a || 0), ay = Math.sin(e.a || 0);
+  const across = ax * camRight.x + ay * camRight.z; // +1 aiming screen right, -1 screen left
+  const side = across >= 0 ? 1 : -1;
+  let tx = cam.position.x - e.x, ty = cam.position.z - e.y;
+  const d = Math.hypot(tx, ty) || 1;
+  tx /= d; ty /= d;
+  const facing = ax * tx + ay * ty > 0 ? 1 : -1;
+  const sp = pickupSprite(e.w, GUN_COLOR[e.w] || BLADE_COLOR);
+  const gw = sp.w * HELD_SCALE * (0.4 + 0.6 * Math.abs(across)), gh = sp.h * HELD_SCALE; // shorter when aimed at / away from you
+  const reach = side * (HAND + (0.5 - GRIP) * gw - 0.06 * pose.kick); // grip in the hand, kicked back after a shot
+  const pull = d > 0.5 ? 0.2 + 0.08 * facing : 0; // same slide toward the camera as the body, plus a little
+  const x = e.x + camRight.x * reach + tx * pull, y = e.y + camRight.z * reach + ty * pull;
+  const h = (BODY_H + 0.12) * hScale;
+  const px = side > 0 ? sp.px : (u, v) => sp.px(1 - u, v);
+  const tex = spriteTexture(px, sp.pal, 32, 16, 'held|' + e.w + '|' + side);
+  const spr = acquire(playerPool, makeSprite);
+  setBillboard(spr, tex, x, y, e.z + pose.bob + h * 0.37 - gh / 2, gw, gh, xray);
+  spr.material.opacity = 1;
+  spr.material.alphaTest = 0.4;
 }

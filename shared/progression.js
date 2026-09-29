@@ -27,6 +27,7 @@ export const levelFor = xp => levelInfo(xp).level;
 export const SKIN_UNLOCKS = {
   zombie: 2, mummy: 3, werewolf: 4, vampire: 5, knight: 6,
   ninja: 7, nun: 8, demon: 9, slime: 10, goose: 12,
+  cowboy: 13, construction: 14, robot: 16, ghost: 17, bodybuilder: 18, astronaut: 19, superhero: 20,
 };
 
 export const unlockLevel = skin => SKIN_UNLOCKS[skin] || 1;

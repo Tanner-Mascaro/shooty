@@ -12,6 +12,8 @@ export const PLAYER_SKIN_NAMES = {
   infernalWitch: 'Infernal Witch', iceWitch: 'Ice Witch', ghostWitch: 'Ghost Witch', plagueWitch: 'Plague Witch',
   zombie: 'Risen Corpse', mummy: 'Cursed Mummy', werewolf: 'Werewolf', vampire: 'Vampire Count', knight: 'Hexed Knight',
   ninja: 'Shadow Ninja', nun: 'Unholy Nun', demon: 'Brimstone Demon', slime: 'Cauldron Slime', goose: 'Familiar Goose',
+  cowboy: 'Gunslinger', construction: 'Tower Mason', robot: 'Clockwork Golem', ghost: 'Friendly Phantom',
+  bodybuilder: 'Iron Brute', astronaut: 'Star Voyager', superhero: 'Caped Crusader',
 };
 
 // --- pickups ---
@@ -39,6 +41,8 @@ const GUN_SHAPES = {
   crossbow: { w: 1.0, h: 0.42, boxes: [[0.08, 0.38, 0.42, 0.75, 4], [0.38, 0.72, 0.35, 0.58, 1], [0.05, 0.22, 0.28, 0.48, 2],
     [0.78, 0.95, 0.28, 0.48, 2], [0.2, 0.8, 0.22, 0.32, 2], [0.55, 0.7, 0.58, 0.95, 4], [0.35, 0.9, 0.4, 0.46, 3],
     [0.88, 0.98, 0.38, 0.52, 2], [0.42, 0.52, 0.18, 0.28, 3]] },
+  // held only (never a pickup): wooden grip, dark guard, steel blade
+  blade: { w: 0.55, h: 0.16, boxes: [[0, 0.26, 0.35, 0.65, 4], [0.26, 0.32, 0.1, 0.9, 2], [0.32, 0.94, 0.3, 0.7, 1], [0.94, 1, 0.4, 0.6, 1], [0.32, 0.94, 0.3, 0.4, 3]] },
   // Hex Wand: a dark wooden shaft, a brass collar and a glowing gem
   wand: { w: 0.55, h: 0.2, boxes: [[0.04, 0.78, 0.4, 0.6, 4], [0.04, 0.24, 0.34, 0.66, 2], [0.76, 0.84, 0.28, 0.72, 1], [0.84, 0.98, 0.18, 0.82, 3]] },
   beam: { w: 0.95, h: 0.28, boxes: [[0.02, 0.22, 0.32, 0.72, 2], [0.22, 0.62, 0.26, 0.52, 1], [0.62, 0.88, 0.3, 0.46, 1],

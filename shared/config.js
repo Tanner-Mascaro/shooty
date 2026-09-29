@@ -66,7 +66,8 @@ export const ROYALE_ZONE = [
 
 // the seven witches are free; the rest unlock with XP levels (shared/progression.js)
 export const PLAYER_SKINS = ['witch', 'robotWitch', 'gothicWitch', 'infernalWitch', 'iceWitch', 'ghostWitch', 'plagueWitch',
-  'zombie', 'mummy', 'werewolf', 'vampire', 'knight', 'ninja', 'nun', 'demon', 'slime', 'goose'];
+  'zombie', 'mummy', 'werewolf', 'vampire', 'knight', 'ninja', 'nun', 'demon', 'slime', 'goose',
+  'cowboy', 'construction', 'robot', 'ghost', 'bodybuilder', 'astronaut', 'superhero'];
 
 // silly cheat mode: set your display name to one of these (case-insensitive)
 export const HACK_NAMES = new Set(['hacker', 'hackerman', 'godmode', 'cheater']);

@@ -389,6 +389,7 @@ export class Room {
     }
     if (this.tutorial && !p.bot) { p.nades = 2; if (!(p.spells || []).length) p.spells = ['haste']; } // something to practice with
     p.lastShot = {};
+    p.w = this.isInfected(p) ? null : Object.keys(p.mag)[0] || 'blade'; // what others see in your hand
     p.sc = false; p.sl = false;
     p.vz = 0; p.vx = 0; p.vy = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
     p.dashUntil = 0; p.nextDash = 0; p.dashX = 0; p.dashY = 0;
@@ -999,6 +1000,7 @@ export class Room {
     const gunGame = this.mode === 'gungame';
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team,
       mn: Math.floor(p.mana ?? MAX_MANA), ...(p.invisUntil > Date.now() ? { iv: 1 } : {}), ...(p.curseUntil > Date.now() ? { cu: 1 } : {}),
+      ...(p.w && !this.isInfected(p) ? { w: p.w } : {}),
       ...(p.dead ? { dead: true } : {}), ...(gunGame ? { gl: p.gunLevel || 0 } : {}) }));
     this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs,
       hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), ctf: this.ctfSnapshot(), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z, f: Math.max(0, Math.round(n.until - Date.now())) })) });
@@ -1375,6 +1377,7 @@ Room.prototype.handlers = {
     p.p = Math.max(-1.2, Math.min(1.2, msg.p));
     p.sc = !this.isInfected(p) && !!msg.sc;
     p.sl = !this.isInfected(p) && !!msg.sl;
+    if (msg.w === 'blade' || (typeof msg.w === 'string' && Object.hasOwn(p.mag, msg.w))) p.w = msg.w;
   },
 
   shoot(p, msg) {
@@ -1385,6 +1388,7 @@ Room.prototype.handlers = {
     if (this.isInfected(p) ? msg.weapon !== 'claws' : msg.weapon === 'claws') { this.syncAmmo(p); return; }
     if (now < (p.nextFire[msg.weapon] || 0)) return;
     p.invisUntil = 0; // attacking gives you away
+    if (msg.weapon !== 'claws') p.w = msg.weapon;
     if (!w.melee) {
       // the client counts its own rounds the same way, so no reply unless we disagree
       if (!(p.mag[msg.weapon] > 0)) { this.syncAmmo(p); return; }

@@ -282,6 +282,6 @@ export function updatePlayer(dt) {
 
   if (now - lastInputAt >= TICK) {
     lastInputAt = now;
-    send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, seq: S.mySeq });
+    send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, w: S.weapon, seq: S.mySeq });
   }
 }
