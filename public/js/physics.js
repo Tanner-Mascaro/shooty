@@ -1,7 +1,7 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt, walkHeight, ceilingAt, houseAt } from '/shared/terrain.js';
-import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE } from '/shared/config.js';
+import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE, BROOM, CURSE } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { tryJump, tryDash } from '/shared/movement.js';
@@ -169,8 +169,8 @@ function applyFriction(dt, scale = 1) {
 
 export function dash() {
   if (!S.started || !S.me || !S.clawsOnly) return;
-  const forward = Number(held('forward')) - Number(held('back')) + S.touchMove.y;
-  const side = Number(held('right')) - Number(held('left')) + S.touchMove.x;
+  const forward = Number(held('forward')) - Number(held('back')) + S.touchMove.y + S.padMove.y;
+  const side = Number(held('right')) - Number(held('left')) + S.touchMove.x + S.padMove.x;
   const cos = Math.cos(S.me.a), sin = Math.sin(S.me.a);
   const dx = forward || side ? cos * forward - sin * side : cos;
   const dy = forward || side ? sin * forward + cos * side : sin;
@@ -214,11 +214,12 @@ export function updatePlayer(dt) {
   if (held('back')) fx--;
   if (held('right')) sx++;
   if (held('left')) sx--;
-  fx += S.touchMove.y; sx += S.touchMove.x; // the touch joystick
+  fx += S.touchMove.y + S.padMove.y; sx += S.touchMove.x + S.padMove.x; // touch joystick, controller stick
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
-  const movementScale = (S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1) * (S.hacks ? HACK_SPEED : 1) * (S.hasteUntil > performance.now() ? HASTE.speed : 1);
+  const movementScale = (S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1) * (S.hacks ? HACK_SPEED : 1) * (S.hasteUntil > performance.now() ? HASTE.speed : 1)
+    * (S.cursedUntil > performance.now() ? CURSE.slow : 1);
   const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
   const now = performance.now();
@@ -231,13 +232,15 @@ export function updatePlayer(dt) {
   if (tryJump(S, held('jump'), S.clawsOnly ? PLAGUE_JUMPS : 1)) play('jump');
   if (S.clawsOnly && now < S.dashUntil) {
     S.vx = S.dashX * PLAGUE_DASH_SPEED; S.vy = S.dashY * PLAGUE_DASH_SPEED;
+  } else if (now < (S.broomUntil || 0)) { // Broom Dash: a straight burst the way you faced
+    S.vx = Math.cos(S.broomA) * BROOM.speed; S.vy = Math.sin(S.broomA) * BROOM.speed;
   } else if (S.sliding && S.onGround) { applyFriction(dt, SLIDE.friction); accelerate(wx, wy, wishSpeed * 0.3, ACCEL * 0.3, dt); }
   else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
   S.slideDip += ((S.sliding ? 1 : 0) - S.slideDip) * Math.min(1, dt * 12);
 
   let speed = Math.hypot(S.vx, S.vy);
-  const speedLimit = SPEED_LIMIT * movementScale;
+  const speedLimit = Math.max(SPEED_LIMIT * movementScale, now < (S.broomUntil || 0) ? BROOM.speed : 0); // a broom dash may exceed the usual cap
   if (speed > speedLimit) { S.vx *= speedLimit / speed; S.vy *= speedLimit / speed; speed = speedLimit; }
   S.speed = speed;
 

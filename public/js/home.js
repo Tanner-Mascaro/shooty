@@ -63,6 +63,7 @@ export function initHome() {
   $('homeAuth').addEventListener('submit', e => { e.preventDefault(); submit('login'); });
   $('homeRegister').addEventListener('click', () => submit('register'));
   $('homeSkipAuth').addEventListener('click', enterLobby);
+  $('homeTutorial').addEventListener('click', () => { setEntered(true); hideHome(); switchRoom('?room=' + newCode() + '&tutorial=1'); });
 
   const q = new URLSearchParams(location.search);
   if (q.get('room') || q.get('play') === '1') hideHome();

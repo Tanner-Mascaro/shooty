@@ -58,6 +58,12 @@ function draw() {
     g.strokeStyle = 'rgba(245,225,150,0.95)'; g.lineWidth = 2 * px; g.stroke();
   }
 
+  if (S.ctf && S.room?.mode === 'ctf') for (const t of [1, 2]) { // bases and where each cauldron is
+    const b = S.ctf.bases[t], c = S.ctf.c[t], col = t === 1 ? '#e03c46' : '#786eff';
+    g.strokeStyle = col; g.lineWidth = 3 * px; g.strokeRect(b.x - 1, b.y - 1, 2, 2);
+    g.fillStyle = col; g.beginPath(); g.arc(c.x, c.y, 7 * px, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#f0d890'; g.lineWidth = 2 * px; g.stroke();
+  }
   g.textAlign = 'center'; g.font = `700 ${12 * px}px 'Caslon Antique', Georgia, serif`;
   const label = (text, x, y, color) => {
     g.lineWidth = 3 * px; g.strokeStyle = 'rgba(20,10,4,0.85)'; g.strokeText(text, x, y - 9 * px);
@@ -65,7 +71,7 @@ function draw() {
   };
   for (const [id, o] of Object.entries(S.others)) {
     const p = o.now || o.cur;
-    if (!p) continue;
+    if (!p || (o.cur?.iv && isEnemy(+id))) continue; // invisible enemies stay off the map
     const color = isEnemy(+id) ? '#e0485a' : '#b890f0';
     if (p.dead) { // a cross where they fell
       g.strokeStyle = 'rgba(40,20,10,0.8)'; g.lineWidth = 2 * px;
@@ -126,6 +132,7 @@ function drawStandings() {
       const members = rows.filter(row => row.team === t), head = document.createElement('tr'), th = document.createElement('th');
       head.className = 'teamHead team' + t; th.colSpan = 4;
       th.textContent = mode === 'hardpoint' ? `${teamName(mode, t)} · ${S.hardpoint?.scores?.[t] || 0}`
+        : mode === 'ctf' ? `${teamName(mode, t)} · ${S.ctf?.scores?.[t] || 0} captures`
         : mode === 'plague' ? `${teamName(mode, t)} · ${members.length}`
         : `${teamName(mode, t)} · ${members.reduce((n, row) => n + row.kills, 0)}`;
       head.append(th);

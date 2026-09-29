@@ -15,6 +15,7 @@ export const BOT_LEVELS = {
   easy:   { speed: 2.4, sprint: 3.0, sight: 15, reaction: 800, fireGap: 600, aim: 0.13, turn: 3.5 },
   medium: { speed: 2.8, sprint: 3.2, sight: 25, reaction: 400, fireGap: 320, aim: 0.06, turn: 6 },
   hard:   { speed: 3.0, sprint: 3.6, sight: 32, reaction: 200, fireGap: 220, aim: 0.025, turn: 11 },
+  dummy:  { speed: 1.3, sprint: 1.3, sight: 0, reaction: 1e9, fireGap: 1e9, aim: 1, turn: 2 }, // tutorial straw dummies: wander, never fight
 };
 
 export const KNIFE_CHANCE = 0.2;
@@ -316,7 +317,7 @@ export function botTick(game, p) {
   const gunGame = game.mode === 'gungame';
   const knife = gunGame ? gunGameGun(p.gunLevel) === 'blade' : p.knife, nadeBot = !gunGame && p.nadeBot;
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
-  const hill = game.mode === 'hardpoint' ? game.hardpointTarget(now) : null;
+  const hill = game.mode === 'hardpoint' ? game.hardpointTarget(now) : game.mode === 'ctf' ? game.ctfTarget(p) : null; // CTF: the cauldron run is the bot's 'hill'
   const visibleEnemies = game.enemies(p).filter(o => canSee(T, p, o, sight));
   const foe = visibleEnemies.sort((x, y) => {
     const xThreat = hill && Math.hypot(x.x - hill.x, x.y - hill.y) <= hill.radius + 5 ? 0 : 1;

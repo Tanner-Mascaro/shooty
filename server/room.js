@@ -6,13 +6,13 @@ import { LEVELS, LEVEL_NAMES, FEATURED_LEVELS, MW, MH } from '../shared/levels.j
 import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
-import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName } from '../shared/config.js';
-import { canBuildIn, rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN } from '../shared/config.js';
+import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName, redBlue, CTF } from '../shared/config.js';
+import { canBuildIn, rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN, WAND_CHAIN, BROOM, BLINK, INVIS, CURSE } from '../shared/config.js';
 import { RAMP, canBuild, applyBuild, removeBuild, touchesBuild, rampUnder, fitsLevels } from '../shared/spells.js';
 import { maxPlayers, respawnDelay, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
-import { XP, levelFor, skinUnlocked } from '../shared/progression.js';
+import { XP, levelFor, skinUnlocked, TITLES, KILL_EFFECTS } from '../shared/progression.js';
 import { VERSION } from './version.js';
 
 const CHAT_MAX = 140; // as in public/js/chat.js
@@ -187,7 +187,7 @@ export class Room {
   }
   startMessage() {
     return { type: 'start', level: this.level, mode: this.mode, plagueRemainingMs: this.plagueRemainingMs,
-      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), builds: this.buildList() };
+      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), ctf: this.ctfSnapshot(), builds: this.buildList() };
   }
   plagueSetupValid() {
     return this.mode !== 'plague' || this.plagueSelection === 'random'
@@ -212,7 +212,7 @@ export class Room {
       gameOn: this.gameOn, bots: BOTS, max: this.max, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
       winScore: this.winScore, teamWinScore: this.teamWinScore, hardpoint: this.hardpointSnapshot(),
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, account: !!p.username, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, account: !!p.username, title: !p.bot && TITLES[p.title] && p.title !== 'apprentice' ? TITLES[p.title].name : null, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
   }
 
   // --- level / pickups ---
@@ -285,7 +285,7 @@ export class Room {
     this.plagueEndsAt = 0;
     while (this.list.length > this.max && this.dropBot()); // leaving battle royale's bigger rooms
     this.list.forEach((pl, i) => {
-      pl.team = this.mode === 'plague' ? HEALTHY_TEAM : ['teams', 'hardpoint'].includes(this.mode) ? i % 2 + 1 : 0;
+      pl.team = this.mode === 'plague' ? HEALTHY_TEAM : redBlue(this.mode) ? i % 2 + 1 : 0;
       pl.ready = !!pl.bot;
     });
     return true;
@@ -353,17 +353,18 @@ export class Room {
   score() {
     if (this.mode === 'plague') return `${this.list.filter(p => p.team === HEALTHY_TEAM).length} healthy, ${this.list.filter(p => p.team === PLAGUE_TEAM).length} infected`;
     if (this.mode === 'hardpoint') return `${TEAMS[1]} ${this.hardpointScores[1]}, ${TEAMS[2]} ${this.hardpointScores[2]}`;
+    if (this.mode === 'ctf' && this.ctf) return `${TEAMS[1]} ${this.ctf.scores[1]}, ${TEAMS[2]} ${this.ctf.scores[2]} captures`;
     if (this.mode === 'teams') return `${TEAMS[1]} ${this.teamKills(1)}, ${TEAMS[2]} ${this.teamKills(2)}`;
     if (this.mode === 'gungame') return this.list.map(p => `${this.hub.name(p)} gun ${(p.gunLevel || 0) + 1}`).join(', ');
     return this.list.map(p => this.hub.name(p) + ' ' + p.kills).join(', ');
   }
   enoughPlayers() {
     if (this.list.length < 2) return false;
-    return !['teams', 'hardpoint'].includes(this.mode) || [1, 2].every(t => this.list.some(p => p.team === t));
+    return !redBlue(this.mode) || [1, 2].every(t => this.list.some(p => p.team === t));
   }
 
   resetPlayer(p, avoid = this.enemies(p)) {
-    const sp = this.spawnPos(avoid);
+    const sp = this.mode === 'ctf' && this.ctf && p.team ? this.baseSpawn(p.team) : this.spawnPos(avoid);
     p.x = sp.x; p.y = sp.y; p.z = walkHeight(this.T, sp.x, sp.y, 0);
     const near = avoid.length ? avoid.reduce((m, o) => Math.hypot(o.x - sp.x, o.y - sp.y) < Math.hypot(m.x - sp.x, m.y - sp.y) ? o : m) : null;
     p.a = near ? Math.atan2(near.y - sp.y, near.x - sp.x) : Math.random() * Math.PI * 2;
@@ -373,6 +374,7 @@ export class Room {
     p.nades = 0;
     p.dead = false; p.respawnAt = 0;
     p.mana = MAX_MANA; p.hasteUntil = 0; p.wardUntil = 0; p.ward = 0;
+    p.broomUntil = 0; p.invisUntil = 0; p.curseUntil = 0;
     if (this.isInfected(p)) { p.mag = {}; p.inv = {}; }
     else if (this.mode === 'gungame') this.gunGameLoadout(p);
     else if (p.hacks) this.giveHackLoadout(p);
@@ -385,6 +387,7 @@ export class Room {
       p.mag = { [gun]: WEAPONS[gun].mag };
       p.inv = { [gun]: AMMO[gun] };
     }
+    if (this.tutorial && !p.bot) { p.nades = 2; if (!(p.spells || []).length) p.spells = ['haste']; } // something to practice with
     p.lastShot = {};
     p.sc = false; p.sl = false;
     p.vz = 0; p.vx = 0; p.vy = 0; p.onGround = true; p.jumpsUsed = 0; p.jumpHeld = false;
@@ -402,19 +405,28 @@ export class Room {
     if (p.brain) p.brain.weapon = gun;
   }
 
-  add(p) {
+  // a practice room: straw dummies that never fight back, no end in sight (public/js/tutorial.js)
+  makeTutorial() {
+    this.tutorial = true;
+    this.winScore = 999;
+    for (let i = 0; i < 3; i++) { const b = this.addBot('dummy'); if (b) b.name = 'Straw Dummy ' + (i + 1); }
+  }
+
+  add(p, { watch = false } = {}) {
     if (!p.bot && this.list.length >= this.max) this.dropBot(); // make room for a person
     // late gun-game arrivals start level with whoever is furthest behind
     const gunLevel = this.gameOn && this.mode === 'gungame' && this.list.length ? Math.min(...this.list.map(o => o.gunLevel || 0)) : 0;
     Object.assign(p, { room: this, kills: 0, deaths: 0, streak: 0, multi: 0, gunLevel, dead: false, spells: [], ready: !!p.bot, skin: p.skin || 'witch', seq: p.seq || 0, nextFire: {}, mag: {}, inv: {}, lastShot: {}, sc: false, vote: p.vote || null, modeVote: p.modeVote || null, nades: 0 });
     p.plagueStartTeam = HEALTHY_TEAM;
     // Late arrivals join the plague, so reconnecting cannot undo an infection.
-    p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : ['teams', 'hardpoint'].includes(this.mode) ? this.smallerTeam() : 0;
+    p.team = this.mode === 'plague' ? (this.gameOn ? PLAGUE_TEAM : HEALTHY_TEAM) : redBlue(this.mode) ? this.smallerTeam() : 0;
     this.players[p.id] = p;
     if (this.mode === 'plague' && !this.gameOn) this.resetReady();
     this.resetPlayer(p);
-    if (this.gameOn && this.mode === 'royale') this.eliminate(p); // no dropping into a royale halfway: spectate
-    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: p.hp, seq: p.seq, version: VERSION });
+    const watching = this.gameOn && (this.mode === 'royale' || (watch && !p.bot)); // no dropping into a royale halfway; watchers spectate
+    if (watching) this.eliminate(p);
+    this.send(p, { type: 'init', id: p.id, room: this.code, level: this.level, x: p.x, y: p.y, z: p.z, a: p.a, hp: p.hp, seq: p.seq, version: VERSION,
+      ...(watching ? { watching: true } : {}), ...(this.tutorial ? { tutorial: true } : {}) });
     this.send(p, this.pickupList());
     this.send(p, this.boxList());
     this.send(p, { type: 'builds', builds: this.buildList() });
@@ -426,6 +438,7 @@ export class Room {
 
   remove(p) {
     if (!this.players[p.id]) return;
+    this.dropCauldron(p);
     delete this.players[p.id];
     p.room = null;
     if (this.mode === 'plague' && !this.gameOn) this.resetReady();
@@ -455,7 +468,7 @@ export class Room {
     const bot = { id, bot: true, name, level, skin, knife, nadeBot, personality, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
-    return true;
+    return bot;
   }
 
   // take out one bot by id, or the newest bot if no id; false if there are none
@@ -508,6 +521,7 @@ export class Room {
       if ((victim.streak || 0) >= SHUTDOWN_STREAK) streaks.ended = victim.streak;
     }
     victim.streak = 0; victim.multi = 0;
+    if (killer) this.hub.progress?.(killer, { type: 'kill', weapon: info.weapon, head: !!info.head, backstab: !!info.backstab, streak: killer.streak });
 
     // gun game: a kill climbs one gun; a stab knocks the victim down one instead
     let climbed = false;
@@ -519,12 +533,14 @@ export class Room {
     }
 
     this.dropLoot(victim);
+    this.dropCauldron(victim);
     if (infected) victim.team = PLAGUE_TEAM;
     const delay = info.weapon === 'respawn' ? 0 : respawnDelay(this.mode);
     if (delay) this.eliminate(victim, now + delay);
     else this.resetPlayer(victim);
     this.broadcast(this.boxList());
-    this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin,
+    const fx = killer && KILL_EFFECTS[killer.effect]?.color; // the killer's kill effect, if not plain blood
+    this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin, ...(fx ? { fx } : {}),
       respawnMs: Number.isFinite(delay) ? delay : null }, streaks, info, at));
     const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}`
       : info.weapon === 'respawn' ? 'respawned'
@@ -545,7 +561,7 @@ export class Room {
     }
     if (this.mode === 'teams') {
       if (this.teamKills(killer.team) >= this.teamWinScore) this.finish(this.list.filter(p => p.team === killer.team), { team: killer.team }, TEAMS[killer.team] + ' team');
-    } else if (this.mode !== 'hardpoint' && killer.kills >= this.winScore) this.finish([killer], { winner: killer.id }, this.hub.name(killer));
+    } else if (this.mode !== 'hardpoint' && this.mode !== 'ctf' && killer.kills >= this.winScore) this.finish([killer], { winner: killer.id }, this.hub.name(killer));
   }
 
   // out of the fight: the body stays put (others can't hit it), and the player watches until
@@ -624,7 +640,7 @@ export class Room {
     if (this.gameOn || this.list.length < 2 || !this.plagueSetupValid()) return;
     const mode = this.modeVoteWinner();
     if (mode !== this.mode) this.applyMode(mode);
-    if (['teams', 'hardpoint'].includes(this.mode) && ![1, 2].every(t => this.list.some(p => p.team === t)))
+    if (redBlue(this.mode) && ![1, 2].every(t => this.list.some(p => p.team === t)))
       this.list.forEach((p, i) => p.team = i % 2 + 1); // everyone picked the same team: split them
     // vs bots, a battle royale fills its extra seats with more of them
     const bot = this.list.find(p => p.bot);
@@ -649,6 +665,7 @@ export class Room {
       if (this.plagueSelection === 'random') this.list[Math.floor(Math.random() * this.list.length)].team = PLAGUE_TEAM;
       this.plagueEndsAt = Date.now() + PLAGUE_DURATION;
     }
+    this.ctf = this.mode === 'ctf' ? { scores: { 1: 0, 2: 0 }, endsAt: now + CTF.ms, c: { 1: this.cauldronHome(1), 2: this.cauldronHome(2) } } : null;
     const placed = [];
     this.clearBuilds();
     for (const p of this.list) {
@@ -662,9 +679,11 @@ export class Room {
     this.gameOn = true;
     this.roster();
     this.broadcast(this.startMessage());
+    if (this.tutorial) this.humans.forEach(p => this.syncAmmo(p)); // the start message clears the practice potions and spell
     this.broadcastPickups();
     this.broadcast(this.boxList());
     log(`[${this.code}] Match started on ${LEVEL_NAMES[this.level]} (${MODE_NAMES[this.mode]}): ${this.list.map(p => this.hub.who(p)).join(', ')}`);
+    for (const p of this.humans) this.hub.presence?.(p); // friends see "playing" (and a Watch button)
   }
 
   checkPlagueWin(now = Date.now()) {
@@ -733,8 +752,12 @@ export class Room {
     this.zone = null;
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast(Object.assign({ type: 'win', mode: this.mode, level: this.level, scores: this.scoreboard() }, result));
-    for (const p of this.humans) this.hub.record(p, winners.includes(p) ? { wins: 1, xp: XP.match + XP.win } : { losses: 1, xp: XP.match });
+    for (const p of this.humans) {
+      this.hub.record(p, winners.includes(p) ? { wins: 1, xp: XP.match + XP.win } : { losses: 1, xp: XP.match });
+      this.hub.matchDone?.(p, { mode: this.mode, level: this.level, won: winners.includes(p), kills: p.kills || 0, deaths: p.deaths || 0 });
+    }
     log(`[${this.code}] ${label} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
+    for (const p of this.humans) this.hub.presence?.(p);
     this.hub.afterMatch(this);
     this.roster();
   }
@@ -745,8 +768,10 @@ export class Room {
     this.zone = null;
     this.list.forEach(p => p.ready = !!p.bot);
     this.broadcast({ type: 'end', reason, mode: this.mode, level: this.level, scores: this.scoreboard(),
-      ...(this.mode === 'hardpoint' ? { hardpointScores: { ...this.hardpointScores } } : {}) });
+      ...(this.mode === 'hardpoint' ? { hardpointScores: { ...this.hardpointScores } } : {}),
+      ...(this.mode === 'ctf' && this.ctf ? { ctfScores: { ...this.ctf.scores } } : {}) });
     log(`[${this.code}] Match ended: ${reason}`);
+    for (const p of this.humans) this.hub.presence?.(p);
   }
 
   // --- spells ---
@@ -792,12 +817,151 @@ export class Room {
     }
     return dmg;
   }
-  // a stored spell takes effect on the one who cast it
+  // is the straight line between two points free of walls (sampled every 0.2)?
+  clearLine(x0, y0, x1, y1) {
+    const d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 0.2);
+    for (let i = 1; i < n; i++) if (hitsWall(this.T, x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, 0.05)) return false;
+    return true;
+  }
+  // a stored spell takes effect; false if it had nothing to do (a curse with no one to curse):
+  // then the scroll is kept
   castStored(p, spell, now) {
+    const extra = {};
     if (spell === 'heal') p.hp = Math.min(this.maxHp(p), p.hp + HEAL_SPELL);
     else if (spell === 'haste') p.hasteUntil = now + HASTE.ms;
     else if (spell === 'ward') { p.wardUntil = now + WARD.ms; p.ward = WARD.absorb; }
-    this.broadcast({ type: 'spell', id: p.id, spell, x: p.x, y: p.y, z: p.z });
+    else if (spell === 'broom') { p.broomUntil = now + BROOM.ms; extra.a = p.a; }
+    else if (spell === 'invis') p.invisUntil = now + INVIS.ms;
+    else if (spell === 'blink') {
+      // step ahead until a wall, pit or ledge would stop you
+      let to = null;
+      for (let d = 0.25; d <= BLINK.dist; d += 0.25) {
+        const x = p.x + Math.cos(p.a) * d, y = p.y + Math.sin(p.a) * d;
+        if (x < 0.5 || y < 0.5 || x > MW - 0.5 || y > MH - 0.5 || hitsWall(this.T, x, y, PLAYER_R)) break;
+        const z = walkHeight(this.T, x, y, p.z);
+        if (Math.abs(z - p.z) > 1.2) break;
+        if (kindAt(this.T, x, y) !== 2) to = { x, y, z };
+      }
+      if (!to) return false;
+      Object.assign(p, to);
+      p.lastInputAt = now;
+      extra.to = to;
+    } else if (spell === 'curse') {
+      const t = this.enemies(p).filter(o => {
+        const d = Math.hypot(o.x - p.x, o.y - p.y), off = Math.atan2(o.y - p.y, o.x - p.x) - p.a;
+        return d <= CURSE.range && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= CURSE.cone && this.clearLine(p.x, p.y, o.x, o.y);
+      }).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+      if (!t) return false;
+      t.curseUntil = now + CURSE.ms;
+      extra.target = t.id;
+    }
+    this.broadcast({ type: 'spell', id: p.id, spell, x: p.x, y: p.y, z: p.z, ...extra });
+    this.hub.progress?.(p, { type: 'cast' });
+    return true;
+  }
+
+  // --- Capture the Cauldron ---
+  // each coven's base: the two spawn spots furthest apart on this map (team 1 gets the first)
+  ctfBases() {
+    if (this.ctfBaseCache?.level === this.level) return this.ctfBaseCache.bases;
+    const spots = SPAWN_SPOTS[this.level] ||= spawnSpots(this.map, this.T);
+    let best = [spots[0], spots[spots.length - 1]], far = -1;
+    const step = Math.max(1, Math.floor(spots.length / 400)); // a sample is plenty on big maps
+    for (let i = 0; i < spots.length; i += step) for (let j = i + 1; j < spots.length; j += step) {
+      const d = Math.hypot(spots[i].x - spots[j].x, spots[i].y - spots[j].y);
+      if (d > far) { far = d; best = [spots[i], spots[j]]; }
+    }
+    const bases = { 1: { ...best[0], z: walkHeight(this.T, best[0].x, best[0].y, 0) }, 2: { ...best[1], z: walkHeight(this.T, best[1].x, best[1].y, 0) } };
+    this.ctfBaseCache = { level: this.level, bases };
+    return bases;
+  }
+  // somewhere near your own base
+  baseSpawn(team) {
+    const spots = SPAWN_SPOTS[this.level] ||= spawnSpots(this.map, this.T), base = this.ctfBases()[team];
+    const near = spots.slice().sort((a, b) => Math.hypot(a.x - base.x, a.y - base.y) - Math.hypot(b.x - base.x, b.y - base.y)).slice(0, 10);
+    return { ...near[Math.floor(Math.random() * near.length)] };
+  }
+  cauldronHome(team) { const b = this.ctfBases()[team]; return { x: b.x, y: b.y, z: b.z, home: true, carrier: null, droppedAt: 0 }; }
+  // a carrier who dies or leaves drops the cauldron where they are
+  dropCauldron(p) {
+    if (!this.ctf) return;
+    for (const t of [1, 2]) {
+      const c = this.ctf.c[t];
+      if (c.carrier !== p.id) continue;
+      Object.assign(c, { x: p.x, y: p.y, z: walkHeight(this.T, p.x, p.y, p.z), carrier: null, home: false, droppedAt: Date.now() });
+      this.broadcast({ type: 'cauldron', event: 'drop', team: t, by: p.id });
+    }
+  }
+  updateCtf(now) {
+    if (!this.gameOn || this.mode !== 'ctf' || !this.ctf) return false;
+    const { c, scores } = this.ctf;
+    for (const t of [1, 2]) {
+      const cd = c[t];
+      if (cd.carrier != null) {
+        const p = this.players[cd.carrier];
+        if (!p || p.dead) { if (p) this.dropCauldron(p); else Object.assign(cd, this.cauldronHome(t)); continue; }
+        Object.assign(cd, { x: p.x, y: p.y, z: p.z });
+      } else if (!cd.home && now - cd.droppedAt >= CTF.returnMs) {
+        Object.assign(cd, this.cauldronHome(t));
+        this.broadcast({ type: 'cauldron', event: 'return', team: t });
+      }
+    }
+    for (const p of this.list) {
+      if (p.dead || (p.team !== 1 && p.team !== 2)) continue;
+      const mine = c[p.team], theirs = c[3 - p.team], near = cd => Math.hypot(cd.x - p.x, cd.y - p.y) <= CTF.touch && Math.abs(cd.z - p.z) < 1.2;
+      if (!mine.home && mine.carrier == null && near(mine)) { // send your own cauldron home
+        Object.assign(mine, this.cauldronHome(p.team));
+        this.broadcast({ type: 'cauldron', event: 'return', team: p.team, by: p.id });
+      }
+      if (theirs.carrier == null && near(theirs)) { // grab theirs
+        Object.assign(theirs, { carrier: p.id, home: false });
+        this.broadcast({ type: 'cauldron', event: 'take', team: 3 - p.team, by: p.id });
+      }
+      const base = this.ctfBases()[p.team];
+      if (theirs.carrier === p.id && mine.home && Math.hypot(base.x - p.x, base.y - p.y) <= CTF.touch + 0.3) { // capture
+        scores[p.team]++;
+        Object.assign(theirs, this.cauldronHome(3 - p.team));
+        this.broadcast({ type: 'cauldron', event: 'capture', team: 3 - p.team, by: p.id, scores: { ...scores } });
+        this.hub.progress?.(p, { type: 'capture' });
+        log(`[${this.code}] ${this.hub.name(p)} captured the ${TEAMS[3 - p.team]} cauldron — ${TEAMS[1]} ${scores[1]}, ${TEAMS[2]} ${scores[2]}`);
+      }
+    }
+    let winner = scores[1] >= CTF.caps ? 1 : scores[2] >= CTF.caps ? 2 : 0;
+    if (!winner && now >= this.ctf.endsAt) {
+      if (scores[1] === scores[2]) { this.endMatch('Time is up — a draw'); return true; }
+      winner = scores[1] > scores[2] ? 1 : 2;
+    }
+    if (!winner) return false;
+    this.finish(this.list.filter(p => p.team === winner), { team: winner, mode: 'ctf', ctfScores: { ...scores } }, TEAMS[winner] + ' team');
+    return true;
+  }
+  // where a bot on this team should head: home with their cauldron, to their own dropped one,
+  // or to steal theirs (unless a teammate has it); { index, x, y, radius } like a hardpoint hill
+  ctfTarget(p) {
+    if (this.mode !== 'ctf' || !this.ctf || (p.team !== 1 && p.team !== 2)) return null;
+    const mine = this.ctf.c[p.team], theirs = this.ctf.c[3 - p.team], base = this.ctfBases()[p.team];
+    const at = (x, y, tag) => ({ index: `ctf-${tag}-${Math.floor(x)}-${Math.floor(y)}`, x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5, radius: 0.9 });
+    if (theirs.carrier === p.id) return at(base.x, base.y, 'home');
+    if (!mine.home && mine.carrier == null) return at(mine.x, mine.y, 'mine');
+    if (theirs.carrier == null) return at(theirs.x, theirs.y, 'theirs');
+    return null; // a teammate has it: fight
+  }
+  ctfSnapshot(now = Date.now()) {
+    if (this.mode !== 'ctf' || !this.ctf) return null;
+    const cd = t => { const c = this.ctf.c[t]; return { x: c.x, y: c.y, z: c.z, home: c.home, carrier: c.carrier }; };
+    return { scores: { ...this.ctf.scores }, bases: this.ctfBases(), c: { 1: cd(1), 2: cd(2) }, ms: Math.max(0, this.ctf.endsAt - now) };
+  }
+
+  // the Hex Wand's bolt leaps from the one it hit to the nearest other enemy in range
+  wandChain(p, from, now) {
+    const next = this.enemies(p).filter(o => o !== from && Math.hypot(o.x - from.x, o.y - from.y) <= WAND_CHAIN.range && this.clearLine(from.x, from.y, o.x, o.y))
+      .sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+    if (!next) return;
+    let dmg = this.hurt(next, next.hacks ? 0 : Math.round(WAND_CHAIN.dmg * (p.hacks ? HACK_DMG : 1)), now);
+    next.hp -= dmg;
+    this.broadcast({ type: 'chain', x0: from.x, y0: from.y, z0: from.z + BODY_H * 0.6, x1: next.x, y1: next.y, z1: next.z + BODY_H * 0.6 });
+    this.broadcast({ type: 'hit', who: next.id, by: p.id, dmg, head: false, weapon: 'wand', fromX: from.x, fromY: from.y, x: next.x, y: next.y, z: next.z + BODY_H * 0.6 });
+    if (next.hp <= 0) this.killPlayer(next, p, { weapon: 'wand', head: false, dist: Math.hypot(next.x - p.x, next.y - p.y), a: Math.atan2(next.y - from.y, next.x - from.x) });
   }
 
   // --- per-tick: bots, pits, pickups, grenades, state broadcast ---
@@ -812,6 +976,7 @@ export class Room {
       }
       for (const b of this.builds) if (now >= b.until) this.breakBuild(b, false);
       if (this.updateHardpoint(now)) return;
+      if (this.updateCtf(now)) return;
       if (!this.stepZone(now, dt)) return;
       this.stepNades(dt, now);
       for (const p of this.list) {
@@ -833,10 +998,10 @@ export class Room {
     if (this.list.length < 2) return;
     const gunGame = this.mode === 'gungame';
     const players = this.list.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, a: p.a, p: p.p, sc: p.sc, sl: p.sl, hp: p.hp, kills: p.kills, seq: p.seq, team: p.team,
-      mn: Math.floor(p.mana ?? MAX_MANA),
+      mn: Math.floor(p.mana ?? MAX_MANA), ...(p.invisUntil > Date.now() ? { iv: 1 } : {}), ...(p.curseUntil > Date.now() ? { cu: 1 } : {}),
       ...(p.dead ? { dead: true } : {}), ...(gunGame ? { gl: p.gunLevel || 0 } : {}) }));
     this.broadcast({ type: 'state', players, plagueRemainingMs: this.plagueRemainingMs,
-      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z, f: Math.max(0, Math.round(n.until - Date.now())) })) });
+      hardpoint: this.hardpointSnapshot(), zone: this.zoneSnapshot(Date.now()), ctf: this.ctfSnapshot(), nades: this.nades.map(n => ({ id: n.id, x: n.x, y: n.y, z: n.z, f: Math.max(0, Math.round(n.until - Date.now())) })) });
   }
 
   stepNades(dt, now) {
@@ -996,7 +1161,7 @@ Room.prototype.handlers = {
   },
 
   team(p, msg) {
-    if (this.gameOn || !['teams', 'hardpoint'].includes(this.mode) || ![1, 2].includes(msg.team)) return;
+    if (this.gameOn || !redBlue(this.mode) || ![1, 2].includes(msg.team)) return;
     p.team = msg.team;
     this.roster();
   },
@@ -1151,8 +1316,8 @@ Room.prototype.handlers = {
     }
     const spell = Number.isInteger(msg.slot) && (p.spells || [])[msg.slot];
     if (!spell) return;
+    if (!this.castStored(p, spell, now)) { this.send(p, { type: 'notice', text: spell === 'curse' ? 'No enemy in your sights to curse' : 'No room to blink there' }); return; }
     p.spells.splice(msg.slot, 1);
-    this.castStored(p, spell, now);
     this.syncAmmo(p);
   },
 
@@ -1197,6 +1362,8 @@ Room.prototype.handlers = {
     let maxSpeed = MOVE_SPEED_LIMIT * (this.isInfected(p) ? PLAGUE_SPEED_MULTIPLIER : 1);
     if (p.hacks) maxSpeed *= HACK_SPEED;
     if (p.hasteUntil > now) maxSpeed *= HASTE.speed;
+    if (p.broomUntil > now - 150) maxSpeed = Math.max(maxSpeed, BROOM.speed * 1.3);
+    if (p.curseUntil > now) maxSpeed *= CURSE.slow;
     const maxStep = maxSpeed * elapsed / 1000 + 0.04;
     const dx = msg.x - p.x, dy = msg.y - p.y, distance = Math.hypot(dx, dy);
     const scale = distance > maxStep ? maxStep / distance : 1;
@@ -1217,6 +1384,7 @@ Room.prototype.handlers = {
     if (this.checkPlagueWin(now)) return;
     if (this.isInfected(p) ? msg.weapon !== 'claws' : msg.weapon === 'claws') { this.syncAmmo(p); return; }
     if (now < (p.nextFire[msg.weapon] || 0)) return;
+    p.invisUntil = 0; // attacking gives you away
     if (!w.melee) {
       // the client counts its own rounds the same way, so no reply unless we disagree
       if (!(p.mag[msg.weapon] > 0)) { this.syncAmmo(p); return; }
@@ -1257,5 +1425,6 @@ Room.prototype.handlers = {
       if (o.hp <= 0) this.killPlayer(o, p, { weapon: msg.weapon, head: h.head, backstab: h.backstab, dist: r.dist, a: r.a });
       if (!this.gameOn) break; // that kill ended the match
     }
+    if (msg.weapon === 'wand' && res.hits.length && this.gameOn) this.wandChain(p, res.hits[0].target, now);
   },
 };

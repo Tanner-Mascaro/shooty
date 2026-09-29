@@ -132,7 +132,7 @@ export function openSettings() {
   render();
   $('settings').hidden = false;
 }
-function closeSettings() { binding = null; $('settings').hidden = true; }
+export function closeSettings() { binding = null; $('settings').hidden = true; }
 
 // called first on every keydown; true if the panel used the key (so the game ignores it)
 export function captureKey(e) {

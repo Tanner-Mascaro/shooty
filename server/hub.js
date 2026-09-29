@@ -7,7 +7,8 @@ import { PLAYER_SKINS, isHackName } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
 import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
-import { levelFor, skinUnlocked } from '../shared/progression.js';
+import { levelFor, skinUnlocked, titleOk, effectOk } from '../shared/progression.js';
+import { currentChallenges, countEvent, challengeView } from '../shared/challenges.js';
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L mix-ups
 const randomCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
@@ -16,6 +17,8 @@ export const roomCodeFrom = url => {
   return code && /^[A-Za-z0-9]{3,8}$/.test(code) ? code.toUpperCase() : null;
 };
 export const wantsQuickPlay = url => new URL(url || '/', 'http://x').searchParams.get('play') === '1';
+// &watch=1: spectate a match in progress (play from the next one); &tutorial=1: the practice room
+const routeFlag = (url, name) => new URL(url || '/', 'http://x').searchParams.get(name) === '1';
 
 // throttle failed sign-ins by both source IP and normalized username
 const failsByIp = new Map(), failsByAccount = new Map();
@@ -40,6 +43,19 @@ const CHAT_MAX = 140; // same cap as room chat / public/js/chat.js
 const DEV_CHEATS = process.env.NODE_ENV !== 'production' && process.env.ENABLE_DEV_CHEATS === '1';
 const MAX_MESSAGES_PER_SECOND = 120;
 
+// a profile's saved extras, filled in with defaults (older profiles have none)
+function cleanMeta(meta) {
+  const m = meta && typeof meta === 'object' ? meta : {};
+  return {
+    history: Array.isArray(m.history) ? m.history.slice(0, 10) : [],
+    best: m.best && typeof m.best === 'object' ? m.best : {},
+    weapons: m.weapons && typeof m.weapons === 'object' ? m.weapons : {},
+    matches: m.matches | 0, wins: m.wins | 0,
+    challenges: currentChallenges(m.challenges),
+    tutorial: !!m.tutorial,
+  };
+}
+
 export class Hub {
   constructor(profiles) {
     this.profiles = profiles;
@@ -49,6 +65,9 @@ export class Hub {
     this.nextId = 0;
     this.saving = Promise.resolve();
     this.invited = new Map();  // "from>to" -> time, for the invite rate limit
+    this.parties = new Map();  // party id -> { leader: profile id, members: [profile ids], invited: Set, names: { pid: name } }
+    this.partyOf = new Map();  // profile id -> party id
+    this.partyId = 0;
   }
 
   // --- messaging ---
@@ -84,8 +103,8 @@ export class Hub {
     const id = this.nextId++;
     const p = this.conns[id] = { id, socket, ip, joinedAt: Date.now(), name: `Player ${id}`, pid: null, username: null, messageTimes: [], authTimes: [] };
     log(`${this.who(p)} connected (${Object.keys(this.conns).length} online)`);
-    const code = roomCodeFrom(url);
-    if (code) this.joinRoom(p, code);
+    const code = roomCodeFrom(url), opts = { watch: routeFlag(url, 'watch'), tutorial: routeFlag(url, 'tutorial') };
+    if (code) this.joinRoom(p, code, opts);
     else if (wantsQuickPlay(url)) this.joinRoom(p, null);
     // bare / stays at the menu until the player chooses a room
 
@@ -123,16 +142,55 @@ export class Hub {
     socket.on('error', leave);
   }
 
-  joinRoom(p, code) {
+  joinRoom(p, code, opts = {}) {
     let room = null;
     if (code) {
-      room = this.rooms[code] ??= new Room(this, code, true);
+      if (!this.rooms[code]) {
+        room = this.rooms[code] = new Room(this, code, true);
+        if (opts.tutorial) room.makeTutorial();
+      } else room = this.rooms[code];
       if (room.full) { this.notice(p, `Room ${code} is full — you've been put in another game`); room = null; }
     }
     room ??= Object.values(this.rooms).find(r => !r.private && !r.full) || this.newRoom();
-    room.add(p);
-    log(`${this.who(p)} joined room ${room.code}${room.private ? ' (private)' : ''} — ${room.list.length}/${room.max}`);
+    room.add(p, { watch: opts.watch });
+    log(`${this.who(p)} joined room ${room.code}${room.private ? ' (private)' : ''}${room.tutorial ? ' (tutorial)' : ''} — ${room.list.length}/${room.max}`);
     this.presence(p);
+    this.partyFollow(p);
+  }
+
+  // --- parties: friends who move between rooms together, following the leader ---
+  partyFor(pid) { const id = this.partyOf.get(pid); return id != null ? this.parties.get(id) : null; }
+  newestConn(pid) { const set = this.online.get(pid); return set && set.size ? [...set].at(-1) : null; }
+  sendParty(party) {
+    for (const pid of party ? party.members : []) for (const c of this.online.get(pid) || [])
+      this.send(c, { type: 'party', leader: party.leader === pid, members: party.members.map(m => {
+        const conn = this.newestConn(m);
+        return { name: conn ? conn.name : party.names[m] || 'Someone', leader: m === party.leader, online: !!conn, you: m === pid };
+      }) });
+  }
+  leaveParty(pid) {
+    const party = this.partyFor(pid);
+    if (!party) return;
+    party.members = party.members.filter(m => m !== pid);
+    this.partyOf.delete(pid);
+    for (const c of this.online.get(pid) || []) this.send(c, { type: 'party', members: null });
+    if (party.members.length <= 1) { // one left: no party
+      for (const m of party.members) { this.partyOf.delete(m); for (const c of this.online.get(m) || []) this.send(c, { type: 'party', members: null }); }
+      this.parties.delete(this.partyOf.get(pid) ?? [...this.parties].find(([, v]) => v === party)?.[0]);
+      return;
+    }
+    if (party.leader === pid) party.leader = party.members[0];
+    this.sendParty(party);
+  }
+  // the leader landed in a room: bring the rest of the party along
+  partyFollow(p) {
+    const party = p.pid && this.partyFor(p.pid);
+    if (!party || party.leader !== p.pid || !p.room || p.room.tutorial) return;
+    for (const m of party.members) {
+      if (m === p.pid) continue;
+      const c = this.newestConn(m);
+      if (c && c.room !== p.room) this.send(c, { type: 'partyMove', room: p.room.code });
+    }
   }
 
   newRoom() {
@@ -149,6 +207,7 @@ export class Hub {
   disconnect(p) {
     if (!this.conns[p.id]) return;
     delete this.conns[p.id];
+    this.saveMeta(p);
     const mins = ((Date.now() - p.joinedAt) / 60000).toFixed(1);
     log(`${this.who(p)} disconnected after ${mins} min${p.room && p.room.gameOn ? ', mid-match — ' + p.room.score() : ''}`);
     if (p.room) p.room.remove(p);
@@ -187,10 +246,15 @@ export class Hub {
     p.name = saved.name; p.username = saved.username;
     p.stats = Object.fromEntries(STATS.map(s => [s, saved[s] || 0]));
     if (!skinUnlocked(p.skin, levelFor(p.stats.xp))) p.skin = 'witch'; // a skin this profile hasn't unlocked yet
+    p.meta = cleanMeta(saved.meta);
+    this.checkLook(p);
     this.send(p, { type: 'settings', settings: saved.settings }); // null: the browser sends its own
     await this.sendProfile(p);
+    this.sendMeta(p);
     this.sendFriends(p);
     this.presence(p);
+    this.sendParty(this.partyFor(pid));
+    this.partyFollow(p); // a room switch reconnects: only now do we know this is the party leader
     if (p.room) p.room.roster(); // new name
     return true;
   }
@@ -198,6 +262,57 @@ export class Hub {
   async sendProfile(p) {
     const rank = await this.profiles.rank(p.stats).catch(() => null);
     this.send(p, Object.assign({ type: 'profile', name: p.name, username: p.username, rank }, p.stats));
+  }
+
+  // --- history, records, challenges, titles (meta: see cleanMeta) ---
+  sendMeta(p) {
+    if (!p.meta) return;
+    const m = p.meta;
+    m.challenges = currentChallenges(m.challenges);
+    this.send(p, { type: 'meta', history: m.history, best: m.best, weapons: m.weapons, matches: m.matches, wins: m.wins,
+      challenges: challengeView(m.challenges), tutorial: !!m.tutorial });
+  }
+  saveMeta(p) {
+    if (!p.pid || !p.meta) return;
+    const save = this.profiles.saveMeta(p.pid, p.meta).catch(e => log(`Could not save history for ${this.who(p)}: ${e.message}`));
+    this.saving = Promise.all([this.saving, save]);
+  }
+  // something that counts toward challenges happened (see shared/challenges.js); kills also feed records
+  progress(p, e) {
+    if (!p || p.bot || !p.pid || !p.meta) return;
+    const m = p.meta;
+    if (e.type === 'kill') {
+      m.weapons[e.weapon] = (m.weapons[e.weapon] || 0) + 1;
+      m.best.streak = Math.max(m.best.streak || 0, e.streak || 0);
+    }
+    m.challenges = currentChallenges(m.challenges);
+    const finished = countEvent(m.challenges, e);
+    for (const c of finished) {
+      this.record(p, { xp: c.xp });
+      this.send(p, { type: 'challenge', text: c.text, xp: c.xp });
+      log(`${this.who(p)} finished the challenge "${c.text}" (+${c.xp} XP)`);
+    }
+    if (finished.length) { this.sendMeta(p); this.saveMeta(p); }
+  }
+  // a match you were in finished: into your history, and your records
+  matchDone(p, info) {
+    if (!p || p.bot || !p.pid || !p.meta) return;
+    const m = p.meta;
+    m.history.unshift({ t: Date.now(), mode: info.mode, level: info.level, won: info.won, kills: info.kills, deaths: info.deaths });
+    m.history.length = Math.min(m.history.length, 10);
+    m.best.kills = Math.max(m.best.kills || 0, info.kills);
+    m.matches = (m.matches || 0) + 1;
+    if (info.won) m.wins = (m.wins || 0) + 1;
+    this.progress(p, { type: 'match' });
+    if (info.won) this.progress(p, { type: 'win', mode: info.mode });
+    this.sendMeta(p);
+    this.saveMeta(p);
+  }
+  // your title and kill effect, if your level has them (sent from the browser like your skin)
+  checkLook(p) {
+    const level = levelFor(p.stats?.xp || 0);
+    if (!titleOk(p.title, level)) p.title = 'apprentice';
+    if (!effectOk(p.effect, level)) p.effect = 'blood';
   }
 
   // top players, to one player or everyone, once pending stat saves have landed
@@ -261,6 +376,9 @@ Hub.prototype.handlers = {
     const before = this.who(p), first = !p.tokenHash, oldName = p.name, oldSkin = p.skin;
     if (PLAYER_SKINS.includes(msg.skin)) p.skin = msg.skin;
     else if (!PLAYER_SKINS.includes(p.skin)) p.skin = 'witch';
+    const oldLook = p.title + p.effect;
+    if (typeof msg.title === 'string') p.title = msg.title;
+    if (typeof msg.effect === 'string') p.effect = msg.effect;
     p.tokenHash = hashToken(msg.token);
     const pid = await this.profiles.resolve(p.tokenHash);
     if (!await this.useProfile(p, pid, cleanName(msg.name) || null)) return;
@@ -269,7 +387,7 @@ Hub.prototype.handlers = {
       log(`${before} is ${p.name}${p.username ? ' (account ' + p.username + ')' : ''} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}`);
       this.sendBoard(p);
     } else if (p.name !== oldName) log(`${before} renamed to ${p.name}`);
-    if (p.room && p.skin !== oldSkin) p.room.roster();
+    if (p.room && (p.skin !== oldSkin || p.title + p.effect !== oldLook)) p.room.roster();
   },
 
   // your game settings changed (FPS, keys, ...): keep them on your profile
@@ -405,6 +523,50 @@ Hub.prototype.handlers = {
       mode: p.room.mode, count: p.room.list.length });
     log(`${this.who(p)} invited ${f.username} to room ${p.room.code}`);
     this.notice(p, `Invited ${f.name}`);
+  },
+
+  // invite a friend into your party (you lead it if you're not in one yet)
+  async partyInvite(p, msg) {
+    const t = await this.target(p, msg.username);
+    if (!t) return;
+    const f = (await this.profiles.friends(p.pid)).find(f => f.id === t.id);
+    if (!f || f.status !== 'friend') return this.notice(p, 'You can only invite friends to a party');
+    const conns = [...(this.online.get(t.id) || [])];
+    if (!conns.length) return this.notice(p, `${f.name} is offline`);
+    let party = this.partyFor(p.pid);
+    if (party && party.members.includes(t.id)) return this.notice(p, `${f.name} is already in your party`);
+    if (!party) {
+      const id = ++this.partyId;
+      party = { leader: p.pid, members: [p.pid], invited: new Set(), names: { [p.pid]: p.name } };
+      this.parties.set(id, party); this.partyOf.set(p.pid, id);
+    }
+    if (party.members.length >= 8) return this.notice(p, 'Your party is full');
+    party.invited.add(t.id);
+    for (const c of conns) this.send(c, { type: 'partyInvite', from: p.name, id: this.partyOf.get(p.pid) });
+    this.notice(p, `Party invite sent to ${f.name}`);
+    this.sendParty(party);
+  },
+  partyAccept(p, msg) {
+    const party = this.parties.get(msg.id);
+    if (!p.pid || !party || !party.invited.has(p.pid)) return this.notice(p, 'That party invite has expired');
+    if (this.partyFor(p.pid) && this.partyFor(p.pid) !== party) this.leaveParty(p.pid);
+    party.invited.delete(p.pid);
+    if (!party.members.includes(p.pid)) party.members.push(p.pid);
+    party.names[p.pid] = p.name;
+    this.partyOf.set(p.pid, msg.id);
+    this.sendParty(party);
+    const lead = this.newestConn(party.leader);
+    if (lead && lead.room && lead.room !== p.room && !lead.room.tutorial) this.send(p, { type: 'partyMove', room: lead.room.code });
+    log(`${this.who(p)} joined a party led by ${lead ? lead.name : 'someone'}`);
+  },
+  partyLeave(p) { if (p.pid) this.leaveParty(p.pid); },
+  // finished the tutorial: a one-time XP reward
+  tutorialDone(p) {
+    if (!p.meta || p.meta.tutorial || !p.room || !p.room.tutorial) return;
+    p.meta.tutorial = true;
+    this.record(p, { xp: 100 });
+    this.notice(p, 'Tutorial complete! +100 XP');
+    this.sendMeta(p); this.saveMeta(p);
   },
 
   // private message to a friend (works across rooms; both must be signed in)

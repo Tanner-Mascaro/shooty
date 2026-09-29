@@ -1,10 +1,12 @@
 // Lobby profile panel: your name and stats, sign in / create account / sign out, leaderboard.
 // The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
-import { token, setToken, clearToken, savedName, saveName, savedSkin, setEntered } from './profile.js';
+import { token, setToken, clearToken, savedName, saveName, savedSkin, setEntered, savedTitle, savedEffect, saveLook } from './profile.js';
 import { homeProfile, homeAuth, homeOpen, showHome } from './home.js';
 import { canFriend } from './friends.js';
-import { levelInfo, skinsUnlockedBetween } from '/shared/progression.js';
+import { levelInfo, levelFor, skinsUnlockedBetween, unlocksAt, TITLES, KILL_EFFECTS } from '/shared/progression.js';
+import { MODE_NAMES } from '/shared/config.js';
+import { LEVEL_NAMES } from '/shared/levels.js';
 import { S } from './state.js';
 import { updateLoadout } from './room.js';
 import { banner, toast, showXpGain } from './ui.js';
@@ -15,7 +17,7 @@ let me = {}; // latest profile message, merged (stat-only updates arrive after e
 let board = []; // latest leaderboard rows
 
 // sent on connect and whenever you change your name; the server replies with a profile message
-export function sendHello() { send({ type: 'hello', token: token(), name: savedName(), skin: savedSkin() }); }
+export function sendHello() { send({ type: 'hello', token: token(), name: savedName(), skin: savedSkin(), title: savedTitle(), effect: savedEffect() }); }
 
 export function initAccount() {
   const nameInput = $('nameInput'), form = $('authForm');
@@ -38,6 +40,19 @@ export function initAccount() {
     e.stopImmediatePropagation();
     close();
   }, true);
+  const hist = $('historyModal');
+  const closeHist = () => { hist.hidden = true; $('openHistory').focus(); };
+  $('openHistory').addEventListener('click', () => { hist.hidden = false; hist.querySelector('.modalClose').focus(); });
+  hist.querySelector('.modalClose').addEventListener('click', closeHist);
+  hist.addEventListener('click', e => { if (e.target === hist) closeHist(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || hist.hidden) return;
+    e.stopImmediatePropagation();
+    closeHist();
+  }, true);
+  const lookChanged = () => { saveLook($('titlePick').value, $('effectPick').value); sendHello(); };
+  $('titlePick').addEventListener('change', lookChanged);
+  $('effectPick').addEventListener('change', lookChanged);
   $('pwForm').addEventListener('submit', e => {
     e.preventDefault();
     $('pwMsg').textContent = '';
@@ -75,14 +90,75 @@ function showXp() {
   const was = levelInfo(before).level;
   if (xpSeen && level > was) {
     const skins = skinsUnlockedBetween(was, level).map(s => PLAYER_SKIN_NAMES[s] || s);
+    for (let l = was + 1; l <= level; l++) skins.push(...unlocksAt(l));
     const text = 'LEVEL ' + level + (skins.length ? ' — ' + skins.join(', ') + ' unlocked' : '');
     if (S.started) banner(text, true); else toast(text);
   }
   xpSeen = true;
+  showLook();
   showXpGain();
   updateLoadout(); // locked / unlocked character cards
 }
 let xpSeen = false;
+
+// title and kill effect pickers in the Account popup: locked ones show the level they open at
+function showLook() {
+  const level = levelFor(S.xp);
+  const fill = (el, table, current) => {
+    el.replaceChildren(...Object.entries(table).map(([id, t]) => {
+      const o = new Option(t.level > level ? `${t.name} (level ${t.level})` : t.name, id);
+      o.disabled = t.level > level;
+      return o;
+    }));
+    el.value = table[current] && table[current].level <= level ? current : Object.keys(table)[0];
+  };
+  fill($('titlePick'), TITLES, savedTitle());
+  fill($('effectPick'), KILL_EFFECTS, savedEffect());
+}
+
+// daily / weekly challenges, match history and records (the server's 'meta' message)
+const hours = ms => ms >= 86400000 ? Math.ceil(ms / 86400000) + 'd' : Math.max(1, Math.ceil(ms / 3600000)) + 'h';
+export function showMeta(m) {
+  const row = c => {
+    const li = document.createElement('li');
+    li.classList.toggle('done', c.done);
+    const text = document.createElement('span'); text.className = 'chalText'; text.textContent = c.text;
+    const xp = document.createElement('b'); xp.textContent = c.done ? '✓' : '+' + c.xp;
+    const bar = document.createElement('span'); bar.className = 'chalBar';
+    const fill = document.createElement('i'); fill.style.width = Math.round(100 * c.n / c.goal) + '%';
+    const count = document.createElement('small'); count.textContent = c.n + ' / ' + c.goal;
+    bar.append(fill); li.append(text, xp, bar, count);
+    return li;
+  };
+  $('dailyList').replaceChildren(...m.challenges.daily.map(row));
+  $('weeklyList').replaceChildren(...m.challenges.weekly.map(row));
+  $('dailyReset').textContent = 'new in ' + hours(m.challenges.dayMs);
+  $('weeklyReset').textContent = 'new in ' + hours(m.challenges.weekMs);
+
+  const fav = Object.entries(m.weapons || {}).sort((a, b) => b[1] - a[1])[0];
+  const winRate = m.matches ? Math.round(100 * m.wins / m.matches) + '%' : '—';
+  $('records').replaceChildren(...[
+    ['Best streak', m.best.streak || 0], ['Most kills', m.best.kills || 0], ['Matches', m.matches || 0],
+    ['Win rate', winRate], ['Favorite', fav ? fav[0] : '—'], ['Its kills', fav ? fav[1] : 0],
+  ].map(([label, value]) => {
+    const tile = document.createElement('div');
+    tile.className = 'stat';
+    tile.append(document.createElement('b'), document.createElement('span'));
+    tile.firstChild.textContent = value; tile.lastChild.textContent = label;
+    return tile;
+  }));
+  const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? m + 'm ago' : m < 1440 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago'; };
+  $('historyList').replaceChildren(...(m.history.length ? m.history.map(h => {
+    const li = document.createElement('li');
+    li.className = h.won ? 'won' : 'lost';
+    li.innerHTML = '<b></b><span></span><small></small>';
+    li.children[0].textContent = h.won ? 'WIN' : 'LOSS';
+    li.children[1].textContent = `${MODE_NAMES[h.mode] || h.mode} · ${LEVEL_NAMES[h.level] || h.level} · ${h.kills} kills, ${h.deaths} deaths`;
+    li.children[2].textContent = ago(h.t);
+    return li;
+  }) : [Object.assign(document.createElement('li'), { className: 'empty', textContent: 'No matches yet — go play one!' })]));
+  S.tutorialDone = !!m.tutorial;
+}
 
 export function showProfile(msg) {
   me = Object.assign(me, msg);

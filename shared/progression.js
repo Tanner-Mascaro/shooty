@@ -34,3 +34,26 @@ export const skinUnlocked = (skin, level) => unlockLevel(skin) <= level;
 
 // skins that open up somewhere between two levels (for "level up — unlocked X")
 export const skinsUnlockedBetween = (from, to) => Object.keys(SKIN_UNLOCKS).filter(s => SKIN_UNLOCKS[s] > from && SKIN_UNLOCKS[s] <= to);
+
+// titles shown under your name, and the burst your kills leave; both unlock with levels
+export const TITLES = {
+  apprentice: { name: 'Apprentice', level: 1 }, hedge: { name: 'Hedge Witch', level: 2 },
+  hexbreaker: { name: 'Hexbreaker', level: 3 }, keeper: { name: 'Cauldron Keeper', level: 5 },
+  grave: { name: 'Grave Dancer', level: 7 }, elder: { name: 'Coven Elder', level: 9 },
+  hunter: { name: 'Witch Hunter', level: 11 }, queen: { name: 'Night Queen', level: 13 },
+  arch: { name: 'Archwitch', level: 15 }, eternal: { name: 'The Eternal', level: 20 },
+};
+// kill effects: the color of the burst where your victim falls (blood is everyone's default)
+export const KILL_EFFECTS = {
+  blood: { name: 'Blood', level: 1, color: null }, emerald: { name: 'Emerald Smoke', level: 3, color: [80, 220, 110] },
+  violet: { name: 'Violet Sparks', level: 5, color: [180, 110, 255] }, ember: { name: 'Hellfire', level: 7, color: [255, 120, 30] },
+  frost: { name: 'Frost', level: 9, color: [140, 210, 255] }, shadow: { name: 'Shadow', level: 11, color: [40, 20, 60] },
+  gold: { name: 'Gilded', level: 14, color: [255, 210, 80] },
+};
+export const titleOk = (id, level) => !!TITLES[id] && TITLES[id].level <= level;
+export const effectOk = (id, level) => !!KILL_EFFECTS[id] && KILL_EFFECTS[id].level <= level;
+// "Level 5 — Cauldron Keeper title, Violet Sparks" for level-up banners
+export const unlocksAt = level => [
+  ...Object.values(TITLES).filter(t => t.level === level).map(t => t.name + ' title'),
+  ...Object.values(KILL_EFFECTS).filter(k => k.level === level).map(k => k.name + ' kills'),
+];

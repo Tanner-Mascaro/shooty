@@ -106,7 +106,7 @@ export function showMsg(text, persist) {
 
 // post-match scoreboard; REMATCH readies you for the same map and mode right here, LOBBY (or
 // waiting) goes back to the lobby
-export function showSummary({ headline, rematch, scores, mode, level, won, hardpointScores }) {
+export function showSummary({ headline, rematch, scores, mode, level, won, hardpointScores, ctfScores }) {
   clearTimeout(summaryTimer);
   summaryNext = rematch || '';
   $('msg').style.opacity = 0;
@@ -119,7 +119,8 @@ export function showSummary({ headline, rematch, scores, mode, level, won, hardp
   const map = LEVEL_NAMES[level] || level || '';
   const modeLabel = MODE_NAMES[mode] || mode || '';
   const objectiveScore = mode === 'hardpoint' && hardpointScores
-    ? `${teamName('hardpoint', 1)} ${hardpointScores[1] || 0} — ${teamName('hardpoint', 2)} ${hardpointScores[2] || 0}` : '';
+    ? `${teamName('hardpoint', 1)} ${hardpointScores[1] || 0} — ${teamName('hardpoint', 2)} ${hardpointScores[2] || 0}`
+    : mode === 'ctf' && ctfScores ? `${teamName('ctf', 1)} ${ctfScores[1] || 0} — ${teamName('ctf', 2)} ${ctfScores[2] || 0} captures` : '';
   $('summarySub').textContent = [modeLabel, map, objectiveScore].filter(Boolean).join(' · ');
 
   const teams = isTeamMode(mode);
@@ -310,6 +311,7 @@ function drawScores() {
       const members = rows.filter(r => r.team === t);
       h.textContent = mode === 'plague' ? `${teamName(mode, t)} (${members.length})`
         : mode === 'hardpoint' ? `${teamName(mode, t)} ${hardpointScores[t] || 0}`
+        : mode === 'ctf' ? `${teamName(mode, t)} ${S.ctf?.scores?.[t] || 0} ⚱`
         : `${teamName(mode, t)} ${members.reduce((n, r) => n + r.kills, 0)}`;
       out.push(h, ...rows.filter(r => r.team === t).map(line));
     }
@@ -371,7 +373,7 @@ export function updateHud() {
 // gun game: your rung and who's leading; battle royale: who's left and what the storm is doing
 function updateModeStatus() {
   const mode = S.started && S.room?.mode, el = $('modeStatus');
-  el.hidden = mode !== 'gungame' && !(mode === 'royale' && S.zone);
+  el.hidden = mode !== 'gungame' && !(mode === 'royale' && S.zone) && !(mode === 'ctf' && S.ctf);
   el.classList.toggle('storm', mode === 'royale' && !!S.zone?.shrinking);
   if (mode === 'gungame') {
     const lvl = S.myGunLevel, last = GUN_GAME_LADDER.length - 1;
@@ -381,6 +383,15 @@ function updateModeStatus() {
     $('modeClock').textContent = '';
     $('modeObjective').textContent = (lvl >= last ? 'Blade kill to win' : 'Next: ' + gunGameGun(lvl + 1).toUpperCase())
       + (lead.id === S.myId ? ' · You lead' : ` · ${nameOf(lead.id)} leads (${lead.gl + 1})`);
+  } else if (mode === 'ctf' && S.ctf) {
+    const f = S.ctf, mine = f.c[S.myTeam], theirs = f.c[3 - S.myTeam], them = teamName('ctf', 3 - S.myTeam);
+    $('modeRole').textContent = `${teamName('ctf', 1)} ${f.scores[1]} — ${f.scores[2]} ${teamName('ctf', 2)}`;
+    $('modeClock').textContent = clock(f.ms);
+    $('modeObjective').textContent = theirs?.carrier === S.myId ? (mine?.home ? 'Bring it home to your base!' : 'Your cauldron is gone — wait for it to come home')
+      : mine && mine.carrier != null ? `${nameOf(mine.carrier)} has your cauldron — stop them!`
+      : mine && !mine.home ? 'Your cauldron is on the ground — touch it to send it home'
+      : theirs && theirs.carrier != null ? `${nameOf(theirs.carrier)} has the ${them} cauldron — cover them`
+      : `Steal the ${them} cauldron`;
   } else if (mode === 'royale' && S.zone) {
     const z = S.zone, left = clock(S.zoneEndsAt - performance.now()), final = z.stage >= z.stages - 1;
     $('modeRole').textContent = `${z.alive} ALIVE`;

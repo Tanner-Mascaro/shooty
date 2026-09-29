@@ -3,6 +3,7 @@
 import { S } from './state.js';
 import { send } from './net.js';
 import { goToRoom, showRoom } from './room.js';
+import { switchRoom } from './net.js';
 import { drawBoard } from './account.js';
 import { openDm, setDmFriends } from './chat.js';
 import { homeOpen } from './home.js';
@@ -24,7 +25,12 @@ export function initFriends() {
     if (name) send({ type: 'friendAdd', username: name });
     $('friendName').value = '';
   });
-  $('inviteJoin').addEventListener('click', () => invite && goToRoom(invite.room));
+  $('inviteJoin').addEventListener('click', () => {
+    if (!invite) return;
+    if (invite.party) send({ type: 'partyAccept', id: invite.party }); else goToRoom(invite.room);
+    $('invite').hidden = true; invite = null;
+  });
+  $('partyLeave').addEventListener('click', () => send({ type: 'partyLeave' }));
   $('inviteDismiss').addEventListener('click', () => { $('invite').hidden = true; invite = null; });
 }
 
@@ -69,6 +75,8 @@ export function showFriends(list) {
       li.classList.toggle('online', f.online);
       status.textContent = !f.online ? 'offline' : here ? 'in your room' : `in room ${f.room} (${f.count})${f.playing ? ' · playing' : ''}`;
       if (f.online && !here) actions.append(button('Invite', () => send({ type: 'invite', username: u })), button('Join', () => goToRoom(f.room)));
+      if (f.online && !here && f.playing) actions.append(button('Watch', () => switchRoom('?room=' + f.room + '&watch=1')));
+      if (f.online && !inParty.has(f.name)) actions.append(button('Party', () => send({ type: 'partyInvite', username: u })));
       actions.append(button('Msg', () => openDm(u, f.name)), button('✕', () => send({ type: 'friendRemove', username: u }), 'remove'));
     }
     li.append(who, status, actions);
@@ -79,6 +87,27 @@ export function showFriends(list) {
 
 export function flushFriends() {
   if (pendingFriends !== undefined) showFriends(pendingFriends);
+}
+
+// your party: { leader (you lead it), members: [{ name, leader, online, you }] } or members: null
+let inParty = new Set();
+export function showParty(msg) {
+  const members = msg.members || [];
+  inParty = new Set(members.map(m => m.name));
+  $('partyBox').hidden = members.length < 2 && !msg.leader;
+  $('partyList').replaceChildren(...members.map(m => {
+    const li = document.createElement('li');
+    li.textContent = (m.leader ? '♛ ' : '') + m.name + (m.you ? ' (you)' : '') + (m.online ? '' : ' · offline');
+    return li;
+  }));
+  if (friendList) showFriends(friendList); // hide Party on friends already in it
+}
+// a friend asked you into their party: { from, id }
+export function showPartyInvite(msg) {
+  invite = { party: msg.id };
+  $('inviteText').textContent = `${msg.from} invited you to their party — you'll follow them between rooms`;
+  $('invite').hidden = false;
+  $('inviteHint').hidden = !S.started;
 }
 
 // { from, username, room, mode, count }

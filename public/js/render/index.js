@@ -10,7 +10,7 @@ import { syncCamera } from './gl/camera.js';
 import { beginEntities, endEntities, drawPickupBillboards, drawOthersAndCorpses, drawParticlePoints } from './gl/entities.js';
 import { drawZone } from './gl/zone.js';
 import { drawBuilds } from './gl/builds.js';
-import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawHotbar, drawPotionWarnings } from './hud.js';
+import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawCtfMarkers, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawHotbar, drawPotionWarnings } from './hud.js';
 import { updateEmbers, volcanoPlumes, potionTrails, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
 import { updateHud } from '../ui.js';
@@ -40,7 +40,8 @@ function updateCorpses(now, dt) {
 }
 
 function setupCamera() {
-  const target = (!S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1)) * settings.fov;
+  const target = S.dead && S.killcam && S.killcamFov ? BASE_FOV * settings.fov * S.killcamFov // killcam zoom (spectate.js)
+    : (!S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1)) * settings.fov;
   S.fov += (target - S.fov) * 0.3;
   const tanH = Math.tan(S.fov / 2) * (1 + S.fovKick), focal = (view.W / 2) / tanH;
   const ox = S.shake ? (Math.random() - 0.5) * S.shake : 0, oy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
@@ -92,6 +93,7 @@ export function render(dt) {
   drawEnemyGlows(now);
   drawNameTags();
   drawHardpointMarker();
+  drawCtfMarkers();
   drawPotionWarnings(now);
   if (!S.dead && !S.buildMode) drawWeaponView(now); // build mode holsters the gun
   drawHitMarker();

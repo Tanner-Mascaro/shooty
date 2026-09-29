@@ -1,15 +1,15 @@
 // Touch controls for phones and tablets, shown only in a match on a touch screen:
 // - left thumb: a joystick that appears where you touch (analog walk, read in physics.js)
 // - right side: drag to look; tap the hotbar to switch guns, throw a potion, build or cast
-// - buttons: fire (hold), aim, jump, slide, reload, swap, melee, potion, pick up, chat
+// - buttons: fire (hold), jump, aim and reload always; pick up only next to something to take,
+//   dash only when infected. Guns, the blade, potions, building and spells are on the hotbar.
 // Everything calls the same actions as the mouse and keys, so the rules don't change.
 import { S } from './state.js';
 import { settings, toggleFullscreen } from './settings.js';
-import { fire, melee, cycleWeapon, reload, aim, use, throwNade } from './weapons.js';
-import { setBuildMode, placeRamp } from './spells.js';
+import { fire, reload, aim, use } from './weapons.js';
+import { placeRamp } from './spells.js';
 import { cycleSpectate } from './spectate.js';
 import { dash } from './physics.js';
-import { openChat } from './chat.js';
 import { initAudio } from './audio.js';
 
 // ?touch=1 forces the touch controls on (for trying them on a computer)
@@ -20,9 +20,8 @@ const LOOK = 1.6;   // look drag: screen pixels -> "mouse" pixels
 const STICK_R = 56; // how far the joystick knob travels
 const BUTTONS = [
   // [action, label, class]
-  ['fire', 'FIRE', 'big ruby'], ['jump', 'JUMP', 'emerald'], ['aim', 'AIM', 'sapphire'],
-  ['reload', 'RELOAD', 'topaz'], ['swap', 'SWAP', 'topaz'], ['melee', 'MELEE', 'topaz'],
-  ['nade', 'POTION', 'amethyst'], ['use', 'PICK UP', 'amethyst'], ['slide', 'SLIDE', 'amethyst'], ['chat', 'CHAT', 'topaz small'],
+  ['fire', 'FIRE', 'big ruby'], ['jump', 'JUMP', 'emerald'], ['aim', 'AIM', 'sapphire'], ['reload', 'RELOAD', 'topaz'],
+  ['use', 'PICK UP', 'amethyst'], ['slide', 'DASH', 'amethyst'],
 ];
 
 let stick = null, look = null, fullscreenAsked = false;
@@ -43,11 +42,7 @@ function press(action, down) {
     if (down) { if (S.clawsOnly) dash(); else S.slideArmed = true; }
   } else if (!down || S.dead) return;
   else if (action === 'reload') reload();
-  else if (action === 'swap') { setBuildMode(false); cycleWeapon(1); }
-  else if (action === 'melee') melee(true);
-  else if (action === 'nade') throwNade();
   else if (action === 'use') use();
-  else if (action === 'chat') openChat();
 }
 
 // a tap on the hotbar: which slot, if any (hud.js records where it drew each one)
@@ -88,6 +83,12 @@ export function initTouch() {
   if (!isTouch) return;
   S.touch = true;
   document.body.classList.add('touch');
+  // the situational buttons: pick up next to something to take, dash while infected
+  setInterval(() => {
+    if (!S.started) return;
+    document.body.classList.toggle('can-use', !!(S.useTarget && S.useTarget.items.length && !S.dead));
+    document.body.classList.toggle('infected', !!S.clawsOnly);
+  }, 150);
   const ui = buildUI(), base = ui.querySelector('#stickBase'), knob = ui.querySelector('#stickKnob');
 
   ui.addEventListener('pointerdown', e => {

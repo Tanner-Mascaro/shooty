@@ -24,6 +24,10 @@ export const savedSkin = () => {
   const s = get('shooty.skin');
   return PLAYER_SKINS.includes(s) ? s : 'witch';
 };
+// your title and kill effect (the server checks your level has them)
+export const savedTitle = () => get('shooty.title') || 'apprentice';
+export const savedEffect = () => get('shooty.effect') || 'blood';
+export const saveLook = (title, effect) => { set('shooty.title', title); set('shooty.effect', effect); };
 export const saveSkin = skin => set('shooty.skin', PLAYER_SKINS.includes(skin) ? skin : 'witch');
 
 // set once you sign in or continue as a guest; the sign-in screen is skipped from then on

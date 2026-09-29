@@ -1505,26 +1505,28 @@ body.touch.ingame #touchUI { display:block; }
 .tbtn.sapphire { --gem-hi:#9ccbff; --gem:#1f5fc0; --gem-lo:#0b2a66; --gem-glow:rgba(80,150,255,0.45); }
 .tbtn.amethyst { --gem-hi:#c9a0f5; --gem:#7a3fc0; --gem-lo:#3e1470; --gem-glow:rgba(170,100,240,0.45); }
 .tbtn.big { width:92px; height:92px; font-size:15px; letter-spacing:.1em; }
-/* the right-thumb cluster, above the hotbar and ammo */
-.tbtn[data-t=fire]   { right:18px;  bottom:92px; }
-.tbtn[data-t=jump]   { right:122px; bottom:84px; width:66px; height:66px; font-size:12px; }
-.tbtn[data-t=aim]    { right:36px;  bottom:196px; width:60px; height:60px; font-size:12px; }
-.tbtn[data-t=reload] { right:106px; bottom:164px; }
-.tbtn[data-t=swap]   { right:170px; bottom:162px; }
-.tbtn[data-t=slide]  { right:198px; bottom:84px; }
-.tbtn[data-t=melee]  { right:234px; bottom:146px; }
-.tbtn[data-t=nade]   { right:42px;  bottom:266px; }
-.tbtn[data-t=use]    { right:106px; bottom:228px; }
-.tbtn[data-t=chat]   { right:calc(min(230px, 30vmin) + 192px); top:12px; bottom:auto; width:44px; height:36px; border-radius:999px; font-size:10px; }
-/* short phones: tuck the cluster in a bit */
+/* the right-thumb cluster: fire, with jump, aim and reload around it; pick up and dash only when they apply */
+.tbtn { opacity:.78; }
+.tbtn[data-t=fire]   { right:20px;  bottom:26px; width:82px; height:82px; font-size:14px; }
+.tbtn[data-t=jump]   { right:116px; bottom:18px; width:58px; height:58px; font-size:11px; }
+.tbtn[data-t=aim]    { right:30px;  bottom:122px; width:52px; height:52px; font-size:11px; }
+.tbtn[data-t=reload] { right:100px; bottom:92px; width:46px; height:46px; font-size:9px; }
+.tbtn[data-t=use]    { right:104px; bottom:150px; width:56px; height:56px; font-size:10px; display:none; animation:usePulse 1.2s ease-in-out infinite; }
+.tbtn[data-t=slide]  { right:188px; bottom:24px; width:54px; height:54px; font-size:11px; display:none; }
+body.can-use .tbtn[data-t=use], body.infected .tbtn[data-t=slide] { display:block; }
+body.infected .tbtn[data-t=aim], body.infected .tbtn[data-t=reload] { display:none; }
+@keyframes usePulse { 50% { box-shadow:0 0 0 1px #5a3a10, 0 3px 0 #2a1a08, 0 0 22px var(--gem-glow); } }
 @media (max-height:380px) {
-  .tbtn { width:46px; height:46px; }
-  .tbtn.big { width:80px; height:80px; }
-  .tbtn[data-t=fire] { bottom:78px; } .tbtn[data-t=jump] { bottom:74px; right:108px; width:58px; height:58px; }
-  .tbtn[data-t=aim] { bottom:170px; } .tbtn[data-t=reload] { bottom:142px; right:96px; } .tbtn[data-t=swap] { bottom:140px; right:152px; }
-  .tbtn[data-t=slide] { bottom:74px; right:176px; } .tbtn[data-t=melee] { bottom:128px; right:208px; }
-  .tbtn[data-t=nade] { bottom:228px; } .tbtn[data-t=use] { bottom:196px; right:96px; }
+  .tbtn[data-t=fire] { width:72px; height:72px; } .tbtn[data-t=jump] { right:102px; width:52px; height:52px; }
+  .tbtn[data-t=aim] { bottom:108px; } .tbtn[data-t=reload] { bottom:82px; right:90px; } .tbtn[data-t=use] { bottom:134px; right:92px; }
 }
+/* the hotbar already shows your ammo under each gun */
+body.touch.ingame #ammoHud { display:none !important; }
+/* less HUD on phones: standings live on the map button; small top buttons; no version tag */
+body.touch.ingame #scores, body.touch #version { display:none; }
+body.touch.ingame #feed { font-size:11px; max-width:40vw; }
+body.touch #gameGear, body.touch #gameMap { transform:scale(.85); transform-origin:top right; }
+body.touch #gameLeave { transform:scale(.85); transform-origin:top right; }
 /* phones held upright: ask for landscape */
 #rotateHint { display:none; }
 @media (orientation:portrait) {
@@ -1546,3 +1548,63 @@ body.touch.ingame #chat { z-index:360; bottom:auto; top:60px; }
   :root body #corner > button.ghost { padding:6px 10px; font-size:10px; }
   #corner { gap:6px; top:12px; right:10px; }
 }
+
+/* ---- challenges, history & records, look pickers, titles ---- */
+.chalHead { font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#5a2a90; font-weight:700; }
+.chalHead small { font-size:10px; letter-spacing:.04em; color:#8a7048; text-transform:none; font-style:italic; font-weight:400; margin-left:6px; }
+.chalList { list-style:none; display:flex; flex-direction:column; gap:7px; margin:2px 0 6px; }
+.chalList li { display:grid; grid-template-columns:1fr auto; gap:3px 8px; align-items:center; font-size:13px; color:#2a1a10; }
+.chalList .chalText { line-height:1.25; }
+.chalList b { font-size:12px; color:#1c7a36; }
+.chalList .chalBar { height:7px; background:rgba(42,30,18,0.2); border:1px solid rgba(106,74,40,0.6); overflow:hidden; }
+.chalList .chalBar i { display:block; height:100%; background:linear-gradient(180deg, #7fdc90, #1c7a36); }
+.chalList small { font-size:10px; color:#6a5640; text-align:right; }
+.chalList li.done { opacity:.6; }
+.chalList li.done .chalText { text-decoration:line-through; }
+.chalList li.done b { color:#9a1628; }
+#openHistory { align-self:flex-start; }
+#historyModal .card { width:100%; max-width:480px; display:flex; flex-direction:column; gap:12px; }
+#records { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+#records .stat b { font-size:17px; text-transform:capitalize; overflow-wrap:anywhere; }
+#historyList { list-style:none; display:flex; flex-direction:column; gap:4px; max-height:44vh; overflow:auto; }
+#historyList li { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:baseline; padding:6px 8px; font-size:13px;
+  background:rgba(90,60,30,0.07); border:1px solid rgba(90,60,30,0.25); }
+#historyList li b { font-size:11px; letter-spacing:.1em; }
+#historyList li.won b { color:#1c7a36; } #historyList li.lost b { color:#9a1628; }
+#historyList li small { color:#8a7048; font-size:11px; }
+#historyList li.empty { display:block; color:#6a5640; font-style:italic; }
+.lookRow { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:13px; color:#3a2410; }
+.lookRow select { flex:0 1 60%; font:13px 'IBM Plex Sans',system-ui,sans-serif; padding:5px 6px; color:#2a1e12; background:#f0e2be; border:1px solid #8a7048; border-radius:0; }
+#roster .rtitle { display:block; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#7a3fc0; font-weight:700; }
+
+/* ---- tutorial checklist (tutorial.js) ---- */
+#tutorial {
+  position:fixed; left:14px; top:38%; z-index:145; width:min(300px, 42vw); display:flex; flex-direction:column; gap:6px;
+  --roll-h:30px; --roll-side:20px; padding:4px 10px; color:#2a1e12; font-family:'Caslon Antique',Georgia,serif;
+  border-style:solid; border-color:transparent; border-width:var(--roll-h) var(--roll-side);
+  border-image-source:url(/img/scroll-frame.png); border-image-slice:60 35 62 35 fill;
+  border-image-width:var(--roll-h) var(--roll-side); border-image-repeat:stretch;
+  filter:drop-shadow(0 8px 16px rgba(0,0,0,0.55));
+}
+#tutorial[hidden] { display:none; }
+body:not(.ingame) #tutorial { display:none; }
+.tutHead { display:flex; justify-content:space-between; align-items:baseline; }
+.tutHead b { font-size:14px; letter-spacing:.1em; color:#5a2a90; }
+.tutHead small { font-size:12px; color:#6a5640; }
+#tutorialSteps { margin:0; padding-left:20px; display:flex; flex-direction:column; gap:3px; font-size:12.5px; line-height:1.3; }
+#tutorialSteps li.done { color:#1c7a36; text-decoration:line-through; opacity:.7; }
+#tutorialSteps li.done::marker { content:'✓ '; color:#1c7a36; }
+#tutorialDone { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+#tutorialDone b { color:#1c7a36; font-size:14px; }
+#tutorialDone[hidden] { display:none; }
+#tutorialBack { padding:8px 14px; font:700 12px/1 'Caslon Antique',Georgia,serif; letter-spacing:.08em; color:#fff8ec; cursor:pointer;
+  border-radius:999px; border:2px solid #c9a24a; background:linear-gradient(180deg, #1c7a36, #0a3c16); box-shadow:0 0 12px rgba(80,220,110,0.45); }
+#tutorialLeave { align-self:flex-start; font-size:11px; color:#6a4028; background:none; border:none; text-decoration:underline; cursor:pointer; font-family:inherit; }
+body.touch #tutorial { top:10px; left:10px; width:min(260px, 38vw); font-size:11px; }
+body.touch #tutorialSteps { font-size:11px; }
+/* party box in the Friends card */
+#partyBox { display:flex; flex-direction:column; gap:6px; padding-bottom:8px; border-bottom:1px solid rgba(90,60,30,0.25); }
+#partyBox[hidden] { display:none; }
+#partyList { list-style:none; display:flex; flex-direction:column; gap:3px; font-size:13px; color:#2a1a10; }
+#partyLeave { align-self:flex-start; }
+#homeTutorial { margin-top:4px; }

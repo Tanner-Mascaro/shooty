@@ -24,7 +24,7 @@ export function glow(x, y, r, color) {
 }
 
 export function drawTracers(now) {
-  S.tracers = S.tracers.filter(t => now - t.t < (t.weapon === 'sniper' ? 1500 : t.weapon === 'beam' ? 520 : 90));
+  S.tracers = S.tracers.filter(t => now - t.t < (t.weapon === 'sniper' ? 1500 : t.weapon === 'beam' ? 520 : t.weapon === 'wand' ? 300 : 90));
   const c = S.cam, me = S.me, near = 0.1;
   const lerp = (p, q, u) => ({ x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u, z: p.z + (q.z - p.z) * u });
   const line = (A, B, style, width) => { ctx.strokeStyle = style; ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); };
@@ -52,6 +52,11 @@ export function drawTracers(now) {
         line(A, B, 'rgba(160,70,140,' + (hot * 0.75) + ')', 6);
         line(A, B, 'rgba(220,180,210,' + hot + ')', 2);
       }
+    } else if (t.weapon === 'wand') { // a crackling green-violet hex bolt
+      const k = 1 - age / 300;
+      line(A, B, 'rgba(150,80,220,' + (k * 0.55) + ')', 7);
+      line(A, B, 'rgba(150,255,140,' + k + ')', 3);
+      line(A, B, 'rgba(240,255,235,' + k + ')', 1);
     } else line(A, B, 'rgba(200,160,100,' + (0.65 * (1 - age / 90)) + ')', 1.5);
   }
 }
@@ -83,7 +88,7 @@ export function drawPickupGlows() {
 export function drawEnemyGlows(now) {
   for (const o of Object.values(S.others)) {
     const e = o.now;
-    if (!e || e.dead) continue;
+    if (!e || e.dead || o.cur?.iv) continue;
     if (now - o.flashT < 70) {
       const p = project(e.x + Math.cos(e.a || 0) * 0.4, e.y + Math.sin(e.a || 0) * 0.4, e.z + EYE - 0.25); // at the gun, out front
       if (p.f > 0.2 && !occluded(p)) glow(p.x, p.y, 160 / p.f + 20, 'rgba(255,210,90,0.9)');
@@ -100,7 +105,7 @@ export function drawNameTags() {
   ctx.textAlign = 'center';
   for (const [id, o] of Object.entries(S.others)) {
     const e = o.now;
-    if (!e || e.dead) continue;
+    if (!e || e.dead || o.cur?.iv) continue; // invisible: no name to give them away
     const enemy = isEnemy(+id), p = project(e.x, e.y, e.z + BODY_H + 0.3);
     if (p.f < 0.4 || p.f > 18 || occluded(p)) continue;
     ctx.font = 'bold ' + Math.round(Math.max(11, Math.min(16, 40 / p.f + 9))) + 'px Courier New';
@@ -237,6 +242,30 @@ export function drawDamageIndicators(now) {
 
 // Project a visible perimeter onto the ground so the objective is readable in-world as well as
 // on the minimap. A small floating label keeps the point number identifiable at a distance.
+// Capture the Cauldron: a ring at each base (dashed while its cauldron is away) and one under a
+// dropped cauldron, in the team's color
+function ring(x, y, z, r, rgb, dashed) {
+  ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = `rgba(${rgb},0.85)`; ctx.setLineDash(dashed ? [7, 6] : []);
+  ctx.beginPath();
+  let drawing = false;
+  for (let i = 0; i <= 36; i++) {
+    const a = i * Math.PI * 2 / 36, p = project(x + Math.cos(a) * r, y + Math.sin(a) * r, z + 0.04);
+    if (p.f < 0.2 || occluded(p)) { drawing = false; continue; }
+    if (drawing) ctx.lineTo(p.x, p.y); else { ctx.moveTo(p.x, p.y); drawing = true; }
+  }
+  ctx.stroke(); ctx.restore();
+}
+const CTF_RGB = { 1: '230,60,70', 2: '120,110,255' };
+export function drawCtfMarkers() {
+  const f = S.ctf;
+  if (!S.started || S.room?.mode !== 'ctf' || !f) return;
+  for (const t of [1, 2]) {
+    const b = f.bases[t], c = f.c[t];
+    ring(b.x, b.y, b.z, 1.3, CTF_RGB[t], !c.home);
+    if (!c.home && c.carrier == null) ring(c.x, c.y, c.z, 0.8, CTF_RGB[t], false);
+  }
+}
+
 export function drawHardpointMarker() {
   const hp = S.hardpoint;
   if (!S.started || S.room?.mode !== 'hardpoint' || !hp) return;
@@ -393,6 +422,12 @@ export function drawMinimap(now) {
       if (!S.pickupActive[i]) return;
       ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
     });
+    if (S.ctf && S.room?.mode === 'ctf') for (const t of [1, 2]) { // bases (squares) and cauldrons (dots)
+      const b = S.ctf.bases[t], c = S.ctf.c[t];
+      ctx.strokeStyle = `rgb(${CTF_RGB[t]})`; ctx.lineWidth = 2 / ms; ctx.strokeRect(b.x - 0.9, b.y - 0.9, 1.8, 1.8);
+      ctx.fillStyle = `rgb(${CTF_RGB[t]})`; ctx.beginPath(); ctx.arc(c.x, c.y, 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#f0d890'; ctx.lineWidth = 1.5 / ms; ctx.stroke();
+    }
     ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
     for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
     for (const n of S.thrown) {
@@ -401,7 +436,7 @@ export function drawMinimap(now) {
       ctx.fillStyle = '#c07070'; ctx.beginPath(); ctx.arc(n.x + 0.12, n.y - 0.14, 0.1, 0, Math.PI * 2); ctx.fill();
     }
     for (const [id, o] of Object.entries(S.others)) {
-      if (!o.now || o.now.dead) continue;
+      if (!o.now || o.now.dead || (o.cur?.iv && isEnemy(+id))) continue;
       ctx.fillStyle = isEnemy(+id) ? '#a83838' : '#6a5088';
       ctx.beginPath(); ctx.arc(o.now.x, o.now.y, 0.3, 0, Math.PI * 2); ctx.fill();
     }
@@ -482,7 +517,7 @@ export function drawUsePrompt() {
   let text;
   if (t.pad !== undefined) text = S.mag[t.items[0]] !== undefined ? 'Take ' + items[0] + ' ammo' : drop ? 'Swap ' + drop.toUpperCase() + ' for ' + items[0] : 'Take ' + items[0];
   else text = 'Cauldron: ' + items.join(', ');
-  const k = key('use');
+  const k = S.touch ? 'PICK UP' : key('use');
   ctx.font = 'bold 16px Courier New';
   const kw = ctx.measureText(k).width + 14, tw = ctx.measureText(text).width, x = W / 2 - (kw + 10 + tw) / 2, y = H / 2 + 80;
   ctx.fillStyle = 'rgba(20,12,18,0.7)'; ctx.fillRect(x - 8, y - 18, kw + 10 + tw + 16, 28);
@@ -515,23 +550,38 @@ function drawCallout(now) {
 export function drawSpectate(now) {
   const { W, H } = view;
   ctx.textAlign = 'center';
+  if (S.dead && S.killcam) { // letterbox, and who got you with what
+    const kc = S.killcam, o = S.others[kc.id]?.cur, bar = Math.round(H * 0.09);
+    ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, W, bar); ctx.fillRect(0, H - bar, W, bar);
+    ctx.textBaseline = 'middle';
+    ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#ff5a70';
+    ctx.fillText('ᛟ  KILLCAM  ᛟ', W / 2, H - bar * 0.72);
+    ctx.font = '700 20px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#f0e0b8';
+    const what = kc.weapon && !['pit', 'zone', 'respawn'].includes(kc.weapon) ? ' · ' + (kc.weapon === 'nade' ? 'POTION' : kc.weapon.toUpperCase()) : '';
+    const hp = o && Number.isFinite(o.hp) ? ` · ${Math.max(0, Math.round(o.hp))} HP left` : '';
+    ctx.fillText(`Killed by ${nameOf(kc.id)}${what}${hp}`, W / 2, H - bar * 0.35);
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    return;
+  }
   if (S.dead) {
     const out = S.respawnAt === null, y = H - 160;
     // a crimson vignette closes in while you're down
     const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.25, W / 2, H / 2, Math.max(W, H) * 0.75);
     v.addColorStop(0, 'rgba(90,0,15,0)'); v.addColorStop(1, 'rgba(90,0,15,0.55)');
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    const watching = S.spectateId != null ? 'Watching ' + nameOf(S.spectateId) : '';
+    const left = S.watching ? 'you play from the next match' : out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
+    const sub = [watching, left].filter(Boolean).join(' · ');
     ctx.save();
-    parchment(W / 2, y, 400, 96, false);
+    ctx.font = 'italic 700 15px Caslon Antique, Georgia, serif';
+    parchment(W / 2, y, Math.min(W - 24, Math.max(400, ctx.measureText(sub).width + 70)), 96, false); // fits its text
     ctx.textBaseline = 'middle';
     ctx.font = '700 30px Caslon Antique, Georgia, serif';
     ctx.fillStyle = '#9a1628'; ctx.shadowColor = 'rgba(200,30,50,0.45)'; ctx.shadowBlur = 10;
-    ctx.fillText('ᛟ  ' + (out ? 'ELIMINATED' : 'YOU DIED') + '  ᛟ', W / 2, y - 14);
+    ctx.fillText('ᛟ  ' + (S.watching ? 'SPECTATING' : out ? 'ELIMINATED' : 'YOU DIED') + '  ᛟ', W / 2, y - 14);
     ctx.shadowBlur = 0;
     ctx.font = 'italic 700 15px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#4a3420';
-    const watching = S.spectateId != null ? 'Watching ' + nameOf(S.spectateId) : '';
-    const left = out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
-    ctx.fillText([watching, left].filter(Boolean).join(' · '), W / 2, y + 22);
+    ctx.fillText(sub, W / 2, y + 22);
     ctx.restore();
     ctx.textAlign = 'center';
   } else if (inStorm()) {
@@ -584,6 +634,7 @@ function slotBox(x, y, bw, bh, { keyName, on, selected, held }) {
   ctx.restore();
   if (held) { ctx.fillStyle = 'rgba(122,63,192,0.28)'; ctx.fill(); }
   ctx.strokeStyle = selected ? '#c9a24a' : '#5a3820'; ctx.lineWidth = selected ? 2.5 : 1.5; ctx.stroke();
+  if (S.touch) return; // phones tap the slot, no key to show
   ctx.font = '700 10px Caslon Antique, Georgia, serif'; ctx.fillStyle = selected ? '#5a2a90' : '#6a4a28';
   ctx.textAlign = 'left'; ctx.fillText(keyName, x + 5, y + 12);
 }
@@ -611,9 +662,9 @@ export function drawHotbar(now) {
     ...(buildingAllowed() ? [[{ keyName: key('build'), label: 'RAMP', sub: BUILDS.ramp.mana + ' MANA', col: [190, 150, 255], on: S.mana >= BUILDS.ramp.mana, held: S.buildMode }]] : []),
     Array.from({ length: SPELL_SLOTS }, (_, i) => {
       const sp = S.spells[i], look = sp && SPELL_LOOK[sp];
-      return { keyName: key('spell' + (i + 1)), label: sp ? look.rune + ' ' + sp.toUpperCase() : '—', sub: '', col: look ? look.col : [120, 110, 100], on: !!sp };
-    }),
-  ];
+      return { keyName: key('spell' + (i + 1)), label: sp ? look.rune + ' ' + sp.toUpperCase() : '—', sub: '', col: look ? look.col : [120, 110, 100], on: !!sp, slot: i };
+    }).filter(s => s.on || !S.touch), // phones: only the spells you're carrying
+  ].filter(group => group.length);
   const count = groups.flat().length;
   const total = count * bw + (count - groups.length) * gap + (groups.length - 1) * groupGap;
   const sc = Math.min(1, (W - 24) / total), left = (W - total * sc) / 2, top = H - (bh + 14) * sc;
@@ -628,7 +679,7 @@ export function drawHotbar(now) {
       const act = g === 0 ? () => { setBuildMode(false); switchSlot(i + 1); }
         : s.potion ? throwNade
         : s.label === 'RAMP' ? () => setBuildMode(!S.buildMode)
-        : () => castSlot(i);
+        : () => castSlot(s.slot);
       hits.push({ x: left + x * sc, y: top, w: bw * sc, h: bh * sc, act });
       slotBox(x, 0, bw, bh, s);
       if (s.weapon) drawIcon(weaponIcon(s.weapon), x, 0, bw, bh, false);
@@ -652,7 +703,8 @@ export function drawHotbar(now) {
     ctx.font = '700 15px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c8a0ff';
     ctx.fillText(`BUILD MODE · click to raise a ramp · ${key('build')} for your gun`, W / 2, H - (bh + 40) * sc);
   }
-  const effects = [['HASTE', S.hasteUntil, SPELL_LOOK.haste.col], ['WARD', S.wardUntil, SPELL_LOOK.ward.col]].filter(([, until]) => until > now);
+  const effects = [['HASTE', S.hasteUntil, SPELL_LOOK.haste.col], ['WARD', S.wardUntil, SPELL_LOOK.ward.col],
+    ['INVISIBLE', S.invisUntil || 0, SPELL_LOOK.invis.col], ['CURSED', S.cursedUntil || 0, SPELL_LOOK.curse.col]].filter(([, until]) => until > now);
   ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
   effects.forEach(([name, until, col], i) => {
     ctx.fillStyle = `rgb(${col.join(',')})`;

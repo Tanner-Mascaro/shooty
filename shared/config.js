@@ -18,7 +18,7 @@ export const MAX_PLAYERS = 8;      // people per room (and seats, counting bots)
 export const ROYALE_MAX_PLAYERS = 16; // battle royale has room for this many, the extra seats for bots
 export const maxPlayers = mode => mode === 'royale' ? ROYALE_MAX_PLAYERS : MAX_PLAYERS;
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
-export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale', build: 'Build Battle' };
+export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale', build: 'Build Battle', ctf: 'Capture the Cauldron' };
 // modes where you can raise Earth Ramps (build mode, the ramp slot and the mana bar)
 export const canBuildIn = mode => mode === 'build';
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
@@ -33,7 +33,12 @@ export const PLAGUE_DASH_DURATION = 200; // ms
 export const PLAGUE_DASH_COOLDOWN = 2000; // ms between dash starts
 export const MOVE_SPEED = 3, MOVE_SPEED_LIMIT = 10, MOVE_GRAVITY = 7.5, MOVE_JUMP_V = 2.55;
 export const PLAGUE_TEAMS = { [PLAGUE_TEAM]: 'PLAGUE', [HEALTHY_TEAM]: 'HEALTHY' };
-export const isTeamMode = mode => mode === 'teams' || mode === 'hardpoint' || mode === 'plague';
+export const isTeamMode = mode => mode === 'teams' || mode === 'hardpoint' || mode === 'plague' || mode === 'ctf';
+// red vs blue (plague has its own sides)
+export const redBlue = mode => mode === 'teams' || mode === 'hardpoint' || mode === 'ctf';
+// Capture the Cauldron: steal the other coven's cauldron and bring it to yours while yours is home.
+// Touch range, captures to win, match length, and how long a dropped cauldron waits before going home
+export const CTF = { touch: 1.3, caps: 3, ms: 8 * 60 * 1000, returnMs: 20000 };
 export const teamName = (mode, team) => (mode === 'plague' ? PLAGUE_TEAMS : TEAMS)[team] || '';
 // after dying you watch your killer for a moment before respawning; plague turns you into a
 // monster on the spot, and battle royale has no respawns (you spectate until the match ends)
@@ -92,6 +97,7 @@ export const WEAPONS = {
   sniper:   { dmg: 100, head: 1.5, cd: 1400, spread: 0.12,  scopedSpread: 0,     airSpread: 0.08, mag: 4, reload: 2400 },
   crossbow: { dmg: 85,  head: 1.8, cd: 1100, spread: 0.02,  scopedSpread: 0.004, airSpread: 0.05, mag: 1, reload: 1600 },
   beam:     { dmg: 38,  head: 2,   cd: 260,  spread: 0.014, scopedSpread: 0.002, airSpread: 0.04, mag: 16, reload: 1700 },
+  wand:     { dmg: 32,  head: 1.5, cd: 380,  spread: 0.01,  scopedSpread: 0.004, airSpread: 0.035, mag: 10, reload: 1500 }, // Hex Wand: see WAND_CHAIN
   shotgun:  { dmg: 12,  head: 1.5, cd: 850,  spread: 0.07,  pellets: 8, falloff: 12, mag: 6, reload: 2200 },
   smg:      { dmg: 11,  head: 1.8, cd: 75,   spread: 0.03,  scopedSpread: 0.018, airSpread: 0.07, auto: true, mag: 35, reload: 1500 },
   uzi:      { dmg: 9,   head: 1.8, cd: 55,   spread: 0.04,  scopedSpread: 0.022, airSpread: 0.09, auto: true, mag: 32, reload: 1400 },
@@ -102,9 +108,11 @@ export const WEAPONS = {
 // Every gun's ammo runs out; only the blade needs none. A gun you've emptied completely is gone.
 export const START_GUN = 'pistol';
 // spare rounds a gun comes with on top of a full mag (the pistol when you spawn, the rest from pads)
-export const AMMO = { pistol: 24, deagle: 14, revolver: 18, rifle: 60, burst: 60, carbine: 50, sniper: 4, crossbow: 8, beam: 32, shotgun: 6, smg: 55, uzi: 64, lmg: 150 };
+export const AMMO = { wand: 30, pistol: 24, deagle: 14, revolver: 18, rifle: 60, burst: 60, carbine: 50, sniper: 4, crossbow: 8, beam: 32, shotgun: 6, smg: 55, uzi: 64, lmg: 150 };
 export const MAX_SPARE = w => WEAPONS[w].mag * 3; // spare rounds you can carry per gun
-export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'crossbow', 'uzi', 'beam'];
+export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'crossbow', 'uzi', 'beam', 'wand'];
+// the Hex Wand's bolt jumps from whoever it hits to the nearest other enemy within range
+export const WAND_CHAIN = { range: 5, dmg: 22 };
 export const SNIPER_GUNS = ['sniper', 'crossbow', 'beam'];
 export const startGun = mode => mode === 'snipers' ? 'sniper' : START_GUN;
 export const padGuns = mode => mode === 'snipers' ? SNIPER_GUNS : PAD_GUNS;
@@ -132,9 +140,13 @@ export const BUILDS = {
 export const RAMP_STACK = 3;
 export const rampLevels = level => level === 'haunt' ? 1 : RAMP_STACK;
 export const SPELL_SLOTS = 3;
-export const STORED_SPELLS = ['heal', 'haste', 'ward'];
+export const STORED_SPELLS = ['heal', 'haste', 'ward', 'broom', 'blink', 'invis', 'curse'];
 export const HEAL_SPELL = 50;                    // hp, up to your max
 export const HASTE = { ms: 5000, speed: 1.5 };  // move this much faster for a while
 export const WARD = { ms: 8000, absorb: 60 };   // soaks up this much damage while it lasts
+export const BROOM = { ms: 450, speed: 13 };     // Broom Dash: a burst forward at this speed
+export const BLINK = { dist: 6 };                // Blink: step this far ahead (short of walls and pits)
+export const INVIS = { ms: 6000 };               // Invisibility: all but gone until it ends or you shoot
+export const CURSE = { ms: 4000, slow: 0.55, range: 30, cone: 0.22 }; // Curse: slows the enemy you're aiming at
 export const SCROLL_CRATES = 8;
 export const SCROLL_RESPAWN = 20000;

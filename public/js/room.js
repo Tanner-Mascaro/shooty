@@ -1,7 +1,7 @@
 // Lobby room panel: room code + invite link, quick play / new private room, mode, teams,
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
-import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER, MODE_NAMES, GUN_GAME_LADDER } from '/shared/config.js';
+import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER, MODE_NAMES, GUN_GAME_LADDER, redBlue, CTF } from '/shared/config.js';
 import { S } from './state.js';
 import { send, switchRoom } from './net.js';
 import { initAudio, cackle } from './audio.js';
@@ -217,6 +217,7 @@ function modeHelpText(mode) {
   return mode === 'plague'
     ? `Infect everyone, or survive ${PLAGUE_DURATION / 60000} minutes. Monsters are fast and claw to infect.`
     : mode === 'hardpoint' ? `Red vs blue. Hold the rotating hill for 1 point per second. Contested hills stop scoring; first to ${HARDPOINT_SCORE_LIMIT} wins or the leader at ${Math.floor(HARDPOINT_MATCH_MS / 60000)}:${String(Math.floor(HARDPOINT_MATCH_MS / 1000) % 60).padStart(2, '0')}.`
+    : mode === 'ctf' ? `Red vs blue. Steal the other coven's cauldron and bring it to your base while yours is home. First to ${CTF.caps} captures, or the leader after ${CTF.ms / 60000} minutes. Carriers drop it when they fall.`
     : mode === 'teams' ? `Red vs blue. First team to ${teamWin} kills wins.`
     : mode === 'snipers' ? `Sniper, crossbow, and beam rifle only. First to ${win} kills wins.`
     : mode === 'build' ? `Every player for themselves, with Earth Ramps: press build mode, click to raise one, stack them for height. First to ${win} kills wins.`
@@ -336,6 +337,7 @@ export function initRoom() {
     catch { toast(link); } // clipboard blocked (plain http on another device): show it to copy by hand
   });
   $('quickPlay').addEventListener('click', () => switchRoom('?play=1'));
+  $('tutorialLink').addEventListener('click', () => switchRoom('?room=' + newCode() + '&tutorial=1'));
   $('newRoom').addEventListener('click', () => goToRoom(newCode()));
   // leave the match for a lobby of your own (quick play could drop you right back into it)
   for (const id of ['leaveGame', 'gameLeave']) $(id).addEventListener('click', () => goToRoom(newCode()));
@@ -397,7 +399,7 @@ export function showRoom() {
     ? 'Set each player or bot to Infected or Healthy in the player list above. Choose at least one of each. Role changes reset ready status.'
     : 'Exactly one player or bot is picked at random when each round starts.';
 
-  const teams = r.mode === 'teams' || r.mode === 'hardpoint';
+  const teams = redBlue(r.mode);
   // server is source of truth — revert a local pick the server rejected (e.g. unknown skin)
   if (me && me.skin && PLAYER_SKIN_NAMES[me.skin] && me.skin !== savedSkin()) {
     saveSkin(me.skin);
@@ -412,6 +414,7 @@ export function showRoom() {
     li.classList.toggle('bot', !!p.bot);
     const name = document.createElement('span');
     name.textContent = p.name + (p.id === S.myId ? ' (you)' : '');
+    if (p.title) { const t = document.createElement('small'); t.className = 'rtitle'; t.textContent = p.title; name.append(t); }
     const tag = document.createElement('span');
     tag.className = 'tag';
     const side = teams || (r.mode === 'plague' && r.gameOn) ? teamName(r.mode, p.team) + ' · ' : '';

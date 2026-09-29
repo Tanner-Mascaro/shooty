@@ -115,6 +115,14 @@ const MODELS = {
     sym(0.016, -0.115, -0.08, 0.06, 0.12, 'd'),                       // mag
     sym(0.016, -0.15, -0.08, -0.08, -0.03, 'd'),                      // grip
   ],
+  // Hex Wand: wrapped grip, dark wood shaft, brass collar, a glowing gem at the tip
+  wand: [
+    sym(0.0105, -0.03, -0.008, -0.08, 0.05, 'b'),                     // grip wrap
+    sym(0.008, -0.026, -0.011, 0.05, 0.25, 'w'),                      // shaft
+    sym(0.012, -0.03, -0.007, 0.25, 0.27, 'l'),                       // collar
+    sym(0.015, -0.034, -0.003, 0.27, 0.31, 'g'),                      // gem
+    sym(0.006, -0.024, -0.013, 0.31, 0.325, 'g'),                     // gem point
+  ],
   beam: [
     sym(0.022, -0.1, -0.028, -0.38, -0.08, 'd'),                      // stock
     sym(0.024, -0.072, -0.018, -0.08, 0.2, 'm'),                      // receiver
@@ -265,15 +273,16 @@ const HIP = {
   sniper:   [0.1, -0.07, 0.23, -0.08, 0.18],
   crossbow: [0.1, -0.072, 0.23, -0.08, 0.16],
   beam:     [0.1, -0.068, 0.22, -0.08, 0.16],
+  wand:     [0.085, -0.06, 0.22, -0.1, 0.1],
   blade:    [0.11, -0.085, 0.24, -0.25, 0],
   claws:    [0.12, -0.09, 0.22, -0.15, 0.1],
 };
-const ADS_Z = { pistol: 0.34, deagle: 0.34, revolver: 0.34, rifle: 0.3, burst: 0.3, carbine: 0.3, smg: 0.3, uzi: 0.32, lmg: 0.28, crossbow: 0.32, beam: 0.34 };
+const ADS_Z = { wand: 0.34, pistol: 0.34, deagle: 0.34, revolver: 0.34, rifle: 0.3, burst: 0.3, carbine: 0.3, smg: 0.3, uzi: 0.32, lmg: 0.28, crossbow: 0.32, beam: 0.34 };
 const MUZZLE = {
   pistol: [0, -0.018, 0.2], deagle: [0, -0.02, 0.235], revolver: [0, -0.025, 0.28],
   rifle: [0, -0.037, 0.67], burst: [0, -0.032, 0.56], carbine: [0, -0.031, 0.52],
   smg: [0, -0.038, 0.37], uzi: [0, -0.03, 0.3], lmg: [0, -0.04, 0.62],
-  shotgun: [0, -0.018, 0.62], sniper: [0, -0.047, 0.84], crossbow: [0, -0.012, 0.46], beam: [0, -0.0, 0.8],
+  shotgun: [0, -0.018, 0.62], sniper: [0, -0.047, 0.84], crossbow: [0, -0.012, 0.46], beam: [0, -0.0, 0.8], wand: [0, -0.018, 0.33],
 };
 
 // light comes from above and a little to the left; lit per face, in the gun's own frame

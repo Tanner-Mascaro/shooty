@@ -2,12 +2,15 @@
 import { groundAt } from '/shared/terrain.js';
 import { S } from './state.js';
 
-// kind: 'blood' (falls), 'spark' (bright, falls), 'fire' (rises)
-export function burst(x, y, z, n, kind) {
+// kind: 'blood' (falls), 'spark' (bright, falls), 'fire' (rises); color: tint every particle
+// (kill effects, spells), e.g. [80, 220, 110]
+export function burst(x, y, z, n, kind, color) {
   const b = S.theme.blood, f = S.theme.fire;
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, sp = Math.random() * (kind === 'spark' ? 3 : 2.2), life = 0.4 + Math.random() * (kind === 'fire' ? 1.2 : 0.8);
-    const col = kind === 'blood' ? [b[0] * (0.8 + Math.random() * 0.4), b[1], b[2]] : kind === 'spark' ? [255, 170 + Math.random() * 80, 60] : [f[0], f[1] * (0.6 + Math.random() * 0.6), f[2]];
+    const v = 0.75 + Math.random() * 0.5;
+    const col = color ? color.map(c => Math.min(255, c * v))
+      : kind === 'blood' ? [b[0] * (0.8 + Math.random() * 0.4), b[1], b[2]] : kind === 'spark' ? [255, 170 + Math.random() * 80, 60] : [f[0], f[1] * (0.6 + Math.random() * 0.6), f[2]];
     S.particles.push({ x, y, z, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: Math.random() * 2.5 + (kind === 'fire' ? 0.5 : 0),
       g: kind === 'fire' ? -1.5 : 7, life, max: life, col, size: kind === 'blood' ? 0.05 : 0.035, emit: kind !== 'blood' });
   }

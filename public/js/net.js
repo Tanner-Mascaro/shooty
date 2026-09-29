@@ -1,5 +1,5 @@
 // WebSocket connection and handlers for every server -> client message.
-import { EYE, HEAL, PLAGUE_TEAM, teamName, gunGameGun, GUN_GAME_LADDER, HASTE, WARD } from '/shared/config.js';
+import { EYE, HEAL, PLAGUE_TEAM, teamName, gunGameGun, GUN_GAME_LADDER, HASTE, WARD, BROOM, INVIS, CURSE } from '/shared/config.js';
 import { applyBuild, removeBuild } from '/shared/spells.js';
 import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S, owned, nameOf, gunSlots } from './state.js';
@@ -9,16 +9,19 @@ import { burst } from './particles.js';
 import { switchWeapon } from './weapons.js';
 import { showWait, hideWait, setWaitText, showMsg, showSummary, updateRematch, banner, callout, toast, pushFeed, pushNote, clearFeed } from './ui.js';
 import { enterSpectate, leaveSpectate } from './spectate.js';
-import { STREAK_NAMES, MULTI_NAMES } from './constants.js';
+import { STREAK_NAMES, MULTI_NAMES, SPELL_LOOK, GUN_COLOR } from './constants.js';
 import { prewarmWorld } from './render/gl/scene.js';
 import { showRoom } from './room.js';
-import { sendHello, showProfile, onAuth, showBoard } from './account.js';
+import { sendHello, showProfile, onAuth, showBoard, showMeta } from './account.js';
 import { showFriends, showInvite } from './friends.js';
 import { fromProfile, showControlsHint } from './settings.js';
 import { addChat, addDm, addSystem, refreshChat } from './chat.js';
 import { LEVEL_NAMES } from '/shared/levels.js';
 import { syncVoice, onSignal } from './voice.js';
 import { resetTouch } from './touch.js';
+import { tutorialRoom } from './tutorial.js';
+import { showParty, showPartyInvite } from './friends.js';
+import { goToRoom } from './room.js';
 
 let ws = null;
 
@@ -106,6 +109,8 @@ let lastRoster = null; // id -> name, to announce joins / leaves in Messages
 const handlers = {
   init(msg) {
     S.myId = msg.id;
+    S.watching = !!msg.watching; // joined to spectate a match in progress
+    tutorialRoom(!!msg.tutorial);
     document.getElementById('version').textContent = 'v' + msg.version;
     setLevel(msg.level);
     S.me = { x: msg.x, y: msg.y, z: msg.z, a: msg.a, hp: msg.hp };
@@ -204,6 +209,7 @@ const handlers = {
     burst(sp.x, sp.y, sp.z + 0.3, 20, 'spark');
     const heal = msg.weapon === 'health';
     if (msg.id !== S.myId) { playAt(heal ? 'heal' : 'pickup', sp.x, sp.y); return; }
+    S.pickedUp = true; // for the tutorial
     play(heal ? 'heal' : 'pickup');
     if (heal && msg.stored) banner('+ MED KIT', true); // saved as a heal in a spell slot
     else if (heal) { banner('+' + HEAL + ' HP', true); S.healFlash = 10; }
@@ -216,10 +222,12 @@ const handlers = {
   state(msg, now) {
     S.plagueEndsAt = now + (msg.plagueRemainingMs || 0);
     S.hardpoint = msg.hardpoint || null;
+    S.ctf = msg.ctf || null;
     setZone(msg.zone, now);
     S.thrown = msg.nades || [];
     for (const p of msg.players) {
       if (p.id === S.myId) {
+        if (!p.dead) S.watching = false; // a watcher who's been spawned in is playing now
         S.me.hp = p.hp; S.myKills = p.kills; S.myTeam = p.team; S.myGunLevel = p.gl || 0;
         if (p.mn !== undefined) S.mana = p.mn;
         // our own position is client-authoritative; only snap to the server on respawn
@@ -243,7 +251,7 @@ const handlers = {
 
   shot(msg, now) {
     const me = S.me, mine = msg.id === S.myId;
-    const gunSound = { revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt' }[msg.weapon] || msg.weapon;
+    const gunSound = { revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt', wand: 'beam' }[msg.weapon] || msg.weapon;
     if (msg.weapon === 'blade' || msg.weapon === 'claws') { if (!mine) playAt('swing', msg.x, msg.y); return; }
     if (!mine) {
       if (S.others[msg.id]) S.others[msg.id].flashT = now;
@@ -282,13 +290,41 @@ const handlers = {
   },
   // someone cast a stored spell (heal / haste / ward)
   spell(msg, now) {
-    burst(msg.x, msg.y, msg.z + 0.5, 30, 'spark');
+    const look = SPELL_LOOK[msg.spell];
+    burst(msg.x, msg.y, msg.z + 0.5, 30, 'spark', look && look.col);
+    if (msg.to) burst(msg.to.x, msg.to.y, msg.to.z + 0.5, 30, 'spark', look.col); // where a blink lands
+    if (msg.target === S.myId) { // someone cursed you
+      S.cursedUntil = now + CURSE.ms; S.hitFlash = 6; play('hurt');
+      banner('CURSED — SLOWED', false);
+    }
     if (msg.id !== S.myId) { playAt('heal', msg.x, msg.y); return; }
     play('heal');
+    S.castSpell = true; // for the tutorial
     if (msg.spell === 'heal') S.healFlash = 10;
     if (msg.spell === 'haste') S.hasteUntil = now + HASTE.ms;
     if (msg.spell === 'ward') S.wardUntil = now + WARD.ms;
-    banner(msg.spell.toUpperCase(), true);
+    if (msg.spell === 'broom') { S.broomUntil = now + BROOM.ms; S.broomA = msg.a ?? S.me.a; }
+    if (msg.spell === 'invis') S.invisUntil = now + INVIS.ms;
+    if (msg.spell === 'blink' && msg.to && S.me) { Object.assign(S.me, msg.to); S.vx = S.vy = S.vz = 0; }
+    banner({ broom: 'BROOM DASH', blink: 'BLINK', invis: 'INVISIBLE', curse: 'CURSE CAST' }[msg.spell] || msg.spell.toUpperCase(), true);
+  },
+
+  // Capture the Cauldron events: { event: take | drop | return | capture, team (whose cauldron), by }
+  cauldron(msg) {
+    const whose = teamName('ctf', msg.team) + ' cauldron', who = msg.by != null ? nameOf(msg.by) : '';
+    const text = msg.event === 'take' ? `${who} took the ${whose}` : msg.event === 'drop' ? `${who} dropped the ${whose}`
+      : msg.event === 'capture' ? `${who} captured the ${whose}!` : `The ${whose} went home`;
+    pushNote(text);
+    const ours = msg.team === S.myTeam;
+    if (msg.event === 'capture') { banner(ours ? 'THEY CAPTURED OUR CAULDRON' : 'CAULDRON CAPTURED!', !ours); play(ours ? 'lose' : 'win'); }
+    else if (msg.event === 'take') { banner(ours ? 'OUR CAULDRON IS TAKEN!' : msg.by === S.myId ? 'YOU HAVE THEIR CAULDRON' : 'WE HAVE THEIR CAULDRON', !ours); play('pickup'); }
+    else if (msg.event === 'return' && ours) banner('OUR CAULDRON IS HOME', true);
+  },
+
+  // the Hex Wand's bolt jumping to a second target
+  chain(msg, now) {
+    S.tracers.push({ x0: msg.x0, y0: msg.y0, z0: msg.z0, x1: msg.x1, y1: msg.y1, z1: msg.z1, weapon: 'wand', t: now, mine: false });
+    burst(msg.x1, msg.y1, msg.z1, 14, 'spark', GUN_COLOR.wand);
   },
 
   nadeThrow(msg) {
@@ -337,6 +373,7 @@ const handlers = {
       t: now, landed: false, mine: msg.victim === S.myId });
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');
+    if (msg.fx) { burst(msg.x, msg.y, msg.z + 0.4, 60, 'fire', msg.fx); burst(msg.x, msg.y, msg.z + 0.6, 30, 'spark', msg.fx); } // the killer's kill effect
     pushFeed(msg);
     announceStreak(msg);
     if (msg.killer === S.myId) {
@@ -355,7 +392,7 @@ const handlers = {
       if (S.theme.id === 'witch') setTimeout(() => play('cackle'), 250);
     } else if (msg.victim === S.myId) {
       S.myStreak = 0;
-      if (msg.respawnMs !== 0) enterSpectate(msg.killer, msg.respawnMs);
+      if (msg.respawnMs !== 0) enterSpectate(msg.killer, msg.respawnMs, msg.weapon);
       if (msg.demoted !== undefined) callout('STABBED: DOWN TO ' + gunGameGun(msg.demoted).toUpperCase());
       if (msg.infected) {
         S.myTeam = PLAGUE_TEAM;
@@ -393,7 +430,7 @@ const handlers = {
     }));
     showSummary({
       headline, rematch, scores, mode, level: msg.level || S.room?.level, won,
-      hardpointScores: msg.hardpointScores,
+      hardpointScores: msg.hardpointScores, ctfScores: msg.ctfScores,
     });
   },
 
@@ -411,6 +448,7 @@ const handlers = {
         level: msg.level || S.room?.level,
         won: false,
         hardpointScores: msg.hardpointScores,
+        ctfScores: msg.ctfScores,
       });
     } else showWait(msg.reason);
   },
@@ -429,6 +467,15 @@ const handlers = {
   rtc(msg) { onSignal(msg); },
 
   profile(msg) { showProfile(msg); },
+  party(msg) { showParty(msg); },
+  partyInvite(msg) { showPartyInvite(msg); },
+  partyMove(msg) { toast('Following your party leader…'); goToRoom(msg.room); },
+  meta(msg) { showMeta(msg); },
+  challenge(msg) {
+    const text = `Challenge complete: ${msg.text} (+${msg.xp} XP)`;
+    if (S.started) banner('✓ ' + msg.text.toUpperCase(), true); else toast(text);
+    addSystem(text);
+  },
   settings(msg) { fromProfile(msg.settings); },
   auth(msg) { onAuth(msg); },
   leaderboard(msg) { showBoard(msg.rows); },

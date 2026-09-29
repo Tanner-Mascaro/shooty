@@ -1,7 +1,7 @@
 // In-world sprites: pooled billboards + reusable particle buffers (updated in place each frame).
 import * as THREE from 'three';
 import { S } from '../../state.js';
-import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode } from '/shared/config.js';
+import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode, redBlue } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
 import { ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, GUN_COLOR } from '../../constants.js';
 import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
@@ -188,6 +188,18 @@ export function drawPickupBillboards(now) {
     spr.material.opacity = 1;
     spr.material.alphaTest = 0.15;
   }
+  // Capture the Cauldron: each coven's cauldron, big on the ground or small over its carrier's head
+  if (S.ctf && S.room?.mode === 'ctf') for (const t of [1, 2]) {
+    const c = S.ctf.c[t];
+    if (c.carrier === S.myId) continue; // yours to carry: the HUD says so
+    const carrier = c.carrier != null ? S.others[c.carrier]?.now : null;
+    const at = carrier ? { x: carrier.x, y: carrier.y, z: carrier.z + 1.05 } : { x: c.x, y: c.y, z: c.z + 0.05 * Math.sin(now / 300 + t) };
+    const size = carrier ? 0.5 : 1.15;
+    const spr = acquire(boxPool, makeSprite);
+    setBillboard(spr, boxTex, at.x, at.y, at.z, box.w * size / 0.72, box.h * size / 0.72, false);
+    spr.material.opacity = 1;
+    spr.material.alphaTest = 0.15;
+  }
 
   const nadeSp = pickupSprite('nade', GUN_COLOR.nade);
   const nadeTex = nadeSp.src
@@ -228,7 +240,7 @@ function poseFor(o, now) {
   return { back, stride, bob: stride ? 0.04 : 0, kick, a: e.a || 0 };
 }
 
-function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline, pose) {
+function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline, pose, alpha = 1, xray = false) {
   const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
   const px = pose ? s.pose(pose.back, pose.stride) : s.px;
   const poseKey = pose ? (pose.back ? 'b' : 'f') + pose.stride : '';
@@ -258,19 +270,19 @@ function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline
   if (outline) {
     const otex = outlineTexture(px, outline.col, 32, 48, skinKey);
     const ospr = acquire(playerPool, makeSprite);
-    setBillboard(ospr, otex, x, y, z, bw * 1.12, h * 1.12, false);
+    setBillboard(ospr, otex, x, y, z, bw * 1.12, h * 1.12, xray);
     const gtex = spriteTexture(px, [null, outline.col, outline.col, outline.col, outline.col, outline.col], 32, 48, 'glowfill|' + skinKey + '|' + outline.col.join(','));
     const gspr = acquire(playerPool, makeSprite);
-    setBillboard(gspr, gtex, x, y, z, bw * 1.06, h * 1.06, false, true);
+    setBillboard(gspr, gtex, x, y, z, bw * 1.06, h * 1.06, xray, true);
     gspr.material.opacity = 0.28;
     gspr.material.alphaTest = 0.05;
   }
 
   const tex = spriteTexture(px, pal, 32, 48, skinKey + (tint ? tint.join(',') : '') + (flash ? 'f' : ''));
   const spr = acquire(playerPool, makeSprite);
-  setBillboard(spr, tex, x, y, z, bw, h, false);
-  spr.material.opacity = 1;
-  spr.material.alphaTest = 0.4;
+  setBillboard(spr, tex, x, y, z, bw, h, xray);
+  spr.material.opacity = alpha;
+  spr.material.alphaTest = alpha < 1 ? 0.02 : 0.4;
 }
 
 export function drawParticlePoints(embers, particles) {
@@ -326,15 +338,18 @@ export function drawOthersAndCorpses(now) {
   }
   for (const o of Object.values(S.others)) {
     if (!o.now || o.now.dead) continue; // their corpse is drawn instead
+    const killer = !!(S.killcam && S.dead && o.now.id === S.killcam.id); // in the killcam: seen through walls, outlined
     const player = S.room && S.room.players.find(p => p.id === o.now.id);
     const team = player ? player.team : o.now.team;
     const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM
-      ? PLAGUE_TINT : (S.room && ['teams', 'hardpoint'].includes(S.room.mode)) ? TEAM_TINT[team] : null;
+      ? PLAGUE_TINT : (S.room && redBlue(S.room.mode)) ? TEAM_TINT[team] : null;
     drawPlayerBillboard(
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,
       o.now.sl ? 1.15 : 1,
-      now - o.hitT < 90, tint, player && player.skin, glowFor(o), poseFor(o, now)
+      now - o.hitT < 90, tint, player && player.skin, o.cur?.iv && !killer ? null : killer ? { col: [255, 70, 90] } : glowFor(o), poseFor(o, now),
+      o.cur?.iv && !killer ? 0.12 : 1, // Invisibility: a faint shimmer
+      killer
     );
   }
 }

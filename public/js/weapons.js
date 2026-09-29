@@ -38,6 +38,7 @@ export function throwNade() {
   if (!S.hacks) S.nades--;
   S.switchUntil = performance.now() + 400;
   send({ type: 'nade' });
+  S.threwPotion = true; // for the tutorial
   play('swing');
 }
 
@@ -154,6 +155,7 @@ const KICK = {
   sniper:   { recoil: 1,    punch: 0.28,  shake: 14, fovKick: 0.12 },
   crossbow: { recoil: 0.7,  punch: 0.08,  shake: 4 },
   beam:     { recoil: 0.35, punch: 0.04,  shake: 3, fovKick: 0.02 },
+  wand:     { recoil: 0.3,  punch: 0.03,  shake: 2 },
 };
 
 export function fire() {
@@ -171,9 +173,10 @@ export function fire() {
       setTimeout(() => { if (S.weapon === w) swapWeapon(); }, 400);
     }
   }
+  S.invisUntil = 0; // shooting gives you away (the server ends it too)
   // include look angles so the server aims where the crosshair is (recoil punch included)
   send({ type: 'shoot', weapon: w, scoped: S.scoped, a: S.me.a, p: S.pitch + (S.punch || 0) });
-  play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt' }[w] || w);
+  play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt', wand: 'beam' }[w] || w);
   S.muzzle = 6; S.fireT = now;
   const k = KICK[w] || KICK.pistol;
   S.recoil = k.recoil;

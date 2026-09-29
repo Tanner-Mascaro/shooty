@@ -40,6 +40,9 @@ export const S = {
   keys: {}, mouseDX: 0, mouseDY: 0,
   // touch screens (touch.js): the joystick's analog walk (x strafe, y forward, -1..1) and where the hotbar slots are
   touch: false, touchMove: { x: 0, y: 0 }, hotbarHits: [],
+  padMove: { x: 0, y: 0 },
+  killcam: null, // { id, weapon, until }: the moment after you die, seen over your killer's shoulder (spectate.js)
+  tutorialDone: false, // a game controller's left stick (gamepad.js), same idea
 
   // everyone else: id -> { prev, cur, t, now, step, flashT, hitT }. Drawn one server tick
   // behind, interpolated from prev to cur (`now` is this frame's position)

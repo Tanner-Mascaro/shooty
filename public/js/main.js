@@ -18,6 +18,8 @@ import { ensureCanvas } from './render/canvas.js';
 import { S } from './state.js';
 import { initMap } from './mapview.js';
 import { initTouch } from './touch.js';
+import { initGamepad, updateGamepad } from './gamepad.js';
+import { initTutorial } from './tutorial.js';
 
 initLobby();
 initSettings();
@@ -26,6 +28,8 @@ initVoice();
 initInput();
 initMap();
 initTouch();
+initGamepad();
+initTutorial();
 connect();
 
 const fpsEl = document.getElementById('fps');
@@ -58,6 +62,7 @@ function loop(t) {
   }
   const dt = Math.min(0.05, Math.max(0, (t - lastT) / 1000));
   lastT = t;
+  updateGamepad(dt);
   if (S.dead && S.started) updateSpectate(dt); else updatePlayer(dt);
   autoFire();
   render(dt);
