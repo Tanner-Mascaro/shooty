@@ -46,7 +46,7 @@ const GUN_RANGES = {
   shotgun: [2.5, 5.5], smg: [5, 10], uzi: [5, 10],
   pistol: [6, 11], deagle: [6, 12], revolver: [6, 12],
   rifle: [8, 15], burst: [8, 15], carbine: [8, 15], beam: [8, 16],
-  lmg: [9, 16], crossbow: [10, 19], sniper: [13, 23],
+  wand: [7, 14], lmg: [9, 16], crossbow: [10, 19], sniper: [13, 23],
 };
 
 // random witchy names for bots (not "Bot 3")

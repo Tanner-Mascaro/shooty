@@ -14,7 +14,7 @@ export const HARDPOINT_FIRST_MS = 5 * 1000;
 export const HARDPOINT_REVEAL_MS = 10 * 1000;
 export const HARDPOINT_SITE_COUNT = 5;
 export const HARDPOINT_RADIUS = 2.25;
-export const MAX_PLAYERS = 8;      // people per room (and seats, counting bots)
+export const MAX_PLAYERS = 10;     // people per room (and seats, counting bots)
 export const ROYALE_MAX_PLAYERS = 16; // battle royale has room for this many, the extra seats for bots
 export const maxPlayers = mode => mode === 'royale' ? ROYALE_MAX_PLAYERS : MAX_PLAYERS;
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
@@ -52,7 +52,7 @@ export const SHUTDOWN_STREAK = 3;
 
 // gun game: every kill moves you to the next gun; a kill with the last one (the blade) wins.
 // Getting stabbed knocks you back one gun
-export const GUN_GAME_LADDER = ['pistol', 'uzi', 'smg', 'shotgun', 'burst', 'carbine', 'rifle', 'lmg', 'deagle', 'revolver', 'beam', 'crossbow', 'sniper', 'blade'];
+export const GUN_GAME_LADDER = ['pistol', 'uzi', 'smg', 'shotgun', 'burst', 'carbine', 'rifle', 'lmg', 'deagle', 'revolver', 'beam', 'wand', 'crossbow', 'sniper', 'blade'];
 export const gunGameGun = level => GUN_GAME_LADDER[Math.max(0, Math.min(level, GUN_GAME_LADDER.length - 1))];
 
 // battle royale: no respawns, and a storm closes in. Each stage holds, then shrinks the safe

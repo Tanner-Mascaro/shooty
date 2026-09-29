@@ -1,5 +1,5 @@
 // Voice chat: WebRTC audio straight between the browsers in a room (a full mesh; rooms hold at
-// most 8). The server only relays the connection setup ('rtc' messages to one player).
+// most 10). The server only relays the connection setup ('rtc' messages to one player).
 //
 // Everyone in the room is connected as soon as voice is on, so you hear others without a mic.
 // Your mic is only asked for when you first talk (push to talk) or switch on open mic, and
@@ -160,5 +160,5 @@ export function initVoice() {
   });
 }
 
-// for debugging from the console: [[player id, connection state], ...]
-export const voiceStatus = () => [...peers].map(([id, p]) => [id, p.pc.connectionState]);
+// for debugging from the console: [[player id, connection, ice, signaling state], ...]
+export const voiceStatus = () => [...peers].map(([id, p]) => [id, p.pc.connectionState, p.pc.iceConnectionState, p.pc.signalingState]);
