@@ -67,14 +67,21 @@ export const CHAMBER = { lives: 3, gun: 'pistol' };
 // down is game over
 export const SURVIVAL = {
   startGold: 500, hitGold: 10, killGold: 60, headGold: 40, meleeGold: 100, waveGold: 100,
-  firstWaveMs: 6000, breakMs: 9000, // a breather between waves
+  firstWaveMs: 6000, breakMs: 8000, // a breather between waves
   boxCost: 950, boxGuns: ['uzi', 'smg', 'shotgun', 'burst', 'carbine', 'rifle', 'lmg', 'deagle', 'revolver', 'beam', 'wand', 'sniper',
     'flintlock', 'assault', 'dmr', 'marksman', 'dragon', 'doublebarrel', 'autoshotgun', 'blunderbuss', 'gatling', 'reaper', 'swarm', 'tommy', 'staff'],
   refillShare: 0.5, // buying a wall gun you already carry refills it for this share of the price
-  maxAlive: w => Math.min(34, 6 + w * 2), // monsters on the map at once
-  count: w => Math.min(160, 5 + Math.round(w * 3.2 + w * w * 0.18)), // monsters in the wave
-  hpScale: w => 1 + (w - 1) * 0.22 + Math.max(0, w - 10) * 0.12,
-  speedScale: w => Math.min(1.6, 1 + (w - 1) * 0.035),
+  maxAlive: w => Math.min(42, 8 + Math.round(w * 2.6)), // monsters on the map at once
+  count: w => Math.min(220, 6 + Math.round(w * 3.8 + w * w * 0.24)), // monsters in the wave
+  hpScale: w => 1 + (w - 1) * 0.27 + Math.max(0, w - 8) * 0.16,
+  speedScale: w => Math.min(1.75, 1 + (w - 1) * 0.045),
+  // special rounds, on top of boss waves (every 5th) and packs of the fastest (every 4th): how many
+  // monsters (x the usual), how fast (x), and from which wave
+  rounds: {
+    swarm: { label: 'SWARM', every: 6, at: 3, count: 1.6, speed: 1.15, from: 3 },      // a flood of the weakest, quick
+    elite: { label: 'ELITE WAVE', every: 7, at: 0, count: 0.7, speed: 1, from: 7 },     // fewer, and all of them tough
+    bloodmoon: { label: 'BLOOD MOON', every: 9, at: 6, count: 1.1, speed: 1.3, from: 6 }, // everything runs faster
+  },
   dropChance: 0.035, dropLife: 25000,
 };
 // door groups in each survival map (digits in shared/levels.js): what each costs and what's behind it

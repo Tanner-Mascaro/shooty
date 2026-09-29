@@ -24,7 +24,7 @@
 // mat:  what a sample is made of, for the client's colors (MAT below)
 // props: things the client draws or animates on top: trees, volcano craters, cottages (huts)
 
-export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10, STONE: 11, DOOR: 12 }; // STONE: conjured ramps (shared/spells.js); DOOR: the Crypt's doors (shared/crypt.js)
+export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10, STONE: 11, DOOR: 12, RAIL: 13, ROPE: 14, GRAVE: 15 }; // RAIL / ROPE / GRAVE: ships' rails, rope rails, gravestones (drawn as props) // STONE: conjured ramps (shared/spells.js); DOOR: the Crypt's doors (shared/crypt.js)
 
 // enterable cottages: walls, roof and roof pitch per map style (touching B squares make one)
 const COTTAGES = {
@@ -101,11 +101,15 @@ export function buildTerrain(MAP, RES, style) {
   const seen = new Set();
   for (let cy = 1; cy < MH - 1; cy++) for (let cx = 1; cx < MW - 1; cx++) {
     const c = at(cx, cy), x = cx + 0.5, y = cy + 0.5, n = hash2(cx, cy);
+    if (style === 'crypt' && c === '.' && n > 0.965) props.push({ type: 'bones', x: x + (hash2(cy, cx) - 0.5) * 0.5, y, n }); // bones about the floor (just for looks)
     if (c === '+') {
       if (style === 'nuke') { // pumpkin: a squat dome to hide behind, drawn as a real pumpkin mesh
         dome(x, y, 0.42, 0.5, MAT.PUMPKIN, 0);
         props.push({ type: 'pumpkin', x, y, r: 0.42 + 0.06 * n });
-      } else if (style === 'crypt' || style === 'yard') box(cx + 0.18, cy + 0.38, cx + 0.82, cy + 0.62, 0.7, MAT.ROCK); // a gravestone
+      } else if (style === 'crypt' || style === 'yard') { // a headstone: the client draws it (rounded top, a lean)
+        box(cx + 0.18, cy + 0.36, cx + 0.82, cy + 0.64, 0.75, MAT.GRAVE);
+        props.push({ type: 'grave', x, y, n });
+      }
       else if (style === 'ship' || style === 'cove') box(cx + 0.12, cy + 0.12, cx + 0.88, cy + 0.88, 0.75, MAT.CRATE); // cargo
       else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.7, 0.5, MAT.LEAVES, 0.2);
@@ -170,18 +174,28 @@ export function buildTerrain(MAP, RES, style) {
       props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, t, peak: look.peak, style, doorDir, doorHalf, stairs });
       continue;
     }
-    if ((style === 'ship' || style === 'cove') && c === 'R') { // rail: a thin, low bulwark you can see and shoot over (and hop, into the sea)
-      const R = (a, b) => at(a, b) === 'R'; // joins up with the next rail square, like the lab's racks
-      // on a bow's slant the squares only touch at corners: keep those whole, so no gap opens between them
-      const slant = [[1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => R(cx + dx, cy + dy) && !R(cx + dx, cy) && !R(cx, cy + dy));
-      const m = slant ? 0 : 0.36;
-      box(cx + (R(cx - 1, cy) ? 0 : m), cy + (R(cx, cy - 1) ? 0 : m), cx + 1 - (R(cx + 1, cy) ? 0 : m), cy + 1 - (R(cx, cy + 1) ? 0 : m), 0.4, MAT.BARK);
+    if ((style === 'ship' || style === 'cove') && c === 'R') { // rail: fills its square, so there's no ledge outside it;
+      box(cx, cy, cx + 1, cy + 1, 0.5, MAT.RAIL);                  // low enough to shoot over, and hop (into the sea)
+      props.push({ type: 'rail', x, y, cx, cy });
       continue;
     }
     if ((style === 'ship' || style === 'cove') && c === 'I') { // mast: a thick pole; the client hangs the yard and sail on it
       box(cx + 0.3, cy + 0.3, cx + 0.7, cy + 0.7, 5.5, MAT.BARK);
       props.push({ type: 'mast', x, y, h: 5.5 });
       continue;
+    }
+    // the fleet's gangplanks and holed decks: a rope rail along any edge that drops to open water,
+    // too high to jump (the ropes are drawn lower; this is the posts' reach)
+    if (style === 'ship' && c !== '#' && c !== 'L' && c !== 'I') {
+      const t = 0.07;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (at(cx + dx, cy + dy) !== 'L') continue;
+        const x0 = dx > 0 ? cx + 1 - t : cx, x1 = dx < 0 ? cx + t : cx + 1, y0 = dy > 0 ? cy + 1 - t : cy, y1 = dy < 0 ? cy + t : cy + 1;
+        box(dx ? x0 : cx, dy ? y0 : cy, dx ? x1 : cx + 1, dy ? y1 : cy + 1, 0.8, MAT.ROPE);
+        // the rope runs along the edge: from one end of it to the other
+        props.push(dx ? { type: 'rope', x0: dx > 0 ? cx + 1 : cx, y0: cy, x1: dx > 0 ? cx + 1 : cx, y1: cy + 1 }
+          : { type: 'rope', x0: cx, y0: dy > 0 ? cy + 1 : cy, x1: cx + 1, y1: dy > 0 ? cy + 1 : cy });
+      }
     }
     if (c !== '#' || edge(cx, cy)) continue;
     if (style === 'ship' || style === 'yard') { box(cx, cy, cx + 1, cy + 1, style === 'yard' ? 2.4 : 2.2, MAT.WALL); continue; }

@@ -81,6 +81,7 @@ export function hideWait() {
   $('picker').hidden = true;
   hideLoading();
   hideSummary(true);
+  $('gameRestart').hidden = S.room?.mode !== 'survival'; // start the run over, same map (solo)
   syncMusic(); // the lobby tune fades out for the match
 }
 

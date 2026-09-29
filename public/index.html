@@ -407,6 +407,7 @@
 <button id="gameMap" type="button" title="Map &amp; standings (M)" aria-label="Map and standings"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 4.5l5-2 6 2 5-2v13l-5 2-6-2-5 2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 2.5v13M13 4.5v13" stroke="currentColor" stroke-width="1.2"/></svg></button>
 <button id="gameGear" class="gear" title="Settings">⚙</button>
 <button id="gameLeave" title="Leave the match">Leave</button>
+<button id="gameRestart" title="Start this Wave Survival run over, on the same map" hidden>Restart</button>
 <div id="mapView" hidden>
   <div class="mapCard" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
     <div class="modalHead"><b id="mapTitle">MAP &amp; STANDINGS</b><button type="button" id="mapClose" class="modalClose" aria-label="Close">✕</button></div>
@@ -432,7 +433,7 @@
     <div class="setRow"><span>Master volume <small id="volumeVal"></small></span><input type="range" id="volume" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Gun &amp; hit sounds <small id="sfxVal"></small></span><input type="range" id="sfx" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Background hum <small id="ambientVal"></small></span><input type="range" id="ambient" min="0" max="1" step="0.05"></div>
-    <div class="setRow"><span>Lobby music &amp; cackles <small id="musicVal"></small></span><input type="range" id="music" min="0" max="1" step="0.05"></div>
+    <div class="setRow"><span>Lobby music <small id="musicVal"></small></span><input type="range" id="music" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Match music <small id="matchMusicVal"></small></span><input type="range" id="matchMusic" min="0" max="1" step="0.05"></div>
     <div class="label">VOICE CHAT</div>
     <div class="setRow"><span>Voice</span><select id="voiceMode"><option value="ptt">Push to talk</option><option value="open">Open mic</option><option value="off">Off</option></select></div>

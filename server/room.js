@@ -1374,6 +1374,17 @@ Room.prototype.handlers = {
     if (!this.maybeStart()) this.roster();
   },
 
+  // Wave Survival: start the run over on the same map, straight away. Only when you're the only
+  // person in it, so nobody resets a run under their friends
+  restartRun(p) {
+    if (!this.gameOn || this.mode !== 'survival' || p.bot) return;
+    if (this.humans.length > 1) return this.hub.notice(p, 'Only when you are playing on your own');
+    log(`[${this.code}] ${this.hub.who(p)} restarted the run`);
+    this.endMatch('Run restarted');
+    p.ready = true;
+    this.maybeStart();
+  },
+
   // changed your mind on the loading screen: not ready after all
   unready(p) {
     if (this.gameOn || !p.ready) return;

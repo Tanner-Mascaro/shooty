@@ -81,7 +81,7 @@ function survival() {
     m.blast ? 'Explodes' : m.ranged ? 'Throws hexes' : m.boss ? 'Boss' : m.big ? 'Big' : '']);
   return [note(`You and your allies against endless waves. Hits and kills earn gold: spend it on doors (gangplank gates on the ship), guns on the walls, elixirs, and the mystery cauldron (${SURVIVAL.boxCost} gold for a random gun). Fall and you're out until the next wave; reach wave 10 to count it a win.`),
     el('h4', null, 'Monsters'), table(['Crypt', 'Drowned Fleet', 'Health', 'Speed', 'Hit', 'From', ''], mobs),
-    note('Monster health grows every wave. Every fifth wave is a boss wave; every fourth, a pack of fast ones.'),
+    note('Monster health grows every wave. Every fifth wave is a boss wave; every fourth, a pack of fast ones. Now and then comes a special round: a SWARM of the weakest (and far more of them), an ELITE wave of only the tough ones, or a BLOOD MOON, when everything runs faster.'),
     el('h4', null, 'Drops'), note('Monsters sometimes drop these; walk over them.'),
     table(['Drop', 'What it does'], [['MAX AMMO', "Fills everyone's guns"], ['DOUBLE GOLD', `Double gold for ${s(DROPS.double.ms)}`], ['INSTA-KILL', `Every hit kills for ${s(DROPS.insta.ms)}`], ['NUKE', 'Kills every monster on the map']]),
     el('h4', null, 'Elixirs'), note('Drink once per life, from the altars around the map.'),

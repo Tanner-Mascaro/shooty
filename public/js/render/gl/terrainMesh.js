@@ -143,7 +143,7 @@ export function buildWorld(scene, T, theme, palette) {
   // contain walkable cells used to skip the corner check and leave holes you could see through.
   const step = STRIDE;
   const pushObstacle = (i0, j0, i1, j1, maxH, m) => {
-    if (maxH < 0.15 || m === MAT.PUMPKIN) return; // pumpkins are drawn as props
+    if (maxH < 0.15 || m === MAT.PUMPKIN || m === MAT.RAIL || m === MAT.ROPE || m === MAT.GRAVE) return; // drawn as props
     const x0 = i0 / RES, y0 = j0 / RES, x1 = i1 / RES, y1 = j1 / RES;
     const tint = sampleColor(palette, i0, j0, TW, TH);
     const lit = [Math.min(1, tint[0] * 1.25), Math.min(1, tint[1] * 1.25), Math.min(1, tint[2] * 1.25)];
@@ -261,9 +261,122 @@ export function buildWorld(scene, T, theme, palette) {
   addHouses(root, T, tex);
   if (['castle', 'crypt', 'ship', 'yard'].includes(theme.id)) addCastleTorches(root, T, theme); // on the fleet: lanterns on masts and deckhouses
   addMasts(root, (T.props || []).filter(p => p.type === 'mast'));
+  addShipRails(root, (T.props || []).filter(p => p.type === 'rail'), (T.props || []).filter(p => p.type === 'rope'));
+  addGraves(root, (T.props || []).filter(p => p.type === 'grave'));
+  addBones(root, (T.props || []).filter(p => p.type === 'bones'));
   scene.add(root);
   worldRoot = root;
   return root;
+}
+
+// headstones: a grey slab with a rounded top, leaning a little each its own way, some mossy
+function addGraves(root, graves) {
+  if (!graves.length) return;
+  const slab = new THREE.BoxGeometry(0.62, 0.5, 0.24), top = new THREE.CylinderGeometry(0.31, 0.31, 0.24, 12, 1, false, 0, Math.PI);
+  top.rotateX(Math.PI / 2); top.rotateZ(Math.PI / 2); top.translate(0, 0.25, 0); // a half disc on top of the slab
+  const stone = new THREE.MeshLambertMaterial({ color: 0x8a8880 }), moss = new THREE.MeshLambertMaterial({ color: 0x6a7a58 });
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const groups = [[], []], wax = [], flames = [];
+  for (const g of graves) {
+    const h = (g.n * 9301 + 49297) % 1; // a second number from the map's noise, for the lean
+    e.set((h - 0.5) * 0.14, 0, (g.n - 0.5) * 0.16);
+    groups[g.n > 0.7 ? 1 : 0].push(m4.compose(p.set(g.x, 0.25, g.y), q.setFromEuler(e), one).clone());
+    if (h < 0.35) { // a candle burning at its foot
+      const cx = g.x + (h - 0.17) * 1.6, cy = g.y + 0.22;
+      wax.push(m4.compose(p.set(cx, 0.06, cy), q.identity(), one).clone());
+      flames.push(m4.compose(p.set(cx, 0.15, cy), q.identity(), one).clone());
+    }
+  }
+  const put = (geo, mat, list) => { if (!list.length) return; const mesh = new THREE.InstancedMesh(geo, mat, list.length); list.forEach((m, i) => mesh.setMatrixAt(i, m)); mesh.instanceMatrix.needsUpdate = true; root.add(mesh); };
+  put(new THREE.CylinderGeometry(0.025, 0.03, 0.12, 6), new THREE.MeshLambertMaterial({ color: 0xe8e0c8 }), wax);
+  put(new THREE.SphereGeometry(0.03, 5, 4).scale(1, 1.6, 1), new THREE.MeshBasicMaterial({ color: 0xffd070 }), flames);
+  put(new THREE.SphereGeometry(0.09, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff9030, transparent: true, opacity: 0.35, depthWrite: false }), flames);
+  groups.forEach((list, k) => {
+    if (!list.length) return;
+    for (const geo of [slab, top]) {
+      const mesh = new THREE.InstancedMesh(geo, k ? moss : stone, list.length);
+      list.forEach((m, i) => mesh.setMatrixAt(i, m));
+      mesh.instanceMatrix.needsUpdate = true;
+      root.add(mesh);
+    }
+  });
+}
+
+// bones lying about the Crypt's floors: a skull and a few long bones, each pile its own way round
+function addBones(root, piles) {
+  if (!piles.length) return;
+  const bone = new THREE.MeshLambertMaterial({ color: 0xd8d0b8 });
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const skulls = [], longs = [];
+  for (const b of piles) {
+    skulls.push(m4.compose(p.set(b.x, 0.07, b.y), q.setFromEuler(e.set(0, b.n * 40, 0)), one).clone());
+    for (let i = 0; i < 3; i++) {
+      const a = b.n * 97 + i * 2.1;
+      longs.push(m4.compose(p.set(b.x + Math.cos(a) * 0.14, 0.025 + i * 0.02, b.y + Math.sin(a) * 0.14), q.setFromEuler(e.set(Math.PI / 2, 0, a)), one).clone());
+    }
+  }
+  for (const [geo, list] of [[new THREE.SphereGeometry(0.08, 7, 5).scale(1, 0.85, 1.1), skulls], [new THREE.CylinderGeometry(0.018, 0.018, 0.34, 5), longs]]) {
+    const mesh = new THREE.InstancedMesh(geo, bone, list.length);
+    list.forEach((m, i) => mesh.setMatrixAt(i, m));
+    mesh.instanceMatrix.needsUpdate = true;
+    root.add(mesh);
+  }
+}
+
+// The ships' rails: a turned post on each rail square with a brass knob, and a handrail and a lower
+// rail running to each neighboring rail square (half-way; the neighbor draws the rest). Rope rails:
+// a post at each end of an edge over the water, two ropes sagging between. All instanced: there are
+// hundreds of them
+function addShipRails(root, rails, ropes) {
+  if (!rails.length && !ropes.length) return;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  const place = (list, x, y, z, sx, sy, sz, dir) => { // dir: a unit vector the piece lies along (its local y), or none
+    q.identity(); if (dir) q.setFromUnitVectors(up, dir);
+    list.push(m4.compose(v.set(x, z, y), q, sc.set(sx, sy, sz)).clone());
+  };
+  const inst = (geo, mat, list) => {
+    if (!list.length) return;
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    list.forEach((m, i) => mesh.setMatrixAt(i, m));
+    mesh.instanceMatrix.needsUpdate = true;
+    root.add(mesh);
+  };
+  const posts = [], knobs = [], bars = [], ropePosts = [], rope = [];
+  const at = new Set(rails.map(r => r.cx + ',' + r.cy));
+  for (const r of rails) {
+    place(posts, r.x, r.y, 0.26, 1, 1, 1);
+    place(knobs, r.x, r.y, 0.54, 1, 1, 1);
+    for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) { // each pair once: toward +x, +y and the two diagonals
+      if (!at.has((r.cx + dx) + ',' + (r.cy + dy))) continue;
+      if (dx && dy && (at.has((r.cx + dx) + ',' + r.cy) || at.has(r.cx + ',' + (r.cy + dy)))) continue; // a corner already joined square-on
+      const len = Math.hypot(dx, dy), dir = new THREE.Vector3(dx / len, 0, dy / len);
+      for (const [h, t] of [[0.48, 1], [0.2, 0.7]]) place(bars, r.x + dx / 2, r.y + dy / 2, h, t, len, t, dir);
+    }
+  }
+  const seen = new Set();
+  for (const e of ropes) {
+    for (const [x, y] of [[e.x0, e.y0], [e.x1, e.y1]]) {
+      const k = x + ',' + y;
+      if (!seen.has(k)) { seen.add(k); place(ropePosts, x, y, 0.3, 1, 1, 1); }
+    }
+    for (const top of [0.56, 0.32]) { // a sagging rope, in short pieces
+      const N = 6;
+      for (let i = 0; i < N; i++) {
+        const t0 = i / N, t1 = (i + 1) / N, sag = t => top - 0.07 * Math.sin(t * Math.PI);
+        const a = new THREE.Vector3(e.x0 + (e.x1 - e.x0) * t0, sag(t0), e.y0 + (e.y1 - e.y0) * t0);
+        const b = new THREE.Vector3(e.x0 + (e.x1 - e.x0) * t1, sag(t1), e.y0 + (e.y1 - e.y0) * t1);
+        const d = b.clone().sub(a), l = d.length();
+        place(rope, (a.x + b.x) / 2, (a.z + b.z) / 2, (a.y + b.y) / 2, 1, l, 1, d.normalize());
+      }
+    }
+  }
+  const wood = new THREE.MeshLambertMaterial({ color: 0x4a2c18 }), rail = new THREE.MeshLambertMaterial({ color: 0x7a4e2c });
+  const brass = new THREE.MeshLambertMaterial({ color: 0xc89a3a, emissive: 0x3a2808 }), hemp = new THREE.MeshLambertMaterial({ color: 0xc8a870 });
+  inst(new THREE.CylinderGeometry(0.045, 0.06, 0.52, 6), wood, posts);
+  inst(new THREE.SphereGeometry(0.055, 6, 4), brass, knobs);
+  inst(new THREE.BoxGeometry(0.07, 1, 0.05), rail, bars);
+  inst(new THREE.CylinderGeometry(0.04, 0.05, 0.6, 5), wood, ropePosts);
+  inst(new THREE.CylinderGeometry(0.018, 0.018, 1, 4), hemp, rope);
 }
 
 // masts: a yard across the top with a tattered sail hanging from it, and a lower yard
@@ -305,9 +418,10 @@ function addMasts(root, masts) {
 function addCastleTorches(root, T, theme) {
   const { TW, TH, RES, kind, hgt } = T;
   const iron = new THREE.MeshLambertMaterial({ color: 0x1a1520 });
-  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb040 });
+  const ghostly = theme.id === 'crypt'; // the Crypt's torches burn with grave-light
+  const flameMat = new THREE.MeshBasicMaterial({ color: ghostly ? 0xa0ffb8 : 0xffb040 });
   const glowMat = new THREE.MeshBasicMaterial({
-    color: 0xff6a20, transparent: true, opacity: 0.55, depthWrite: false,
+    color: ghostly ? 0x40d070 : 0xff6a20, transparent: true, opacity: 0.55, depthWrite: false,
   });
   const faces = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   let count = 0;

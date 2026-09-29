@@ -13,7 +13,10 @@ const FAR = 0xffff;
 // which monster comes next in wave w (by role: a map with its own monsters swaps them in, see MOB_SETS)
 function pickKind(w, s) {
   if (s.bossLeft > 0) { s.bossLeft--; return w >= 10 ? 'lord' : 'brute'; }
-  if (w % 4 === 0 && w % 5 !== 0 && Math.random() < 0.8) return 'wolf'; // wolf-pack waves
+  if (s.round === 'pack' && Math.random() < 0.8) return 'wolf'; // wolf-pack waves
+  if (s.round === 'swarm') return Math.random() < 0.75 ? 'ghoul' : 'wolf';
+  if (s.round === 'elite') { const tough = [['mummy', 5], ['brute', w >= 9 ? 2 : 0], ['wraith', 2], ['slime', 2]].filter(([, v]) => v);
+    let r = Math.random() * tough.reduce((n, [, v]) => n + v, 0); for (const [k, v] of tough) if ((r -= v) < 0) return k; }
   const pool = [['ghoul', 10], ['mummy', w >= MOBS.mummy.from ? 3 : 0], ['wolf', w >= MOBS.wolf.from ? 2 + w * 0.1 : 0],
     ['slime', w >= MOBS.slime.from ? 2 + w * 0.05 : 0], ['wraith', w >= MOBS.wraith.from ? 2 : 0], ['brute', w >= MOBS.brute.from ? 0.4 + (w - MOBS.brute.from) * 0.15 : 0]];
   let r = Math.random() * pool.reduce((n, [, v]) => n + v, 0);
@@ -95,10 +98,16 @@ export const survivalMethods = {
     const s = this.survival;
     s.wave++;
     s.phase = 'wave';
-    s.toSpawn = SURVIVAL.count(s.wave);
-    s.bossLeft = s.wave % 5 === 0 ? (s.wave >= 10 ? Math.floor(s.wave / 10) : 2) : 0;
+    const w = s.wave, R = SURVIVAL.rounds;
+    // what kind of round: a boss wave, a pack, one of the special rounds, or a plain one
+    s.round = w % 5 === 0 ? 'boss' : w % 4 === 0 ? 'pack' : Object.keys(R).find(k => w >= R[k].from && w % R[k].every === R[k].at) || null;
+    const special = R[s.round];
+    s.roundSpeed = special?.speed || 1;
+    s.toSpawn = Math.round(SURVIVAL.count(w) * (special?.count || 1));
+    s.bossLeft = w % 5 === 0 ? (w >= 10 ? Math.floor(w / 10) + 1 : 2) : 0;
     s.nextSpawnAt = now + 800;
-    const label = s.wave % 5 === 0 ? 'BOSS WAVE' : s.wave % 4 === 0 ? 'WOLF PACK' : s.wave >= 15 ? 'FRENZY' : null;
+    const packName = MOBS[MOB_SETS[this.level]?.wolf || 'wolf'].name.toUpperCase().replace(/^GIANT /, '') + 'S';
+    const label = s.round === 'boss' ? 'BOSS WAVE' : s.round === 'pack' ? packName + '!' : special ? special.label : w >= 15 ? 'FRENZY' : null;
     this.broadcast({ type: 'wave', wave: s.wave, phase: 'wave', label });
     log(`[${this.code}] Wave ${s.wave}: ${s.toSpawn} monsters`);
   },
@@ -132,7 +141,7 @@ export const survivalMethods = {
     const x = sp.x + (Math.random() - 0.5) * 0.5, y = sp.y + (Math.random() - 0.5) * 0.5;
     const hp = Math.round(def.hp * SURVIVAL.hpScale(s.wave));
     const m = { id: 'm' + (++this.npcId), npc: true, kind, x, y, z: walkHeight(this.T, x, y, 0), a: 0, hp, maxHp: hp,
-      speed: def.speed * SURVIVAL.speedScale(s.wave) * (0.9 + Math.random() * 0.2), dmg: Math.round(def.dmg * (1 + s.wave * 0.02)),
+      speed: def.speed * SURVIVAL.speedScale(s.wave) * (s.roundSpeed || 1) * (0.9 + Math.random() * 0.2), dmg: Math.round(def.dmg * (1 + s.wave * 0.02)),
       big: def.big || 0, nextAtk: now + 900, bestD: Infinity, progressAt: now };
     this.npcs.push(m);
     this.broadcast({ type: 'npcSpawn', id: m.id, kind, x, y, z: m.z });

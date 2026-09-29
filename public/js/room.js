@@ -6,7 +6,7 @@ import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, P
 import { gunArt } from './render/gunArt.js';
 import { S, myLevel } from './state.js';
 import { send, switchRoom } from './net.js';
-import { initAudio, cackle } from './audio.js';
+import { initAudio } from './audio.js';
 import { toast } from './ui.js';
 import { PLAYER_SKIN_NAMES, PLAYER_SPRITES, spriteFor, wearsHats } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
@@ -529,7 +529,7 @@ export function initRoom() {
     e.stopImmediatePropagation();
     closePicker();
   }, true);
-  $('readyBtn').addEventListener('click', () => { initAudio(); cackle(); send({ type: 'ready' }); showLoading(true); });
+  $('readyBtn').addEventListener('click', () => { initAudio(); send({ type: 'ready' }); showLoading(true); });
   $('loadingCancel').addEventListener('click', () => { send({ type: 'unready' }); showLoading(false); });
   document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => mapOpenHere(b.dataset.level) ? setDraft(b.dataset.level)
     : toast(`${LEVEL_NAMES[b.dataset.level]} unlocks at level ${MAP_UNLOCKS[b.dataset.level]} — or play it with someone who has it`)));
@@ -578,6 +578,7 @@ export function initRoom() {
   $('newRoom').addEventListener('click', () => goToRoom(newCode()));
   // leave the match for a lobby of your own (quick play could drop you right back into it)
   for (const id of ['leaveGame', 'gameLeave']) $(id).addEventListener('click', () => goToRoom(newCode()));
+  $('gameRestart').addEventListener('click', () => send({ type: 'restartRun' }));
 }
 
 let lobbyWarmed = false;

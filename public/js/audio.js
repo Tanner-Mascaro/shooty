@@ -51,41 +51,10 @@ export function applyVolume() {
   syncMusic();
 }
 
-// --- music: a few spooky lobby tunes, one picked at random, with the odd witch cackle, and a
+// --- music: a few spooky lobby tunes, one picked at random, and a
 // driving tune under each match (by mode) at its own volume ---
 const midi = n => 440 * Math.pow(2, (n - 69) / 12);
 let musicGain = null, musicTimer = 0, nextNote = 0, step = 0, track = null;
-
-function voiced(out, o) { // a sung vowel: sawtooth through "ah" formants, with vibrato
-  const t = o.t, s = actx.createOscillator(); s.type = 'sawtooth';
-  s.frequency.setValueAtTime(o.f, t);
-  s.frequency.linearRampToValueAtTime(o.f * 1.12, t + o.dur * 0.25);
-  s.frequency.exponentialRampToValueAtTime(o.to, t + o.dur);
-  const lfo = actx.createOscillator(), lg = actx.createGain();
-  lfo.frequency.value = o.vibHz || 7; lg.gain.value = o.vib || 10; lfo.connect(lg); lg.connect(s.frequency);
-  const g = actx.createGain();
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(o.vol, t + 0.012);
-  g.gain.setValueAtTime(o.vol, t + o.dur * 0.55);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
-  for (const [freq, q, amp] of [[850, 6, 1], [1250, 7, 0.6], [2700, 9, 0.35]]) {
-    const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
-    const a = actx.createGain(); a.gain.value = amp;
-    s.connect(f); f.connect(a); a.connect(g);
-  }
-  g.connect(out);
-  s.start(t); lfo.start(t); s.stop(t + o.dur + 0.05); lfo.stop(t + o.dur + 0.05);
-}
-// "ah-HA-ha-ha-ha-ha-haaaa": breathy hits sliding down, then a long wavering one
-function laugh(out, delay = 0) {
-  let t = actx.currentTime + delay, f = 640 + Math.random() * 80;
-  for (let i = 0; i < 7; i++) {
-    noise(out, { filter:'bandpass', freq:1900, q:1, dur:0.05, vol:0.25, delay:t - actx.currentTime });
-    voiced(out, { t: t + 0.025, f, to: f * 0.86, dur: 0.1, vol: 0.5 });
-    t += 0.12 + i * 0.012; f *= 0.955;
-  }
-  voiced(out, { t: t + 0.05, f: f * 1.25, to: f * 0.62, dur: 0.95, vol: 0.45, vib: 28, vibHz: 6 });
-}
 
 // a soft held chord tone: two slightly detuned triangles through a low-pass, swelling in and out
 function pad(freq, dur, vol, t, attack = 1) {
@@ -272,7 +241,7 @@ const matchTrack = () => S.room?.mode === 'survival' ? MATCH_TRACKS.siege : S.ro
 
 function scheduleMusic() {
   while (nextNote < actx.currentTime + 0.4) {
-    if (track.play(step, nextNote - actx.currentTime) && Math.random() < 0.35) laugh(musicGain, nextNote - actx.currentTime + track.step * 2); // now and then…
+    track.play(step, nextNote - actx.currentTime);
     nextNote += track.step; step++;
   }
 }
@@ -309,12 +278,6 @@ export function syncMusic() {
   } else if (!on && musicTimer) {
     clearInterval(musicTimer); musicTimer = 0;
   }
-}
-
-// the lobby's own cackle (I'm Ready), on the music volume
-export function cackle() {
-  if (!actx || !musicGain || settings.music <= 0) return;
-  laugh(musicGain);
 }
 
 function setLoop(g, v) { if (g) g.gain.setTargetAtTime(v, actx.currentTime, 0.1); }

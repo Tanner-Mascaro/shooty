@@ -128,6 +128,9 @@ const SHAPE_COLORS = {
     return [230 * rib, 110 * rib, 25 * rib];
   },
   [MAT.DOOR]() { return [110, 72, 40]; },
+  [MAT.RAIL]() { return [92, 60, 34]; },
+  [MAT.ROPE]() { return [190, 160, 110]; },
+  [MAT.GRAVE]() { return [120, 118, 112]; },
   [MAT.STONE]() { return [90, 110, 70]; },
   [MAT.CRATE](x, y, h, n) {
     const plank = ((x + y) * 3) % 1 < 0.08 ? 0.7 : 1, v = (0.82 + 0.28 * n) * plank;
