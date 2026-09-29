@@ -675,6 +675,8 @@ const handlers = {
   partyInvite(msg) { showPartyInvite(msg); },
   partyMove(msg) { toast('Following your party leader…'); goToRoom(msg.room); },
   meta(msg) { showMeta(msg); },
+  // fallen in Wave Survival: what buying back in costs, and when you can
+  buyback(msg) { S.buyback = { cost: msg.cost, at: performance.now() + msg.delayMs }; },
   restarting() {
     S.restarting = true;
     if (S.started) banner('SERVER RESTARTING', true);

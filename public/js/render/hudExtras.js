@@ -152,6 +152,7 @@ export function drawShopLabels() {
   for (const d of L.doors) if (!S.openDoors.has(d.id)) label(d.x, d.y, 1.9, d.name, d.cost);
   for (const b of L.buys) label(b.x + b.wx * 0.38, b.y + b.wy * 0.38, 1.35, b.w.toUpperCase(), b.cost);
   for (const e of L.elixirs) if (!S.elixirs?.[e.elixir]) label(e.x, e.y, 1.1, e.name, e.cost);
+  for (const u of L.supplies) label(u.x, u.y, 1.1, u.name, u.cost);
   for (const c of L.boxes) label(c.x, c.y, 1.5, 'Mystery Cauldron', SURVIVAL.boxCost);
   ctx.textAlign = 'left';
 }

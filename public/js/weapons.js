@@ -121,6 +121,7 @@ export function findUseTarget() {
       shop(b, { buy: b.id, shop: owned ? `Refill ${b.w.toUpperCase()} ammo` : `Buy ${b.w.toUpperCase()}`, cost: owned ? Math.ceil(b.cost * SURVIVAL.refillShare) : b.cost, items: [b.w] });
     }
     for (const e of L.elixirs) if (!S.elixirs?.[e.elixir]) shop(e, { elixir: e.id, shop: `Drink ${e.name}`, cost: e.cost, items: [] });
+    for (const u of L.supplies) shop(u, { supply: u.id, shop: u.supply === 'health' ? 'Drink a Healing Draught' : 'Buy potion bombs', cost: u.cost, items: [] });
     for (const c of L.boxes) shop(c, { cauldron: c.id, shop: 'Stir the mystery cauldron', cost: SURVIVAL.boxCost, items: [] }, 1.6);
   }
   return best;
@@ -138,7 +139,7 @@ export function use() {
   if (S.clawsOnly || S.dead || !t) return;
   if (t.shop) {
     if (S.gold < t.cost) { play('dry'); return; }
-    const key = ['door', 'buy', 'elixir', 'cauldron'].find(k => t[k] !== undefined);
+    const key = ['door', 'buy', 'elixir', 'supply', 'cauldron'].find(k => t[k] !== undefined);
     send({ type: 'use', [key]: t[key], drop: gunToDrop() });
     return;
   }

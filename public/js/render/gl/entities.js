@@ -159,6 +159,63 @@ function makeSprite() {
   return new THREE.Sprite(mat);
 }
 
+// icons for the round tokens, drawn as paths (fonts draw symbols like ⚔ and ☢ as emoji, or not
+// at all): white with a dark edge, like the text ones. Each takes the 2d context of a 64 x 64 canvas
+const ICONS = {
+  fury(g) { // a flame
+    g.beginPath(); g.moveTo(32, 12); g.bezierCurveTo(44, 26, 48, 34, 44, 44); g.bezierCurveTo(41, 52, 23, 52, 20, 44);
+    g.bezierCurveTo(17, 36, 24, 30, 26, 22); g.bezierCurveTo(29, 28, 30, 30, 32, 12); g.closePath(); g.stroke(); g.fill();
+    g.fillStyle = 'rgba(255,120,60,0.9)'; g.beginPath(); g.moveTo(32, 30); g.bezierCurveTo(38, 38, 38, 46, 32, 47); g.bezierCurveTo(26, 46, 27, 38, 32, 30); g.fill();
+  },
+  feather(g) { // a quill
+    g.beginPath(); g.moveTo(20, 50); g.bezierCurveTo(22, 30, 34, 16, 48, 12); g.bezierCurveTo(48, 26, 38, 40, 22, 48); g.closePath(); g.stroke(); g.fill();
+    g.strokeStyle = 'rgba(30,10,20,0.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(16, 54); g.bezierCurveTo(26, 40, 36, 26, 46, 15); g.stroke();
+  },
+  cloak(g) { // a hood with two eyes in the dark
+    g.beginPath(); g.moveTo(16, 50); g.bezierCurveTo(16, 24, 22, 14, 32, 14); g.bezierCurveTo(42, 14, 48, 24, 48, 50); g.closePath(); g.stroke(); g.fill();
+    g.fillStyle = '#1a1024'; g.beginPath(); g.ellipse(32, 36, 10, 12, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff8e8'; for (const x of [28, 36]) { g.beginPath(); g.arc(x, 34, 2, 0, Math.PI * 2); g.fill(); }
+  },
+  maxammo(g) { // three rounds standing up
+    for (const x of [21, 32, 43]) { g.beginPath(); g.moveTo(x - 5, 50); g.lineTo(x - 5, 26); g.quadraticCurveTo(x, 12, x + 5, 26); g.lineTo(x + 5, 50); g.closePath(); g.stroke(); g.fill(); }
+    g.fillStyle = 'rgba(200,150,60,0.9)'; for (const x of [21, 32, 43]) g.fillRect(x - 5, 42, 10, 8);
+  },
+  insta(g) { // a skull
+    g.beginPath(); g.arc(32, 28, 15, Math.PI * 0.85, Math.PI * 0.15); g.lineTo(42, 46); g.lineTo(22, 46); g.closePath(); g.stroke(); g.fill();
+    g.fillStyle = '#1a1024'; for (const x of [26, 38]) { g.beginPath(); g.arc(x, 30, 4.5, 0, Math.PI * 2); g.fill(); }
+    g.beginPath(); g.moveTo(32, 34); g.lineTo(29, 39); g.lineTo(35, 39); g.fill(); for (const x of [27, 32, 37]) g.fillRect(x - 1, 42, 2, 4);
+  },
+  nuke(g) { // a burst
+    g.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = i % 2 ? 10 : 20; g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); } g.closePath(); g.stroke(); g.fill();
+    g.fillStyle = 'rgba(255,150,40,0.95)'; g.beginPath(); g.arc(32, 32, 7, 0, Math.PI * 2); g.fill();
+  },
+  troll(g) { // a heart
+    g.beginPath(); g.moveTo(32, 48); g.bezierCurveTo(10, 34, 16, 14, 32, 24); g.bezierCurveTo(48, 14, 54, 34, 32, 48); g.closePath(); g.stroke(); g.fill();
+  },
+  quick(g) { // a circling arrow
+    g.lineWidth = 7; g.strokeStyle = 'rgba(30,10,20,0.85)'; g.beginPath(); g.arc(32, 32, 13, -0.3, Math.PI * 1.55); g.stroke();
+    g.lineWidth = 4; g.strokeStyle = '#fff8e8'; g.beginPath(); g.arc(32, 32, 13, -0.3, Math.PI * 1.55); g.stroke();
+    g.beginPath(); g.moveTo(40, 14); g.lineTo(48, 28); g.lineTo(34, 26); g.closePath(); g.lineWidth = 3; g.strokeStyle = 'rgba(30,10,20,0.85)'; g.stroke(); g.fill();
+  },
+  health(g) { // a cross
+    g.beginPath(); for (const [x, y] of [[26, 14], [38, 14], [38, 26], [50, 26], [50, 38], [38, 38], [38, 50], [26, 50], [26, 38], [14, 38], [14, 26], [26, 26]]) g.lineTo(x, y);
+    g.closePath(); g.stroke(); g.fill();
+  },
+  bombs(g) { // a round potion bomb, fuse lit
+    g.beginPath(); g.arc(30, 36, 14, 0, Math.PI * 2); g.stroke(); g.fill();
+    g.fillRect(26, 18, 8, 6); g.strokeRect(26, 18, 8, 6);
+    g.lineWidth = 2.5; g.beginPath(); g.moveTo(30, 18); g.quadraticCurveTo(34, 10, 42, 12); g.stroke();
+    g.fillStyle = 'rgba(255,200,60,1)'; g.beginPath(); g.arc(43, 12, 4, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(180,100,255,0.9)'; g.beginPath(); g.arc(30, 38, 8, 0, Math.PI * 2); g.fill();
+  },
+  totem(g) { // a clover of three leaves
+    for (const [x, y] of [[32, 20], [22, 33], [42, 33]]) { g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.stroke(); g.fill(); }
+    g.fillRect(29, 34, 6, 16); g.strokeRect(29, 34, 6, 16);
+  },
+};
+const ICON_TEXT = { double: '2×', swift: '»' }; // these read fine as text
+export const iconTexture = (kind, col) => ICONS[kind] ? glyphTexture('icon:' + kind, col) : glyphTexture(ICON_TEXT[kind] ?? POWER_GLYPH[kind] ?? '', col);
+
 // a round token with a glyph on it (power-ups, monster drops, elixirs, souls)
 function glyphTexture(glyph, col) {
   const key = 'glyph|' + glyph + '|' + col.join(',');
@@ -171,7 +228,10 @@ function glyphTexture(glyph, col) {
   grad.addColorStop(0.6, `rgba(${col.join(',')},0.95)`);
   grad.addColorStop(1, `rgba(${col.map(v => v * 0.3).join(',')},0)`);
   g.fillStyle = grad; g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
-  if (glyph) {
+  if (glyph.startsWith('icon:')) {
+    g.lineWidth = 3; g.strokeStyle = 'rgba(30,10,20,0.85)'; g.fillStyle = '#fff8e8'; g.lineJoin = 'round';
+    ICONS[glyph.slice(5)](g);
+  } else if (glyph) {
     g.font = 'bold 30px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 4; g.strokeStyle = 'rgba(30,10,20,0.8)'; g.strokeText(glyph, 32, 34);
     g.fillStyle = '#fff8e8'; g.fillText(glyph, 32, 34);
@@ -306,11 +366,11 @@ export function drawPickupBillboards(now) {
   for (const u of S.powerups) if (u.active) {
     const z = u.z + 0.35 + 0.08 * Math.sin(now / 300 + u.id);
     if (u.kind === 'shield') { const spr = token(hatTexture(), u.x, u.y, z, 0.7, 0.15 * Math.sin(now / 400 + u.id)); spr.material.alphaTest = 0.4; }
-    else token(glyphTexture(POWER_GLYPH[u.kind], POWER_COLOR[u.kind]), u.x, u.y, z, 0.55);
+    else token(iconTexture(u.kind, POWER_COLOR[u.kind]), u.x, u.y, z, 0.55);
   }
   // Soul Harvest: wisps in the fallen's team color
   for (const o of S.souls) token(glyphTexture('', TEAM_RGB[o.t] || [220, 220, 255]), o.x, o.y, o.z + 0.45 + 0.1 * Math.sin(now / 250 + o.id), 0.5 + 0.06 * Math.sin(now / 90 + o.id));
-  for (const t of S.totems) token(glyphTexture('♣', SPELL_LOOK.totem.col), t.x, t.y, t.z + 0.2 + 0.05 * Math.sin(now / 200), 0.7);
+  for (const t of S.totems) token(iconTexture('totem', SPELL_LOOK.totem.col), t.x, t.y, t.z + 0.2 + 0.05 * Math.sin(now / 200), 0.7);
   // the Crypt: guns on the walls, elixir altars, the mystery cauldron, monster drops
   if (S.survival && isSurvivalLevel(S.level)) {
     const L = cryptLayout(S.MAP);
@@ -321,13 +381,14 @@ export function drawPickupBillboards(now) {
       setBillboard(spr, sp.tex, b.x + b.wx * 0.38, b.y + b.wy * 0.38, 0.95, sp.w * 1.1, sp.h * 1.1, false);
       spr.material.opacity = 1; spr.material.alphaTest = 0.4;
     }
-    for (const e of L.elixirs) token(glyphTexture(POWER_GLYPH[e.elixir], POWER_COLOR[e.elixir]), e.x, e.y, 0.5 + 0.05 * Math.sin(now / 400 + e.id), 0.75);
+    for (const e of L.elixirs) token(iconTexture(e.elixir, POWER_COLOR[e.elixir]), e.x, e.y, 0.5 + 0.05 * Math.sin(now / 400 + e.id), 0.75);
+    for (const u of L.supplies) token(iconTexture(u.supply, u.supply === 'health' ? [230, 60, 70] : [180, 100, 255]), u.x, u.y, 0.5 + 0.05 * Math.sin(now / 400 + u.id + 2), 0.7);
     for (const c of L.boxes) {
       const spr = acquire(boxPool, makeSprite);
       setBillboard(spr, boxTex, c.x, c.y, 0.02 * Math.sin(now / 300), box.w * 1.8, box.h * 1.8, false);
       spr.material.opacity = 1; spr.material.alphaTest = 0.15;
     }
-    for (const d of S.survival.drops || []) token(glyphTexture(POWER_GLYPH[d.k], POWER_COLOR[d.k]), d.x, d.y, d.z + 0.45 + 0.1 * Math.sin(now / 250 + d.id), 0.65, 0.2 * Math.sin(now / 500 + d.id));
+    for (const d of S.survival.drops || []) token(iconTexture(d.k, POWER_COLOR[d.k]), d.x, d.y, d.z + 0.45 + 0.1 * Math.sin(now / 250 + d.id), 0.65, 0.2 * Math.sin(now / 500 + d.id));
   }
   // Capture the Cauldron: each coven's cauldron, big on the ground or small over its carrier's head
   if (S.ctf && S.room?.mode === 'ctf') for (const t of [1, 2]) {

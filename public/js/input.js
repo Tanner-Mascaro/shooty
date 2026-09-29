@@ -55,6 +55,7 @@ export function initInput() {
     if (act === 'chat') { e.preventDefault(); return openChat(); }
     if (act === 'talk') askMic(); // first press asks for the mic
     if (act === 'slide' && !S.clawsOnly) S.slideArmed = true;
+    if (act === 'use' && S.started && S.dead && S.buyback && performance.now() >= S.buyback.at) return send({ type: 'buyBack' }); // Wave Survival: rise again for gold
     if (!S.started || !act || S.dead) return;
     if (act.startsWith('slot') || act === 'swap') setBuildMode(false); // back to the gun
     if (act.startsWith('slot')) switchSlot(+act.slice(4));

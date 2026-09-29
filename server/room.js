@@ -3,7 +3,7 @@
 // People can join a match that's already running; it ends early if too few are left.
 import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, HARDPOINT_ROTATION_MS, HARDPOINT_FIRST_MS, HARDPOINT_REVEAL_MS, HARDPOINT_SITE_COUNT, HARDPOINT_RADIUS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, MOVE_SPEED_LIMIT, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
 import { LEVELS, LEVEL_NAMES, MW, MH, MAP_UNLOCKS } from '../shared/levels.js';
-import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall, flyBlocked } from '../shared/terrain.js';
+import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall, flyBlocked, blocksWalk } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName, redBlue, CTF } from '../shared/config.js';
@@ -642,6 +642,7 @@ export class Room {
       : this.respawnMs();
     if (delay) this.eliminate(victim, now + delay);
     else this.resetPlayer(victim);
+    if (this.mode === 'survival') this.fell(victim, now); // down: the price to buy back in
     if (killer && killer.bot && killer !== victim && Math.random() < 0.25) this.emote(killer, Math.random() < 0.5 ? 'hiss' : 'cackle');
     this.broadcast(this.boxList());
     const fx = killer && KILL_EFFECTS[killer.effect]?.color; // the killer's kill effect, if not plain blood
@@ -1376,6 +1377,8 @@ Room.prototype.handlers = {
 
   // Wave Survival: start the run over on the same map, straight away. Only when you're the only
   // person in it, so nobody resets a run under their friends
+  buyBack(p) { this.buyBack(p); },
+
   restartRun(p) {
     if (!this.gameOn || this.mode !== 'survival' || p.bot) return;
     if (this.humans.length > 1) return this.hub.notice(p, 'Only when you are playing on your own');
@@ -1562,7 +1565,7 @@ Room.prototype.handlers = {
     const dx = msg.x - p.x, dy = msg.y - p.y, distance = Math.hypot(dx, dy);
     const scale = distance > maxStep ? maxStep / distance : 1;
     const x = p.x + dx * scale, y = p.y + dy * scale;
-    if (!hitsWall(this.T, x, y, PLAYER_R)) { p.x = x; p.y = y; }
+    if (!blocksWalk(this.T, x, y, PLAYER_R)) { p.x = x; p.y = y; } // walls, and water where the pits are water
     const g = walkHeight(this.T, p.x, p.y, p.z);
     // how high above the floor you could be: a jump, higher in low gravity, much higher off a jump pad
     const rise = p.padUntil > now ? 4.5 : 0.8 / Math.min(1, this.gravityScale(now)) * (p.featherUntil > now ? 1.8 : 1);

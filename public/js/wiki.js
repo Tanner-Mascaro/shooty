@@ -2,7 +2,7 @@
 // shared/progression.js, shared/levels.js), so it stays right as things change.
 import { WEAPONS, GUN_NAMES, gunName, PAD_GUNS, SURVIVAL, MODE_NAMES, POWERUPS, MAP_EVENTS, EVENT_EVERY, EVENT_FIRST, STORED_SPELLS,
   HASTE, WARD, BROOM, BLINK, INVIS, CURSE, FROST, TOTEM, WELL, DECOY, HEAL_SPELL, WAND_CHAIN, NADE, ATTACHMENTS, MOBS, MOB_SETS, DROPS, ELIXIRS,
-  WALL_BUYS, DOORS, METEOR, POWERUP_SHIELD } from '/shared/config.js';
+  WALL_BUYS, DOORS, METEOR, POWERUP_SHIELD, SUPPLIES } from '/shared/config.js';
 import { SKIN_UNLOCKS, HATS, FAMILIARS, TITLES, KILL_EFFECTS, CAMOS, FEATS, featReward, hatNeeds, petNeeds } from '/shared/progression.js';
 import { LEVEL_NAMES, FEATURED_LEVELS, SURVIVAL_LEVELS, MAP_UNLOCKS } from '/shared/levels.js';
 import { SPELL_NAME } from './constants.js';
@@ -79,13 +79,15 @@ function survival() {
   const ship = Object.fromEntries(Object.entries(MOB_SETS.ship).map(([role, k]) => [role, MOBS[k].name]));
   const mobs = Object.entries(MOBS).filter(([, m]) => !m.role).map(([k, m]) => [m.name, ship[k] || '', m.hp, m.speed, m.dmg, 'Wave ' + m.from,
     m.blast ? 'Explodes' : m.ranged ? 'Throws hexes' : m.boss ? 'Boss' : m.big ? 'Big' : '']);
-  return [note(`You and your allies against endless waves. Hits and kills earn gold: spend it on doors (gangplank gates on the ship), guns on the walls, elixirs, and the mystery cauldron (${SURVIVAL.boxCost} gold for a random gun). Fall and you're out until the next wave; reach wave 10 to count it a win.`),
+  return [note(`You and your allies against endless waves. Hits and kills earn gold: spend it on doors (gangplank gates on the ship), guns on the walls, elixirs, and the mystery cauldron (${SURVIVAL.boxCost} gold for a random gun). Fall and you're out until the next wave — or, after a few seconds, press the use key to buy back in for gold (dearer each time; with everyone down the run waits a little for anyone who can pay). Reach wave 10 to count it a win.`),
     el('h4', null, 'Monsters'), table(['Crypt', 'Drowned Fleet', 'Health', 'Speed', 'Hit', 'From', ''], mobs),
     note('Monster health grows every wave. Every fifth wave is a boss wave; every fourth, a pack of fast ones. Now and then comes a special round: a SWARM of the weakest (and far more of them), an ELITE wave of only the tough ones, or a BLOOD MOON, when everything runs faster.'),
     el('h4', null, 'Drops'), note('Monsters sometimes drop these; walk over them.'),
     table(['Drop', 'What it does'], [['MAX AMMO', "Fills everyone's guns"], ['DOUBLE GOLD', `Double gold for ${s(DROPS.double.ms)}`], ['INSTA-KILL', `Every hit kills for ${s(DROPS.insta.ms)}`], ['NUKE', 'Kills every monster on the map']]),
     el('h4', null, 'Elixirs'), note('Drink once per life, from the altars around the map.'),
     table(['Elixir', 'Cost', 'Effect'], Object.values(ELIXIRS).map(e => [e.name, e.cost, e.text])),
+    el('h4', null, 'Supplies'), note('Stands in most sections; buy as often as you like.'),
+    table(['Supply', 'Cost', 'Effect'], Object.values(SUPPLIES).map(u => [u.name, u.cost, u.text])),
     el('h4', null, 'Guns on the walls'),
     table(['Gun', 'Cost'], Object.values(WALL_BUYS).map(b => [gunName(b.w), b.cost])),
     el('h4', null, 'Doors'),

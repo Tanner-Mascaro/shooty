@@ -380,6 +380,8 @@ function crypt() {
   put(39, 37, 'X'); put(39, 52, 'U');
   for (const [x, y] of [[26, 21], [53, 21], [26, 53], [53, 53]]) put(x, y, 'Z');
   put(25, 30, 'e'); put(54, 30, 'i');
+  // supply stands: H a healing draught, N potion bombs (SUPPLIES in shared/config.js)
+  for (const [x, y, c] of [[45, 75, 'H'], [34, 75, 'N'], [41, 52, 'H'], [37, 52, 'N'], [10, 56, 'H'], [68, 56, 'N'], [12, 31, 'H'], [72, 6, 'N'], [44, 9, 'H']]) put(x, y, c);
   // bone pit: a bog of bones in the middle, graves around it
   room(8, 13, 15, 22, 'L');
   for (let y = 5; y <= 33; y += 7) for (const x of [4, 18]) put(x, y, '+');
@@ -493,6 +495,8 @@ function ship() {
   for (let x = 29; x <= 50; x += 7) { put(x, 6, '+'); put(x, 14, '+'); }
   for (const [x, y] of [[28, 5], [51, 5], [28, 15], [51, 15], [39, 5]]) put(x, y, 'Z');
   put(52, 10, 'i');
+  // supply stands: H a healing draught, N potion bombs
+  for (const [x, y, c] of [[45, 70, 'H'], [34, 70, 'N'], [47, 33, 'H'], [32, 33, 'N'], [11, 58, 'H'], [68, 58, 'N'], [11, 28, 'N'], [67, 28, 'H'], [45, 6, 'H']]) put(x, y, c);
   return g.map(r => r.join(''));
 }
 LEVELS.ship = ship();

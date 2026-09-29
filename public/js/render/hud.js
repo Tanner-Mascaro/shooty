@@ -606,7 +606,10 @@ export function drawSpectate(now) {
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
     const watching = S.spectateId != null ? 'Watching ' + nameOf(S.spectateId) : '';
     const survival = S.room?.mode === 'survival';
-    const left = S.watching ? 'you play from the next match' : out && survival ? 'You rise again when this wave is cleared'
+    const bb = survival && S.buyback, useKey = keyName(settings.keys.use);
+    const buy = !bb ? '' : now < bb.at ? `Buy back in (${bb.cost} gold) in ${Math.ceil((bb.at - now) / 1000)}s`
+      : S.gold >= bb.cost ? `Press ${useKey} to buy back in — ${bb.cost} gold` : `Buying back in costs ${bb.cost} gold`;
+    const left = S.watching ? 'you play from the next match' : out && survival ? (buy ? buy + ' · or rise when the wave is cleared' : 'You rise again when this wave is cleared')
       : out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
     const sub = [watching, left].filter(Boolean).join(' · ');
     ctx.save();

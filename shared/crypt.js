@@ -6,7 +6,7 @@
 // (openDoor), like conjured ramps (shared/spells.js). They're MAT.DOOR, which the terrain mesh
 // skips: render/gl/doors.js draws them so they can vanish.
 import { MAT, CEILING_H } from './terrain.js';
-import { DOORS, WALL_BUYS, ELIXIRS } from './config.js';
+import { DOORS, WALL_BUYS, ELIXIRS, SUPPLIES } from './config.js';
 import { LEVELS } from './levels.js';
 export { isSurvivalLevel } from './levels.js';
 
@@ -17,7 +17,7 @@ export function cryptLayout(MAP) {
   if (layouts.has(MAP)) return layouts.get(MAP);
   const names = DOORS[Object.keys(LEVELS).find(k => LEVELS[k] === MAP)] || {};
   const H = MAP.length, W = MAP[0].length, at = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? '#' : MAP[y][x];
-  const doors = [], starts = [], spawners = [], buys = [], elixirs = [], boxes = [];
+  const doors = [], starts = [], spawners = [], buys = [], elixirs = [], boxes = [], supplies = [];
   // doors: each touching group of the same digit
   const doorOf = new Int16Array(W * H).fill(-1);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -75,10 +75,11 @@ export function cryptLayout(MAP) {
     else if (c === 'Z') spawners.push(spot);
     else if (c === 'X') boxes.push({ ...spot, id: boxes.length });
     else if (WALL_BUYS[c]) buys.push({ ...spot, ...facing(x, y), id: buys.length, key: c, w: WALL_BUYS[c].w, cost: WALL_BUYS[c].cost });
+    else if (SUPPLIES[c]) supplies.push({ ...spot, id: supplies.length, key: c, supply: SUPPLIES[c].id, name: SUPPLIES[c].name, cost: SUPPLIES[c].cost });
     else if (ELIXIRS[c]) elixirs.push({ ...spot, id: elixirs.length, key: c, elixir: ELIXIRS[c].id, name: ELIXIRS[c].name, cost: ELIXIRS[c].cost });
   }
   const start = starts.length ? starts[0].region : 0;
-  const out = { W, H, doors, starts, spawners, buys, elixirs, boxes, region, regions, start };
+  const out = { W, H, doors, starts, spawners, buys, elixirs, boxes, supplies, region, regions, start };
   layouts.set(MAP, out);
   return out;
 }

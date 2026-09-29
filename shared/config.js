@@ -83,6 +83,9 @@ export const SURVIVAL = {
     bloodmoon: { label: 'BLOOD MOON', every: 9, at: 6, count: 1.1, speed: 1.3, from: 6 }, // everything runs faster
   },
   dropChance: 0.035, dropLife: 25000,
+  // buy back in: fallen, after `delay` pay to rise again at the start (dearer each time); with
+  // everyone down the run waits `window` for someone who can afford it
+  buyback: { delay: 3000, window: 15000, cost: n => 250 + 250 * n },
 };
 // door groups in each survival map (digits in shared/levels.js): what each costs and what's behind it
 export const DOORS = {
@@ -108,6 +111,11 @@ export const ELIXIRS = {
   Y: { id: 'quick', name: 'Quickbrew', cost: 2000, text: 'Reload twice as fast' },
 };
 export const ELIXIR_HP = 75, ELIXIR_SPEED = 1.15, ELIXIR_RELOAD = 0.5;
+// supply stands in the survival maps (H and N there): buy as often as you like
+export const SUPPLIES = {
+  H: { id: 'health', name: 'Healing Draught', cost: 300, text: 'Heals you to full' },
+  N: { id: 'bombs', name: 'Potion Bombs', cost: 400, text: 'Two potion bombs', count: 2 },
+};
 // monster drops: walk over them. maxammo refills everyone, double points and insta-kill last
 // `ms`, the nuke kills every monster on the map
 export const DROPS = { maxammo: { name: 'MAX AMMO' }, double: { name: 'DOUBLE GOLD', ms: 20000 }, insta: { name: 'INSTA-KILL', ms: 20000 }, nuke: { name: 'NUKE' } };
@@ -171,7 +179,7 @@ export const CUSTOM = {
   headshots: [false, true],
   ammo: ['normal', 'infinite'],
   powerups: [true, false],
-  events: [true, false],
+  events: [false, true], // meteors, blood moons and the rest: off unless a lobby turns them on
 };
 export const CUSTOM_WEAPONS = {
   pistols: ['pistol', 'deagle', 'revolver', 'derringer', 'flintlock', 'autopistol'], shotguns: ['shotgun', 'doublebarrel', 'autoshotgun', 'blunderbuss'],

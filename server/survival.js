@@ -3,7 +3,7 @@
 // survivor over a flow field that's rebuilt as people move and doors open, then claw, burst
 // or hurl hexes. Gold from hits and kills buys doors, guns off the walls, elixirs and rolls of
 // the mystery cauldron. Mixed into Room (server/room.js); `this` is the Room.
-import { BODY_H, WEAPONS, AMMO, MAX_SPARE, SURVIVAL, MOBS, MOB_SETS, MOB_R, DROPS, ELIXIR_HP, magSize } from '../shared/config.js';
+import { BODY_H, WEAPONS, AMMO, MAX_SPARE, SURVIVAL, MOBS, MOB_SETS, MOB_R, DROPS, ELIXIR_HP, SUPPLIES, NADE, magSize } from '../shared/config.js';
 import { walkHeight, kindAt, hitsWall } from '../shared/terrain.js';
 import { cryptLayout, openRegions, closeDoor, openDoor } from '../shared/crypt.js';
 import { LEVEL_NAMES } from '../shared/levels.js';
@@ -26,6 +26,7 @@ function pickKind(w, s) {
 
 export const survivalMethods = {
   startSurvival(now) {
+    for (const p of this.list) p.buybacks = 0;
     const layout = cryptLayout(this.map);
     this.freshTerrain();
     const doorPrev = new Map();
@@ -162,6 +163,7 @@ export const survivalMethods = {
       }
       if (s.toSpawn <= 0 && !mobs.length) this.waveCleared(now);
     }
+    if (!this.list.some(p => !p.dead) && this.checkSurvivalOver(now)) return true; // waiting on a buy-back ran out
     if (now - s.fieldAt > 400) { this.buildField(); s.fieldAt = now; }
     for (const m of mobs) { this.stepMob(m, now, dt); if (!this.gameOn) return true; }
     this.separateMobs(mobs);
@@ -305,10 +307,34 @@ export const survivalMethods = {
     this.broadcast({ type: 'drop', kind: d.kind, by: p.id, x: d.x, y: d.y, z: d.z });
   },
 
-  // everyone down: the crypt wins. Ten waves or more counts as a win for the survivors
-  checkSurvivalOver() {
+  // fallen: the price to buy back in, and when you may
+  buybackCost(p) { return SURVIVAL.buyback.cost(p.buybacks || 0); },
+  fell(p, now) {
+    if (p.bot) return;
+    p.downAt = now;
+    this.send(p, { type: 'buyback', cost: this.buybackCost(p), delayMs: SURVIVAL.buyback.delay });
+  },
+  // the use key while you're down: pay up and rise at the start, keeping your gold
+  buyBack(p, now = Date.now()) {
+    if (!this.gameOn || this.mode !== 'survival' || !p.dead || p.bot) return;
+    if (now < (p.downAt || 0) + SURVIVAL.buyback.delay) return;
+    const cost = this.buybackCost(p);
+    if ((p.gold || 0) < cost) return this.hub.notice(p, `Buying back in costs ${cost} gold`);
+    p.gold -= cost;
+    p.buybacks = (p.buybacks || 0) + 1;
+    const gold = p.gold;
+    this.resetPlayer(p);
+    p.gold = gold;
+    this.syncAmmo(p);
+    log(`[${this.code}] ${this.hub.name(p)} bought back in for ${cost} gold`);
+  },
+
+  // everyone down: the crypt wins. Ten waves or more counts as a win for the survivors. Someone who
+  // can afford to buy back in gets the chance first
+  checkSurvivalOver(now = Date.now()) {
     if (!this.gameOn || this.mode !== 'survival' || !this.survival) return false;
     if (this.list.some(p => !p.dead)) return false;
+    if (this.humans.some(p => p.dead && (p.gold || 0) >= this.buybackCost(p) && now < (p.downAt || 0) + SURVIVAL.buyback.window)) return false;
     const wave = this.survival.wave;
     for (const p of this.humans) this.hub.record(p, { xp: Math.min(400, wave * 10) });
     this.finish(wave >= 10 ? this.humans : [], { mode: 'survival', wave, survived: wave - 1 }, `${LEVEL_NAMES[this.level]} (survivors reached wave ${wave})`);
@@ -349,6 +375,20 @@ export const survivalMethods = {
         p.gold -= b.cost;
       }
       this.broadcast({ type: 'pickup', id: p.id, weapon: b.w, x: b.x, y: b.y, z: 1 });
+    } else if (Number.isInteger(msg.supply)) { // a healing draught or potion bombs, as often as you like
+      const u = L.supplies[msg.supply];
+      if (!u || !near(u, 1.5)) return;
+      if (u.supply === 'health') {
+        if (p.hp >= this.maxHp(p)) return this.hub.notice(p, 'Already at full health');
+        if (!pay(u.cost)) return;
+        p.hp = this.maxHp(p);
+      } else {
+        if ((p.nades || 0) >= NADE.maxCarry) return this.hub.notice(p, `You can carry ${NADE.maxCarry} potion bombs`);
+        if (!pay(u.cost)) return;
+        p.nades = Math.min(NADE.maxCarry, (p.nades || 0) + SUPPLIES.N.count);
+      }
+      this.syncAmmo(p);
+      this.broadcast({ type: 'pickup', id: p.id, weapon: u.supply === 'health' ? 'health' : 'nade', x: u.x, y: u.y, z: 1 });
     } else if (Number.isInteger(msg.elixir)) {
       const e = L.elixirs[msg.elixir];
       if (!e || !near(e, 1.5) || p.elixirs?.[e.elixir]) return;

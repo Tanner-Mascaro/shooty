@@ -29,7 +29,7 @@ export function enterSpectate(killer, respawnMs, weapon) {
 
 export function leaveSpectate() {
   S.killcam = null; S.killcamFov = 0;
-  S.dead = false; S.spectateId = null; S.respawnAt = 0; S.deathAt = null; S.specCam = null;
+  S.dead = false; S.spectateId = null; S.respawnAt = 0; S.deathAt = null; S.specCam = null; S.buyback = null;
 }
 
 // watch the next player still standing

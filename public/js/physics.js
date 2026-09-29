@@ -30,7 +30,7 @@ function wallHitbox(x, y) {
 
   for (let j = minJ; j <= maxJ; j++) for (let i = minI; i <= maxI; i++) {
     if (i < 0 || j < 0 || i >= T.TW || j >= T.TH) return true;
-    if (T.kind[j * T.TW + i] !== 1) continue;
+    if (T.kind[j * T.TW + i] !== 1 && !(T.water && T.kind[j * T.TW + i] === 2)) continue; // walls, and water you can't wade into
 
     const left = i / T.RES, right = (i + 1) / T.RES;
     const top = j / T.RES, bottom = (j + 1) / T.RES;

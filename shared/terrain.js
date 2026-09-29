@@ -362,7 +362,7 @@ export function buildTerrain(MAP, RES, style) {
   if (style === 'castle') addCastleClimbTowers(hgt, kind, mat, props, MAP, RES, TW, TH);
 
   // no procedural scatter of extra bushes/crates — map ASCII already places the cover we want
-  return { hgt, kind, mat, props, TW, TH, RES };
+  return { hgt, kind, mat, props, TW, TH, RES, water: WATER_STYLES.has(style) };
 }
 
 // Climbable castle towers: real stair treads (flat rectangles) + mid balconies + battlement deck.
@@ -639,6 +639,21 @@ export function flyBlocked(T, x, y, z, r, h, edge = 1.3) {
     if (walkHeight(T, px, py, z + 0.1) > z + 0.1) return true;
     const c = ceilingAt(T, px, py, z + 0.1);
     if (c != null && c < z + h) return true;
+  }
+  return false;
+}
+
+// realms whose pits are water (the swamp's bog, the ice, the sea): you can't walk or jump into them
+const WATER_STYLES = new Set(['witch', 'ice', 'ship', 'cove']);
+// can someone of radius r stand at (x, y)? Not in a wall, off the map, or in water
+export function blocksWalk(T, x, y, r) {
+  if (hitsWall(T, x, y, r)) return true;
+  if (!T.water) return false;
+  const minI = Math.floor((x - r) * T.RES), maxI = Math.floor((x + r) * T.RES), minJ = Math.floor((y - r) * T.RES), maxJ = Math.floor((y + r) * T.RES);
+  for (let j = minJ; j <= maxJ; j++) for (let i = minI; i <= maxI; i++) {
+    if (T.kind[j * T.TW + i] !== 2) continue;
+    const cx = Math.min(Math.max(x, i / T.RES), (i + 1) / T.RES), cy = Math.min(Math.max(y, j / T.RES), (j + 1) / T.RES);
+    if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) return true;
   }
   return false;
 }
