@@ -116,7 +116,7 @@ export const DROPS = { maxammo: { name: 'MAX AMMO' }, double: { name: 'DOUBLE GO
 export const MOBS = {
   ghoul:  { name: 'Ghoul', skin: 'zombie', hp: 70, speed: 1.9, dmg: 18, cd: 900, from: 1 },
   mummy:  { name: 'Mummy', skin: 'mummy', hp: 150, speed: 1.4, dmg: 30, cd: 1100, from: 3 },
-  wolf:   { name: 'Werewolf', skin: 'werewolf', hp: 55, speed: 4.3, dmg: 16, cd: 600, from: 4 },
+  wolf:   { name: 'Werewolf', skin: 'werewolf', hp: 45, speed: 3.5, dmg: 12, cd: 600, from: 4 },
   slime:  { name: 'Bursting Slime', skin: 'slime', hp: 45, speed: 3.1, dmg: 45, cd: 0, from: 6, blast: 2.4 }, // bursts when it reaches you
   wraith: { name: 'Wraith', skin: 'ghost', hp: 60, speed: 2.4, dmg: 12, cd: 2000, from: 7, ranged: 9, float: true }, // hurls hexes from range
   brute:  { name: 'Brute', skin: 'demon', hp: 520, speed: 2.1, dmg: 45, cd: 1300, from: 9, big: 1.5, heavy: true },
