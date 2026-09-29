@@ -18,6 +18,7 @@ export function setLevel(name) {
   S.level = name; S.MAP = LEVELS[name]; S.theme = THEMES[name];
   S.T = buildTerrain(S.MAP, RES, name);
   S.builds.clear(); // conjured walls / ramps belonged to the old map
+  S.doorPrev.clear(); S.openDoors = new Set(); // and so did the Crypt's doors
   buildColors(); buildMini();
   S.pickupSpots = findPickups(S.MAP);
   S.pickupActive = S.pickupSpots.map(() => true);
@@ -78,6 +79,10 @@ function buildColors() {
 // obstacle surface colors by material: (world x, y, height, noise 0..1, theme) -> [r, g, b]
 const SHAPE_COLORS = {
   [MAT.ROCK](x, y, h, n, theme) {
+    if (theme.id === 'crypt') { // weathered gravestones
+      const v = 0.7 + 0.3 * noise(x * 6, y * 6) + n * 0.1, moss = noise(x * 9, y * 9) > 0.75;
+      return moss ? [70 * v, 90 * v, 60 * v] : [120 * v, 118 * v, 112 * v];
+    }
     if (theme.id === 'ice') { // packed ice and snow
       const mott = 0.75 + 0.35 * noise(x * 4, y * 4) + n * 0.08;
       const crack = Math.sin(h * 14 + noise(x, y) * 5) > 0.7 ? 0.78 : 1;
@@ -115,6 +120,8 @@ const SHAPE_COLORS = {
     const rib = Math.sin(Math.atan2(y % 1 - 0.5, x % 1 - 0.5) * 8) > 0.6 ? 0.8 : 1;
     return [230 * rib, 110 * rib, 25 * rib];
   },
+  [MAT.DOOR]() { return [110, 72, 40]; },
+  [MAT.STONE]() { return [90, 110, 70]; },
   [MAT.CRATE](x, y, h, n) {
     const plank = ((x + y) * 3) % 1 < 0.08 ? 0.7 : 1, v = (0.82 + 0.28 * n) * plank;
     return [124 * v, 96 * v, 48 * v];
@@ -183,6 +190,17 @@ const FLOORS = {
     if (crack) { EM[k] = 1; return [120, 190, 255]; }
     r += 20 * glow; g += 50 * glow; b += 80 * glow;
     return [r, g, b];
+  },
+  crypt(x, y, n, glow, ld, k, EM) {
+    // old tomb flagstones, cracked and bone-strewn, with faint green grave-light in the seams
+    const cx = Math.floor(x * 0.8), cy = Math.floor(y * 0.8), fx = x * 0.8 - cx, fy = y * 0.8 - cy;
+    const tone = 0.7 + 0.25 * hash(cx, cy) + n * 0.1;
+    let r = 64 * tone, g = 60 * tone, b = 58 * tone;
+    if (fx < 0.05 || fy < 0.05) { if (hash(cx * 3, cy * 7) > 0.8) { EM[k] = 1; return [60, 150, 80]; } r = 26; g = 26; b = 28; }
+    else if (noise(x * 7, y * 7) > 0.86) { r = 150; g = 142; b = 120; } // bone chips
+    else if (noise(x * 2, y * 2) > 0.7) { r *= 0.8; g *= 0.9; b *= 0.8; } // moss
+    const dark = 1 - 0.7 * glow;
+    return [r * dark, g * dark, b * dark];
   },
   castle(x, y, n, glow) {
     // cool slate flagstones with dark mortar (matches wall brick greys)

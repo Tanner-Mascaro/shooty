@@ -21,7 +21,8 @@ export const ACTIONS = {
   chat: ['Open messages', 'Enter'], talk: ['Push to talk', 'KeyV'],
   fullscreen: ['Fullscreen', 'KeyO'], settings: ['Open settings', 'KeyP'], map: ['Map & standings', 'KeyM'],
   build: ['Build mode (Earth Ramp)', 'KeyX'],
-  spell1: ['Spell 1', 'Digit4'], spell2: ['Spell 2', 'Digit5'], spell3: ['Spell 3', 'Digit6'],
+  spell1: ['Drink potion 1', 'Digit4'], spell2: ['Drink potion 2', 'Digit5'], spell3: ['Drink potion 3', 'Digit6'],
+  emote: ['Emote wheel', 'KeyB'],
 };
 // ads: right click scopes while held ('hold') or until clicked again ('toggle');
 // voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
@@ -188,7 +189,7 @@ export function showControlsHint() {
     return;
   }
   el.textContent = `${k('forward')}${k('left')}${k('back')}${k('right')} move | mouse aim | ${k('jump')} jump (hold to bhop) | ${k('slide')} slide | click shoot | right click scope | ` +
-    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('build')} build mode | ${k('spell1')}-${k('spell3')} spells | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
+    `${k('reload')} reload | ${k('use')} pick up / loot | ${k('nade')} potion | ${k('swap')}/wheel switch | ${k('slot1')} ${k('slot2')} guns ${k('slot3')} blade | ${k('melee')} melee | ${k('build')} build mode | ${k('spell1')}-${k('spell3')} drink potions | ${k('emote')} emote | ${k('chat')} messages | ${k('talk')} talk | ${k('fullscreen')} fullscreen | ${k('settings')} settings`;
 }
 
 export function initSettings() {

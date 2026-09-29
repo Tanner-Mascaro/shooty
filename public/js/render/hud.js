@@ -1,10 +1,12 @@
 // Everything drawn at full resolution on top of the 3D view: tracers, glows, the gun,
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
-import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS, NADE } from '/shared/config.js';
+import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS, NADE, magSize, MOBS, gunLook, gunName } from '/shared/config.js';
 import { S, spare, isEnemy, nameOf } from '../state.js';
-import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, SPELL_LOOK, MAX_SPEED } from '../constants.js';
-import { pickupSprite } from './sprites.js';
+import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, SPELL_LOOK, SPELL_NAME, MAX_SPEED, POWER_COLOR, TEAM_RGB } from '../constants.js';
+import { cryptLayout } from '/shared/crypt.js';
+import { pickupSprite, spellPotion } from './sprites.js';
+import { gunArt } from './gunArt.js';
 import { buildingAllowed, setBuildMode, castSlot } from '../spells.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
@@ -16,6 +18,7 @@ import { slotWeapon, gunToDrop, switchSlot, throwNade } from '../weapons.js';
 import { drawViewmodel, aimAmount } from './viewmodel.js';
 
 const key = a => keyName(settings.keys[a]);
+const MOB_BIG = k => MOBS[k]?.big || 1;
 
 export function glow(x, y, r, color) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -68,7 +71,8 @@ export function drawPickupGlows() {
     if (q.f < 0.3 || occluded(q)) return;
     const on = S.pickupActive[i];
     const r = p.weapon === 'ammo' ? 0.65 : 1; // candles get a smaller glow
-    if (on || r === 1) glow(q.x, q.y, (on ? 260 : 120) * r / q.f, 'rgba(' + GUN_COLOR[p.weapon].join(',') + ',' + (on ? 0.45 : 0.15) + ')');
+    const col = p.spell ? SPELL_LOOK[p.spell]?.col || GUN_COLOR.scroll : GUN_COLOR[p.weapon] || GUN_COLOR.scroll;
+    if (on || r === 1) glow(q.x, q.y, (on ? 260 : 120) * r / q.f, 'rgba(' + col.join(',') + ',' + (on ? 0.45 : 0.15) + ')');
   });
   for (const b of S.boxes) { // cauldrons glow swamp green brew
     const q = project(b.x, b.y, b.z + 0.4);
@@ -76,6 +80,14 @@ export function drawPickupGlows() {
     const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 220 + b.id);
     glow(q.x, q.y, (220 * pulse) / q.f, 'rgba(60,120,50,' + (0.28 + 0.14 * pulse) + ')');
   }
+  const halo = (x, y, z, col, r) => {
+    const q = project(x, y, z);
+    if (q.f < 0.3 || occluded(q)) return;
+    glow(q.x, q.y, r / q.f, 'rgba(' + col.join(',') + ',0.4)');
+  };
+  for (const u of S.powerups) if (u.active) halo(u.x, u.y, u.z + 0.4, POWER_COLOR[u.kind], 240);
+  for (const o of S.souls) halo(o.x, o.y, o.z + 0.5, TEAM_RGB[o.t] || [220, 220, 255], 260);
+  for (const d of S.survival?.drops || []) halo(d.x, d.y, d.z + 0.5, POWER_COLOR[d.k], 300);
   for (const n of S.thrown || []) {
     const q = project(n.x, n.y, n.z);
     if (q.f < 0.3 || occluded(q)) continue;
@@ -177,7 +189,7 @@ function drawScope(now) {
 
 // crosshair per weapon; the rifle/SMG gap opens in the air and on recoil
 function drawCrosshair() {
-  const cx = view.W / 2, cy = view.H / 2, w = S.weapon, sc = settings.crosshair;
+  const cx = view.W / 2, cy = view.H / 2, w = gunLook(S.weapon), sc = settings.crosshair;
   if (w === 'blade' || w === 'claws') {
     ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 6 * sc, 0, Math.PI * 2); ctx.stroke();
   } else if (w === 'shotgun') {
@@ -197,7 +209,7 @@ export function drawWeaponView(now) {
   if (S.clawsOnly) {
     drawViewmodel(now);
     if (aimAmount() < 0.5) drawCrosshair();
-  } else if (S.scoped && S.weapon === 'sniper' && S.fov < BASE_FOV * 0.6) drawScope(now);
+  } else if (S.scoped && gunLook(S.weapon) === 'sniper' && S.fov < BASE_FOV * 0.6) drawScope(now);
   else { drawViewmodel(now); if (aimAmount() < 0.5) drawCrosshair(); } // aimed: the iron sights are the crosshair
   if (S.muzzle > 0) S.muzzle--;
 }
@@ -420,7 +432,7 @@ export function drawMinimap(now) {
     }
     S.pickupSpots.forEach((p, i) => {
       if (!S.pickupActive[i]) return;
-      ctx.fillStyle = 'rgb(' + GUN_COLOR[p.weapon].join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
+      ctx.fillStyle = 'rgb(' + (p.spell ? SPELL_LOOK[p.spell]?.col || GUN_COLOR.scroll : GUN_COLOR[p.weapon] || GUN_COLOR.scroll).join(',') + ')'; ctx.fillRect(p.x - 0.25, p.y - 0.25, 0.5, 0.5);
     });
     if (S.ctf && S.room?.mode === 'ctf') for (const t of [1, 2]) { // bases (squares) and cauldrons (dots)
       const b = S.ctf.bases[t], c = S.ctf.c[t];
@@ -430,6 +442,20 @@ export function drawMinimap(now) {
     }
     ctx.fillStyle = 'rgb(' + S.theme.accent + ')';
     for (const b of S.boxes) ctx.fillRect(b.x - 0.2, b.y - 0.2, 0.4, 0.4);
+    const dot = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
+    for (const p of S.pads) dot(p.x, p.y, 0.45, '#50d0ff');
+    for (const pt of S.portals) { dot(pt.a.x, pt.a.y, 0.5, '#a060ff'); dot(pt.b.x, pt.b.y, 0.5, '#a060ff'); }
+    for (const u of S.powerups) if (u.active) dot(u.x, u.y, 0.45, `rgb(${POWER_COLOR[u.kind].join(',')})`);
+    for (const o of S.souls) dot(o.x, o.y, 0.4, `rgb(${(TEAM_RGB[o.t] || [230, 230, 255]).join(',')})`);
+    for (const d of S.survival?.drops || []) dot(d.x, d.y, 0.5, `rgb(${POWER_COLOR[d.k].join(',')})`);
+    if (S.survival && S.level === 'crypt') {
+      const L = cryptLayout(S.MAP);
+      ctx.fillStyle = '#8a5a30';
+      for (const d of L.doors) if (!S.openDoors.has(d.id)) ctx.fillRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
+      for (const b of L.buys) dot(b.x, b.y, 0.35, '#f2c85a');
+      for (const c of L.boxes) dot(c.x, c.y, 0.55, '#70ff90');
+    }
+    for (const o of Object.values(S.npcs)) if (o.now && o.now.k !== 'decoy') dot(o.now.x, o.now.y, 0.28 * (MOB_BIG(o.now.k)), '#e04040');
     for (const n of S.thrown) {
       ctx.fillStyle = '#4a2860'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.38, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#7a5088'; ctx.beginPath(); ctx.arc(n.x, n.y, 0.22, 0, Math.PI * 2); ctx.fill();
@@ -493,7 +519,7 @@ export function drawMinimap(now) {
 export function drawAmmo(now) {
   const { W, H } = view, w = S.weapon;
   if (w === 'blade' || w === 'claws') return;
-  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w);
+  const mag = S.mag[w] ?? 0, full = magSize(w, S.att), left = spare(w);
   ctx.textAlign = 'center';
   const r = S.reloading, y = H / 2 + 44;
   if (r) {
@@ -512,11 +538,12 @@ export function drawAmmo(now) {
 // "E  Take SNIPER" when you're in reach of a gun pad or a loot box
 export function drawUsePrompt() {
   const t = S.useTarget;
-  if (!t || !t.items.length) return;
-  const { W, H } = view, drop = gunToDrop(), items = t.items.map(w => w.toUpperCase());
+  if (!t || (!t.items.length && !t.shop)) return;
+  const { W, H } = view, drop = gunToDrop(), items = t.items.map(w => gunName(w).toUpperCase());
   let text;
-  if (t.pad !== undefined) text = S.mag[t.items[0]] !== undefined ? 'Take ' + items[0] + ' ammo' : drop ? 'Swap ' + drop.toUpperCase() + ' for ' + items[0] : 'Take ' + items[0];
-  else text = 'Cauldron: ' + items.join(', ');
+  if (t.shop) text = `${t.shop} — ${t.cost} gold${S.gold < t.cost ? ' (need ' + (t.cost - S.gold) + ' more)' : ''}${t.buy !== undefined && drop && S.mag[t.items[0]] === undefined ? ' · drops ' + drop.toUpperCase() : ''}`;
+  else if (t.pad !== undefined) text = S.mag[t.items[0]] !== undefined ? 'Take ' + items[0] + ' ammo' : drop ? 'Swap ' + drop.toUpperCase() + ' for ' + items[0] : 'Take ' + items[0];
+  else text = 'Pick up ' + items.join(', ') + (drop && t.items.some(w => S.mag[w] === undefined) ? ' · drops ' + drop.toUpperCase() : '');
   const k = S.touch ? 'PICK UP' : key('use');
   ctx.font = 'bold 16px Courier New';
   const kw = ctx.measureText(k).width + 14, tw = ctx.measureText(text).width, x = W / 2 - (kw + 10 + tw) / 2, y = H / 2 + 80;
@@ -570,7 +597,9 @@ export function drawSpectate(now) {
     v.addColorStop(0, 'rgba(90,0,15,0)'); v.addColorStop(1, 'rgba(90,0,15,0.55)');
     ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
     const watching = S.spectateId != null ? 'Watching ' + nameOf(S.spectateId) : '';
-    const left = S.watching ? 'you play from the next match' : out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
+    const survival = S.room?.mode === 'survival';
+    const left = S.watching ? 'you play from the next match' : out && survival ? 'You rise again when this wave is cleared'
+      : out ? 'Click to watch someone else' : 'Back in ' + Math.max(0, (S.respawnAt - now) / 1000).toFixed(1) + 's';
     const sub = [watching, left].filter(Boolean).join(' · ');
     ctx.save();
     ctx.font = 'italic 700 15px Caslon Antique, Georgia, serif';
@@ -578,7 +607,7 @@ export function drawSpectate(now) {
     ctx.textBaseline = 'middle';
     ctx.font = '700 30px Caslon Antique, Georgia, serif';
     ctx.fillStyle = '#9a1628'; ctx.shadowColor = 'rgba(200,30,50,0.45)'; ctx.shadowBlur = 10;
-    ctx.fillText('ᛟ  ' + (S.watching ? 'SPECTATING' : out ? 'ELIMINATED' : 'YOU DIED') + '  ᛟ', W / 2, y - 14);
+    ctx.fillText('ᛟ  ' + (S.watching ? 'SPECTATING' : out && S.room?.mode === 'survival' ? 'YOU FELL' : out ? 'ELIMINATED' : 'YOU DIED') + '  ᛟ', W / 2, y - 14);
     ctx.shadowBlur = 0;
     ctx.font = 'italic 700 15px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#4a3420';
     ctx.fillText(sub, W / 2, y + 22);
@@ -606,6 +635,8 @@ potionImg.src = '/img/potion.png';
 // a gun's pickup sprite drawn once into a small canvas
 function weaponIcon(w) {
   if (icons[w]) return icons[w];
+  const art = gunArt(w);
+  if (art) return icons[w] = art.canvas;
   const sp = w === 'blade' ? BLADE_ICON : pickupSprite(w, GUN_COLOR[w]);
   const c = document.createElement('canvas'), IW = 64, IH = Math.max(8, Math.round(IW * sp.h / sp.w));
   c.width = IW; c.height = IH;
@@ -662,8 +693,8 @@ export function drawHotbar(now) {
     ...(buildingAllowed() ? [[{ keyName: key('build'), label: 'RAMP', sub: BUILDS.ramp.mana + ' MANA', col: [190, 150, 255], on: S.mana >= BUILDS.ramp.mana, held: S.buildMode }]] : []),
     Array.from({ length: SPELL_SLOTS }, (_, i) => {
       const sp = S.spells[i], look = sp && SPELL_LOOK[sp];
-      return { keyName: key('spell' + (i + 1)), label: sp ? look.rune + ' ' + sp.toUpperCase() : '—', sub: '', col: look ? look.col : [120, 110, 100], on: !!sp, slot: i };
-    }).filter(s => s.on || !S.touch), // phones: only the spells you're carrying
+      return { keyName: key('spell' + (i + 1)), label: '—', sub: sp ? (SPELL_NAME[sp] || sp).toUpperCase() : '', col: look ? look.col : [120, 110, 100], on: !!sp, slot: i, spell: sp };
+    }).filter(s => s.on || !S.touch), // phones: only the potions you're carrying
   ].filter(group => group.length);
   const count = groups.flat().length;
   const total = count * bw + (count - groups.length) * gap + (groups.length - 1) * groupGap;
@@ -682,7 +713,9 @@ export function drawHotbar(now) {
         : () => castSlot(s.slot);
       hits.push({ x: left + x * sc, y: top, w: bw * sc, h: bh * sc, act });
       slotBox(x, 0, bw, bh, s);
+      const brew = s.spell && spellPotion(s.spell);
       if (s.weapon) drawIcon(weaponIcon(s.weapon), x, 0, bw, bh, false);
+      else if (brew) drawIcon(brew.canvas, x, 0, bw, bh, false);
       else if (s.potion) drawIcon(potionImg, x, 0, bw, bh, !s.on);
       else {
         ctx.font = '700 12px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
@@ -703,8 +736,9 @@ export function drawHotbar(now) {
     ctx.font = '700 15px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#c8a0ff';
     ctx.fillText(`BUILD MODE · click to raise a ramp · ${key('build')} for your gun`, W / 2, H - (bh + 40) * sc);
   }
-  const effects = [['HASTE', S.hasteUntil, SPELL_LOOK.haste.col], ['WARD', S.wardUntil, SPELL_LOOK.ward.col],
-    ['INVISIBLE', S.invisUntil || 0, SPELL_LOOK.invis.col], ['CURSED', S.cursedUntil || 0, SPELL_LOOK.curse.col]].filter(([, until]) => until > now);
+  const effects = [['HASTE', S.hasteUntil, SPELL_LOOK.haste.col], ["WITCH'S HAT", S.wardUntil, SPELL_LOOK.ward.col],
+    ['INVISIBLE', S.invisUntil || 0, SPELL_LOOK.invis.col], ['CURSED', S.cursedUntil || 0, SPELL_LOOK.curse.col],
+    ['HEX FURY', S.furyUntil, POWER_COLOR.fury], ['FEATHERFALL', S.featherUntil, POWER_COLOR.feather], ['FROZEN', S.frozenUntil, SPELL_LOOK.frost.col]].filter(([, until]) => until > now);
   ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.textAlign = 'center';
   effects.forEach(([name, until, col], i) => {
     ctx.fillStyle = `rgb(${col.join(',')})`;

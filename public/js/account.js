@@ -50,9 +50,6 @@ export function initAccount() {
     e.stopImmediatePropagation();
     closeHist();
   }, true);
-  const lookChanged = () => { saveLook($('titlePick').value, $('effectPick').value); sendHello(); };
-  $('titlePick').addEventListener('change', lookChanged);
-  $('effectPick').addEventListener('change', lookChanged);
   $('pwForm').addEventListener('submit', e => {
     e.preventDefault();
     $('pwMsg').textContent = '';
@@ -101,19 +98,13 @@ function showXp() {
 }
 let xpSeen = false;
 
-// title and kill effect pickers in the Account popup: locked ones show the level they open at
+// title and kill effect: picked on the Customize card (room.js); a saved one you no longer
+// qualify for (another device, an older save) falls back to the first
 function showLook() {
   const level = levelFor(S.xp);
-  const fill = (el, table, current) => {
-    el.replaceChildren(...Object.entries(table).map(([id, t]) => {
-      const o = new Option(t.level > level ? `${t.name} (level ${t.level})` : t.name, id);
-      o.disabled = t.level > level;
-      return o;
-    }));
-    el.value = table[current] && table[current].level <= level ? current : Object.keys(table)[0];
-  };
-  fill($('titlePick'), TITLES, savedTitle());
-  fill($('effectPick'), KILL_EFFECTS, savedEffect());
+  const t = TITLES[savedTitle()]?.level <= level ? savedTitle() : 'apprentice';
+  const e = KILL_EFFECTS[savedEffect()]?.level <= level ? savedEffect() : 'blood';
+  if (t !== savedTitle() || e !== savedEffect()) saveLook(t, e);
 }
 
 // daily / weekly challenges, match history and records (the server's 'meta' message)

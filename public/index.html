@@ -107,14 +107,13 @@
         <div class="roomId"><span class="label">ROOM</span> <b id="roomCode">·····</b> <small id="roomKind"></small></div>
         <button id="copyLink" class="ghost">Copy invite link</button>
       </div>
-      <div class="links"><button id="quickPlay" class="link">Quick play</button><span>·</span><button id="newRoom" class="link">New private room</button><span>·</span><button id="tutorialLink" class="link">Tutorial</button></div>
+      <div class="links roomLinks"><button id="quickPlay" type="button" class="roomBtn">✦ Quick play</button><button id="newRoom" type="button" class="roomBtn">✦ New private room</button><button id="tutorialLink" type="button" class="roomBtn">✦ Tutorial</button></div>
 
       <div class="field">
         <div class="label">YOUR LOADOUT</div>
         <div id="loadout">
           <button type="button" class="stat" data-edit="mode"><b id="loMode"></b><span>Mode</span></button>
           <button type="button" class="stat" data-edit="map"><b id="loMap"></b><span>Realm</span></button>
-          <button type="button" class="stat" data-edit="skin"><b id="loSkin"></b><span>Character</span></button>
         </div>
       </div>
       <div class="field" id="scoreSetup">
@@ -133,6 +132,19 @@
           <button type="button" data-score="30">30</button>
           <button type="button" data-score="40">40</button>
         </div>
+        <div id="soulScorePick" class="choice seg" hidden>
+          <button type="button" data-score="15">15</button>
+          <button type="button" data-score="25">25</button>
+          <button type="button" data-score="40">40</button>
+        </div>
+      </div>
+      <div class="field" id="customGame">
+        <button type="button" id="customToggle" class="stat" aria-expanded="false" aria-controls="customRows">
+          <b><i class="rune">✦</i> CUSTOM GAME <i class="rune">✦</i></b>
+          <span id="customSummary">standard rules</span>
+          <i class="caret" aria-hidden="true">▾</i>
+        </button>
+        <div id="customRows" hidden></div>
       </div>
       <div class="field">
         <div class="label" id="rosterHead">PLAYERS</div>
@@ -160,22 +172,32 @@
       <button id="readyBtn" disabled>I'm Ready</button>
     </section>
     <section id="side">
+      <div id="customize" class="card">
+        <div class="cardHead"><div class="label">CUSTOMIZE</div><button type="button" class="ghost roll" aria-expanded="true" aria-label="Roll up"></button></div>
+        <div class="rollBody"><div>
+          <div id="profileLoadout">
+            <button type="button" class="stat lookTile" data-edit="skin"><b id="loSkin"></b><span>Character</span></button>
+            <button type="button" class="stat lookTile" data-edit="att"><b id="loAtt"></b><span>Attachment</span></button>
+            <button type="button" class="stat lookTile" data-edit="title"><b id="loTitle"></b><span>Title</span></button>
+            <button type="button" class="stat lookTile" data-edit="effect"><b id="loEffect"></b><span>Kill effect</span></button>
+          </div>
+          <small class="acctNote">More unlock as you level up.</small>
+        </div></div>
+      </div>
       <div id="profile" class="card">
-        <div class="cardHead"><div class="label">PROFILE</div><button type="button" class="ghost roll" aria-expanded="true" aria-label="Roll up"></button></div>
+        <div class="cardHead"><div class="label">STATS</div><button type="button" class="ghost roll" aria-expanded="true" aria-label="Roll up"></button></div>
         <div class="rollBody"><div>
           <div id="profileWho"><b id="profileName"></b><small id="acctLine"></small></div>
           <div id="levelRow"><b id="levelNum">Level 1</b><span class="xpBar"><i id="xpFill"></i></span><small id="xpText"></small></div>
           <div id="stats"></div>
           <button type="button" id="openHistory" class="ghost">History &amp; records</button>
-        </div></div>
-      </div>
-      <div class="card" id="boardCard" hidden>
-        <div class="cardHead"><div class="label">LEADERBOARD</div><button type="button" class="ghost roll" aria-expanded="true" aria-label="Roll up"></button></div>
-        <div class="rollBody"><div>
-          <table id="board">
-            <thead><tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Kills</th><th>K/D</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
+          <div id="boardCard" hidden>
+            <div class="label boardHead">LEADERBOARD</div>
+            <table id="board">
+              <thead><tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Kills</th><th>K/D</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div></div>
       </div>
     </section>
@@ -202,12 +224,6 @@
       <div class="field">
         <div class="label">DISPLAY NAME</div>
         <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="field">
-        <div class="label">LOOK</div>
-        <label class="lookRow"><span>Title</span><select id="titlePick"></select></label>
-        <label class="lookRow"><span>Kill effect</span><select id="effectPick"></select></label>
-        <small class="acctNote">More unlock as you level up.</small>
       </div>
       <div id="acctIn" class="field" hidden>
         <div class="label">SIGNED IN</div>
@@ -241,16 +257,19 @@
       <div id="pickerHead"><b id="pickerTitle">CHOOSE</b><button type="button" id="pickerClose" aria-label="Close">✕</button></div>
       <div class="field" data-sec="mode">
         <div class="label">MODE <small id="modeVote" style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">Click a mode to vote</small></div>
-        <div id="modes" class="choice seg">
-          <button data-mode="ffa">FREE-FOR-ALL</button>
-          <button data-mode="teams">TEAMS</button>
-          <button data-mode="hardpoint">HARDPOINT</button>
-          <button data-mode="plague">PLAGUE</button>
-          <button data-mode="snipers">SNIPERS</button>
-          <button data-mode="gungame">GUN GAME</button>
-          <button data-mode="royale">BATTLE ROYALE</button>
-          <button data-mode="build">BUILD BATTLE</button>
-          <button data-mode="ctf">CAPTURE THE CAULDRON</button>
+        <div id="modes" class="choice cards">
+          <button data-mode="ffa"><b>FREE-FOR-ALL</b><small>Every witch for herself</small></button>
+          <button data-mode="teams"><b>TEAMS</b><small>Red vs blue</small></button>
+          <button data-mode="hardpoint"><b>HARDPOINT</b><small>Hold the rotating hill</small></button>
+          <button data-mode="plague"><b>PLAGUE</b><small>Infect or survive</small></button>
+          <button data-mode="snipers"><b>SNIPERS</b><small>Long guns only</small></button>
+          <button data-mode="gungame"><b>GUN GAME</b><small>A new gun every kill</small></button>
+          <button data-mode="royale"><b>BATTLE ROYALE</b><small>One life, closing storm</small></button>
+          <button data-mode="build"><b>BUILD BATTLE</b><small>Raise earth ramps</small></button>
+          <button data-mode="ctf"><b>CAPTURE THE CAULDRON</b><small>Steal their cauldron</small></button>
+          <button data-mode="harvest"><b>SOUL HARVEST</b><small>Reap the fallen</small></button>
+          <button data-mode="chamber"><b>ONE IN THE CHAMBER</b><small>One round, one kill</small></button>
+          <button data-mode="survival"><b>WAVE SURVIVAL</b><small>Endless undead</small></button>
         </div>
         <p id="modeHelp"></p>
       </div>
@@ -265,6 +284,19 @@
           <button data-level="robot"><b>ALCHEMIST'S LAB</b><small>Potion shelves &amp; brew vats</small></button>
           <button data-level="haunt"><b>HEXED MANOR</b><small>Cursed halls &amp; the Backrooms</small></button>
         </div>
+      </div>
+      <div class="field" data-sec="att">
+        <div class="label">ATTACHMENT <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">One at a time; more unlock as you level up</small></div>
+        <div id="atts" class="choice cards"></div>
+        <p id="attHelp"></p>
+      </div>
+      <div class="field" data-sec="title">
+        <div class="label">TITLE <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">Shown by your name in the lobby</small></div>
+        <div id="titles" class="choice cards"></div>
+      </div>
+      <div class="field" data-sec="effect">
+        <div class="label">KILL EFFECT <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">The burst where your victims fall</small></div>
+        <div id="effects" class="choice cards"></div>
       </div>
       <div class="field" data-sec="skin">
         <div class="label">CHARACTER <small id="skinStatus" style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px"></small></div>

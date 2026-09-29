@@ -159,7 +159,7 @@ export function buildWorld(scene, T, theme, palette) {
     const matCount = new Map();
     for (let jj = j; jj < j1; jj++) for (let ii = i; ii < i1; ii++) {
       cells++;
-      if (kAt(ii, jj) !== 1 || treeCells[jj * TW + ii]) continue;
+      if (kAt(ii, jj) !== 1 || treeCells[jj * TW + ii] || mAt(ii, jj) === MAT.DOOR) continue; // doors: render/gl/props.js
       const h = hAt(ii, jj);
       if (h < 0.15) continue;
       blocked++;
@@ -176,7 +176,7 @@ export function buildWorld(scene, T, theme, palette) {
     }
     // Mixed block: one sample-sized box per blocked cell so walls stay solid at edges/doors.
     for (let jj = j; jj < j1; jj++) for (let ii = i; ii < i1; ii++) {
-      if (kAt(ii, jj) !== 1 || treeCells[jj * TW + ii]) continue;
+      if (kAt(ii, jj) !== 1 || treeCells[jj * TW + ii] || mAt(ii, jj) === MAT.DOOR) continue;
       const h = hAt(ii, jj);
       if (h < 0.15) continue;
       pushObstacle(ii, jj, ii + 1, jj + 1, h, mAt(ii, jj));
@@ -258,7 +258,7 @@ export function buildWorld(scene, T, theme, palette) {
   addProps(root, T, theme);
   addTrees(root, (T.props || []).filter(p => p.type === 'tree'), tex, theme);
   addHouses(root, T, tex);
-  if (theme.id === 'castle') addCastleTorches(root, T, theme);
+  if (theme.id === 'castle' || theme.id === 'crypt') addCastleTorches(root, T, theme);
   scene.add(root);
   worldRoot = root;
   return root;

@@ -1,10 +1,12 @@
 // In-world sprites: pooled billboards + reusable particle buffers (updated in place each frame).
 import * as THREE from 'three';
 import { S } from '../../state.js';
-import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode, redBlue } from '/shared/config.js';
+import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode, redBlue, MOBS } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
-import { GUN_COLOR } from '../../constants.js';
+import { cryptLayout } from '/shared/crypt.js';
+import { GUN_COLOR, POWER_COLOR, TEAM_RGB, SPELL_LOOK } from '../../constants.js';
 import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
+import { gunArt } from '../gunArt.js';
 import { getScene, getCamera } from './scene.js';
 
 const spriteCache = new Map();
@@ -13,12 +15,13 @@ entityRoot.name = 'entities';
 let attached = false;
 
 const TEAM_TINT = { 1: [180, 50, 50], 2: [110, 70, 150] };
-const BLADE_COLOR = [200, 205, 215];
-const HELD_SCALE = 0.7; // held guns are drawn smaller than the ones on pads
+const HELD_SCALE = 0.95; // guns in someone's hands, drawn at about life size
+const GROUND_SCALE = 1.3; // guns on pads and on the ground, a little bigger so you spot them
 const HAND = 0.2, GRIP = 0.3; // hand's distance from the body's middle; where along the gun it's held
 const PLAGUE_TINT = [70, 140, 55];
 
 // pools
+const shadowPool = [];
 const playerPool = [];
 const pickupPool = [];
 const boxPool = [];
@@ -55,6 +58,27 @@ function spriteTexture(px, pal, w = 32, h = 48, keyExtra = '') {
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
+  spriteCache.set(key, tex);
+  return tex;
+}
+
+// a gun drawn from its 3D model (render/gunArt.js): { tex, w, h } in world size, or null
+function gunTexture(w, flip = false) {
+  const key = 'gun|' + w + (flip ? '|l' : '');
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const art = gunArt(w, flip);
+  if (!art) return null;
+  const tex = new THREE.CanvasTexture(art.canvas);
+  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
+  const out = { tex, w: art.w, h: art.h };
+  spriteCache.set(key, out);
+  return out;
+}
+
+function canvasTexture(canvas, key) {
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
   spriteCache.set(key, tex);
   return tex;
 }
@@ -134,7 +158,51 @@ function makeSprite() {
   return new THREE.Sprite(mat);
 }
 
+// a round token with a glyph on it (power-ups, monster drops, elixirs, souls)
+function glyphTexture(glyph, col) {
+  const key = 'glyph|' + glyph + '|' + col.join(',');
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 4, 32, 32, 30);
+  grad.addColorStop(0, `rgba(${col.map(v => Math.min(255, v + 90)).join(',')},1)`);
+  grad.addColorStop(0.6, `rgba(${col.join(',')},0.95)`);
+  grad.addColorStop(1, `rgba(${col.map(v => v * 0.3).join(',')},0)`);
+  g.fillStyle = grad; g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
+  if (glyph) {
+    g.font = 'bold 30px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 4; g.strokeStyle = 'rgba(30,10,20,0.8)'; g.strokeText(glyph, 32, 34);
+    g.fillStyle = '#fff8e8'; g.fillText(glyph, 32, 34);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  spriteCache.set(key, tex);
+  return tex;
+}
+// a witch's hat: the shield (Witch's Hat power-up, Ward spell), on the ground and over the head
+// of whoever is wearing one. Palette: 1 felt, 2 band, 3 buckle, 4 felt highlight
+const HAT = {
+  pal: [null, [42, 26, 64], [150, 70, 210], [235, 195, 80], [78, 52, 110]],
+  px(u, v) {
+    if (v >= 0.76 && v <= 0.92) { // the brim: a flat ellipse
+      const e = ((v - 0.84) / 0.08) ** 2;
+      if (Math.abs(u - 0.5) < 0.49 * Math.sqrt(Math.max(0, 1 - e))) return v < 0.8 ? 4 : 1;
+      return 0;
+    }
+    if (v < 0.06 || v > 0.76) return 0;
+    const k = (v - 0.06) / 0.7, cx = 0.5 + 0.16 * (1 - k) ** 2, w = 0.03 + 0.21 * k; // the cone, tip bent over
+    if (Math.abs(u - cx) > w) return 0;
+    if (v > 0.6 && v < 0.71) return Math.abs(u - cx) < 0.06 ? 3 : 2; // band and buckle
+    return u < cx - w * 0.4 ? 4 : 1;
+  },
+};
+function hatTexture() { return spriteTexture(HAT.px, HAT.pal, 32, 32, 'witchhat'); }
+
+const POWER_GLYPH = { fury: '⚔', shield: '⛨', feather: '❦', cloak: '◌', maxammo: '▤', double: '2×', insta: '☠', nuke: '☢', troll: '♥', swift: '»', quick: '↻' };
+
 function setBillboard(spr, tex, x, y, z, worldW, worldH, xray, additive) {
+  spr.material.rotation = 0;
   if (spr.material.map !== tex) {
     spr.material.map = tex;
     spr.material.needsUpdate = true;
@@ -153,8 +221,39 @@ function setBillboard(spr, tex, x, y, z, worldW, worldH, xray, additive) {
   spr.visible = true;
 }
 
+// soft round shadows on the ground under people, monsters and things lying about: darker and
+// tighter the closer they are to the floor
+let shadowTex = null, shadowGeo = null;
+function makeShadow() {
+  if (!shadowTex) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d'), grad = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    grad.addColorStop(0, 'rgba(0,0,0,0.75)'); grad.addColorStop(0.55, 'rgba(0,0,0,0.4)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+    shadowTex = new THREE.CanvasTexture(c);
+    shadowGeo = new THREE.PlaneGeometry(1, 1);
+    shadowGeo.rotateX(-Math.PI / 2);
+  }
+  const m = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  m.renderOrder = 1;
+  return m;
+}
+function dropShadow(x, y, z, r, strength = 1) {
+  if (!S.T) return;
+  const floor = walkHeight(S.T, x, y, z + 0.05), up = Math.max(0, z - floor);
+  if (up > 4) return;
+  const k = 1 / (1 + up * 0.9), m = acquire(shadowPool, makeShadow);
+  m.position.set(x, floor + 0.015, y);
+  const size = r * 2 * (1 + up * 0.25);
+  m.scale.set(size, 1, size);
+  m.material.opacity = 0.85 * k * strength;
+}
+
 export function beginEntities() {
   ensureRoot();
+  resetPoolMarks(shadowPool);
   resetPoolMarks(playerPool);
   resetPoolMarks(pickupPool);
   resetPoolMarks(boxPool);
@@ -162,6 +261,7 @@ export function beginEntities() {
 }
 
 export function endEntities() {
+  for (const s of shadowPool) if (!s.userData.inUse) s.visible = false;
   for (const s of playerPool) if (!s.userData.inUse) s.visible = false;
   for (const s of pickupPool) if (!s.userData.inUse) s.visible = false;
   for (const s of boxPool) if (!s.userData.inUse) s.visible = false;
@@ -172,24 +272,61 @@ export function drawPickupBillboards(now) {
   if (!ensureRoot() || !S.T) return;
   S.pickupSpots.forEach((p, i) => {
     if (!S.pickupActive[i]) return;
-    const sp = pickupSprite(p.weapon, GUN_COLOR[p.weapon]);
     const z = 0.3 + 0.07 * Math.sin(now / 400 + i);
-    const tex = sp.src
-      ? imageTexture(sp.src)
-      : spriteTexture(sp.px, sp.pal, 32, 32, p.weapon);
+    const gun = gunTexture(p.weapon), sp = gun ? { w: gun.w * GROUND_SCALE, h: gun.h * GROUND_SCALE } : pickupSprite(p.weapon, GUN_COLOR[p.weapon], p.spell);
+    const tex = gun ? gun.tex : sp.canvas ? canvasTexture(sp.canvas, 'spell|' + p.spell) : sp.src ? imageTexture(sp.src) : spriteTexture(sp.px, sp.pal, 32, 32, p.weapon);
     const spr = acquire(pickupPool, makeSprite);
     setBillboard(spr, tex, p.x, p.y, z, sp.w, sp.h, false);
+    if (gun || sp.canvas || sp.src) { spr.material.opacity = 1; spr.material.alphaTest = gun ? 0.4 : 0.15; }
+    dropShadow(p.x, p.y, 0, Math.max(0.18, sp.w * 0.45), 0.7);
     if (sp.src) { spr.material.opacity = 1; spr.material.alphaTest = 0.15; }
   });
 
   const box = boxSprite();
   const boxTex = imageTexture(box.src);
-  for (const b of S.boxes) {
-    const bob = 0.035 * Math.sin(now / 320 + b.id);
+  // guns someone dropped: the guns themselves, lying where they fell
+  for (const b of S.boxes) b.items.forEach((w, i) => {
+    const sp = gunTexture(w);
+    if (!sp) return;
+    const off = (i - (b.items.length - 1) / 2) * 0.32, bob = 0.03 * Math.sin(now / 320 + b.id + i);
+    dropShadow(b.x + off, b.y - off * 0.5, b.z, sp.w * 0.45, 0.8);
     const spr = acquire(boxPool, makeSprite);
-    setBillboard(spr, boxTex, b.x, b.y, b.z + bob, box.w, box.h, false);
-    spr.material.opacity = 1;
-    spr.material.alphaTest = 0.15;
+    setBillboard(spr, sp.tex, b.x + off, b.y - off * 0.5, b.z + 0.12 + bob, sp.w * GROUND_SCALE, sp.h * GROUND_SCALE, false);
+    spr.material.opacity = 1; spr.material.alphaTest = 0.4;
+    spr.material.rotation = 0.35 * Math.sin(b.id * 1.7 + i); // tossed down at an angle
+  });
+  const token = (tex, x, y, z, size, rot = 0) => {
+    dropShadow(x, y, z - 0.3, size * 0.4, 0.6);
+    const spr = acquire(boxPool, makeSprite);
+    setBillboard(spr, tex, x, y, z, size, size, false);
+    spr.material.opacity = 1; spr.material.alphaTest = 0.05; spr.material.rotation = rot;
+    return spr;
+  };
+  for (const u of S.powerups) if (u.active) {
+    const z = u.z + 0.35 + 0.08 * Math.sin(now / 300 + u.id);
+    if (u.kind === 'shield') { const spr = token(hatTexture(), u.x, u.y, z, 0.7, 0.15 * Math.sin(now / 400 + u.id)); spr.material.alphaTest = 0.4; }
+    else token(glyphTexture(POWER_GLYPH[u.kind], POWER_COLOR[u.kind]), u.x, u.y, z, 0.55);
+  }
+  // Soul Harvest: wisps in the fallen's team color
+  for (const o of S.souls) token(glyphTexture('', TEAM_RGB[o.t] || [220, 220, 255]), o.x, o.y, o.z + 0.45 + 0.1 * Math.sin(now / 250 + o.id), 0.5 + 0.06 * Math.sin(now / 90 + o.id));
+  for (const t of S.totems) token(glyphTexture('♣', SPELL_LOOK.totem.col), t.x, t.y, t.z + 0.2 + 0.05 * Math.sin(now / 200), 0.7);
+  // the Crypt: guns on the walls, elixir altars, the mystery cauldron, monster drops
+  if (S.survival && S.level === 'crypt') {
+    const L = cryptLayout(S.MAP);
+    for (const b of L.buys) {
+      const sp = gunTexture(b.w);
+      if (!sp) continue;
+      const spr = acquire(pickupPool, makeSprite);
+      setBillboard(spr, sp.tex, b.x + b.wx * 0.38, b.y + b.wy * 0.38, 0.95, sp.w * 1.1, sp.h * 1.1, false);
+      spr.material.opacity = 1; spr.material.alphaTest = 0.4;
+    }
+    for (const e of L.elixirs) token(glyphTexture(POWER_GLYPH[e.elixir], POWER_COLOR[e.elixir]), e.x, e.y, 0.5 + 0.05 * Math.sin(now / 400 + e.id), 0.75);
+    for (const c of L.boxes) {
+      const spr = acquire(boxPool, makeSprite);
+      setBillboard(spr, boxTex, c.x, c.y, 0.02 * Math.sin(now / 300), box.w * 1.8, box.h * 1.8, false);
+      spr.material.opacity = 1; spr.material.alphaTest = 0.15;
+    }
+    for (const d of S.survival.drops || []) token(glyphTexture(POWER_GLYPH[d.k], POWER_COLOR[d.k]), d.x, d.y, d.z + 0.45 + 0.1 * Math.sin(now / 250 + d.id), 0.65, 0.2 * Math.sin(now / 500 + d.id));
   }
   // Capture the Cauldron: each coven's cauldron, big on the ground or small over its carrier's head
   if (S.ctf && S.room?.mode === 'ctf') for (const t of [1, 2]) {
@@ -236,8 +373,33 @@ function poseFor(o, now) {
   return { back, stride, bob: stride ? 0.04 : 0, kick, a: e.a || 0 };
 }
 
-function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline, pose, alpha = 1, xray = false) {
+// what an emote does to someone's sprite, `t` seconds in: { rot, bob, sx, sy, back }
+function emoteAnim(e, t) {
+  const s = Math.sin, a = Math.abs;
+  switch (e) {
+    case 'cackle': return { bob: a(s(t * 14)) * 0.07, sy: 1 - a(s(t * 14)) * 0.06, rot: s(t * 7) * 0.05 }; // doubled over laughing
+    case 'curtsy': { const d = Math.max(0, s(t * 2.4)); return { sy: 1 - 0.18 * d, sx: 1 + 0.06 * d, rot: -0.1 * d }; }
+    case 'hex': return { rot: s(t * 6) * 0.12, sx: 1 + 0.06 * a(s(t * 9)) }; // weaving a spell
+    case 'brew': return { rot: s(t * 5) * 0.1, bob: Math.cos(t * 5) * 0.03 }; // stirring the cauldron
+    case 'broom': return { bob: Math.min(1, t * 2) * (0.3 + s(t * 4) * 0.08), rot: -0.22 + s(t * 4) * 0.05 }; // up on a broomstick
+    case 'bats': { const c = Math.cos(t * 9); return { sx: Math.max(0.08, a(c)), back: c < 0 }; } // whirls into a cloud of bats
+    case 'howl': return { sy: 1.12, bob: 0.05, rot: s(t * 20) * 0.025 }; // at the moon
+    case 'hiss': return { sx: 1.12, sy: 0.94, rot: s(t * 30) * 0.04 }; // back arched like a black cat
+  }
+  return null;
+}
+export function emoteFor(id, now) {
+  const e = S.emotes[id];
+  if (!e || now - e.t > e.ms) return null;
+  return emoteAnim(e.emote, (now - e.t) / 1000);
+}
+
+function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline, pose, alpha = 1, xray = false, anim = null) {
   const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
+  if (anim) {
+    hScale *= anim.sy || 1; wScale *= anim.sx || 1; z += anim.bob || 0;
+    if (anim.back !== undefined && pose) pose = { ...pose, back: anim.back };
+  }
   const px = pose ? s.pose(pose.back, pose.stride) : s.px;
   const poseKey = pose ? (pose.back ? 'b' : 'f') + pose.stride : '';
   if (pose) {
@@ -279,6 +441,7 @@ function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline
   setBillboard(spr, tex, x, y, z, bw, h, xray);
   spr.material.opacity = alpha;
   spr.material.alphaTest = alpha < 1 ? 0.02 : 0.4;
+  if (anim?.rot) spr.material.rotation = anim.rot;
 }
 
 export function drawParticlePoints(embers, particles) {
@@ -329,8 +492,27 @@ export function drawParticlePoints(embers, particles) {
 export function drawOthersAndCorpses(now) {
   for (const c of S.corpses) {
     if (c.mine && !S.dead) continue; // your own body is under the camera, unless you're spectating
-    const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0;
-    drawPlayerBillboard(c.x, c.y, c.z - sink, 1 - 0.72 * fall, 1 + 0.9 * fall, false, null, c.skin, null);
+    const age = now - c.t, fall = Math.min(1, age / 450), sink = age > 4000 ? (age - 4000) / 2000 * 0.4 : 0, big = c.big || 1;
+    dropShadow(c.x, c.y, c.z, 0.32 * big * (1 + 0.5 * fall), Math.max(0, 1 - sink * 2));
+    drawPlayerBillboard(c.x, c.y, c.z - sink, (1 - 0.72 * fall) * big, (1 + 0.9 * fall) * big, false, null, c.skin, null);
+  }
+  // monsters and decoys
+  for (const [id, o] of Object.entries(S.npcs)) {
+    const e = o.now;
+    if (!e) continue;
+    if (e.at && now - o.flashT > 250) o.flashT = now; // lunging: drawn with the recoil kick
+    const pose = poseFor(o, now);
+    dropShadow(e.x, e.y, e.z, 0.3 * (MOBS[e.k]?.big || 1), e.k === 'wraith' ? 0.5 : 1);
+    if (e.k === 'decoy') { // a double of its caster
+      const owner = S.room?.players.find(p => p.id === e.o);
+      const tint = S.room && redBlue(S.room.mode) && owner ? TEAM_TINT[owner.team] : null;
+      drawPlayerBillboard(e.x, e.y, e.z, 1, 1, now - o.hitT < 90, tint, owner?.skin, null, pose);
+      continue;
+    }
+    const def = MOBS[e.k] || MOBS.ghoul, big = def.big || 1;
+    const tint = e.fr ? [150, 220, 255] : def.boss ? [150, 30, 40] : null;
+    const floaty = e.k === 'wraith' ? 0.25 + 0.08 * Math.sin(now / 300 + e.x) : 0;
+    drawPlayerBillboard(e.x, e.y, e.z + floaty, big, big, now - o.hitT < 90, tint, def.skin, null, pose, e.k === 'wraith' ? 0.75 : 1);
   }
   for (const o of Object.values(S.others)) {
     if (!o.now || o.now.dead) continue; // their corpse is drawn instead
@@ -340,15 +522,22 @@ export function drawOthersAndCorpses(now) {
     const tint = S.room?.mode === 'plague' && S.room.gameOn && team === PLAGUE_TEAM
       ? PLAGUE_TINT : (S.room && redBlue(S.room.mode)) ? TEAM_TINT[team] : null;
     const pose = poseFor(o, now);
+    if (!o.cur?.iv || killer) dropShadow(o.now.x, o.now.y, o.now.z, 0.3);
     drawPlayerBillboard(
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,
       o.now.sl ? 1.15 : 1,
       now - o.hitT < 90, tint, player && player.skin, killer ? { col: [255, 70, 90] } : null, pose, // only the killcam outlines anyone
       o.cur?.iv && !killer ? 0.12 : 1, // Invisibility: a faint shimmer
-      killer
+      killer, emoteFor(o.now.id, now)
     );
-    if (o.now.w && (!o.cur?.iv || killer)) drawHeldGun(o.now, o.now.sl ? SLIDE.crouch : 1, pose, killer);
+    if (o.now.w && (!o.cur?.iv || killer) && !emoteFor(o.now.id, now)) drawHeldGun(o.now, o.now.sl ? SLIDE.crouch : 1, pose, killer);
+    if (o.cur?.sh && !o.cur?.iv) { // shielded: a glowing witch's hat hovers over them
+      const spr = acquire(playerPool, makeSprite);
+      setBillboard(spr, hatTexture(), o.now.x, o.now.y, o.now.z + (BODY_H + 0.08) * (o.now.sl ? SLIDE.crouch : 1) + 0.04 * Math.sin(now / 250 + o.now.id), 0.5, 0.5, false);
+      spr.material.opacity = 0.9; spr.material.alphaTest = 0.4;
+      spr.material.rotation = 0.12 * Math.sin(now / 500 + o.now.id);
+    }
   }
 }
 
@@ -366,16 +555,15 @@ function drawHeldGun(e, hScale, pose, xray) {
   const d = Math.hypot(tx, ty) || 1;
   tx /= d; ty /= d;
   const facing = ax * tx + ay * ty > 0 ? 1 : -1;
-  const sp = pickupSprite(e.w, GUN_COLOR[e.w] || BLADE_COLOR);
-  const gw = sp.w * HELD_SCALE * (0.4 + 0.6 * Math.abs(across)), gh = sp.h * HELD_SCALE; // shorter when aimed at / away from you
+  const art = gunTexture(e.w, side < 0);
+  if (!art) return;
+  const gw = art.w * HELD_SCALE * (0.4 + 0.6 * Math.abs(across)), gh = art.h * HELD_SCALE; // shorter when aimed at / away from you
   const reach = side * (HAND + (0.5 - GRIP) * gw - 0.06 * pose.kick); // grip in the hand, kicked back after a shot
   const pull = d > 0.5 ? 0.2 + 0.08 * facing : 0; // same slide toward the camera as the body, plus a little
   const x = e.x + camRight.x * reach + tx * pull, y = e.y + camRight.z * reach + ty * pull;
   const h = (BODY_H + 0.12) * hScale;
-  const px = side > 0 ? sp.px : (u, v) => sp.px(1 - u, v);
-  const tex = spriteTexture(px, sp.pal, 32, 16, 'held|' + e.w + '|' + side);
   const spr = acquire(playerPool, makeSprite);
-  setBillboard(spr, tex, x, y, e.z + pose.bob + h * 0.37 - gh / 2, gw, gh, xray);
+  setBillboard(spr, art.tex, x, y, e.z + pose.bob + h * 0.37 - gh / 2, gw, gh, xray);
   spr.material.opacity = 1;
   spr.material.alphaTest = 0.4;
 }

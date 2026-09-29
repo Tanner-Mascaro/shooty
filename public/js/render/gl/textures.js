@@ -278,8 +278,9 @@ export function clearTextureCache() {
 
 export function texturesFor(theme) {
   if (cache.has(theme.id)) return cache.get(theme.id);
-  const floorDraw = FLOOR_DRAW[theme.id] || FLOOR_DRAW.hell;
-  const wallDraw = WALL_DRAW[theme.id] || WALL_DRAW.hell;
+  const look = theme.id === 'crypt' ? 'castle' : theme.id; // the Crypt borrows the castle's stonework
+  const floorDraw = FLOOR_DRAW[look] || FLOOR_DRAW.hell;
+  const wallDraw = WALL_DRAW[look] || WALL_DRAW.hell;
   const floor = makeTexture((ctx, w, h) => floorDraw(ctx, w, h), { size: 256 });
   floor.repeat.set(18, 18);
   const wall = makeTexture((ctx, w, h) => wallDraw(ctx, w, h, theme), { size: 256 });

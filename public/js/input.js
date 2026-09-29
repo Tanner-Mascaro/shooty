@@ -12,6 +12,19 @@ import { send } from './net.js';
 import { cycleSpectate } from './spectate.js';
 import { setBuildMode, placeRamp, castSlot } from './spells.js';
 import { toggleMap } from './mapview.js';
+import { EMOTES } from '/shared/config.js';
+
+// the emote wheel: open with its key, then a number key, or move the mouse toward one and click
+function emote(e) {
+  S.emoteWheel = false;
+  if (e) send({ type: 'emote', emote: e });
+}
+function wheelPick() {
+  const { x, y } = S.wheelAim || { x: 0, y: 0 };
+  if (Math.hypot(x, y) < 25) return null;
+  const a = (Math.atan2(y, x) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+  return EMOTES[Math.round(a / (Math.PI * 2) * EMOTES.length) % EMOTES.length];
+}
 
 const locked = () => document.pointerLockElement === canvas;
 const typing = e => e.target.matches('input:not([type]), input[type=text], input[type=password], textarea') || chatOpen();
@@ -30,6 +43,12 @@ export function initInput() {
     const act = actionFor(e.code);
     if (e.code === 'Space' || (act && S.started)) e.preventDefault();
     if (e.repeat) return;
+    if (S.emoteWheel) { // picking an emote: number keys choose, anything else closes it
+      const n = /^Digit([1-8])$/.exec(e.code);
+      if (n) { e.preventDefault(); return emote(EMOTES[+n[1] - 1]); }
+      if (act === 'emote' || e.code === 'Escape') return emote(null);
+    }
+    if (act === 'emote' && S.started && !S.dead) { S.emoteWheel = true; S.wheelAim = { x: 0, y: 0 }; S.mouseHeld = false; return; }
     if (act === 'fullscreen') return toggleFullscreen();
     if (act === 'settings') return openSettings();
     if (act === 'map') return toggleMap();
@@ -52,9 +71,14 @@ export function initInput() {
   window.addEventListener('keyup', e => { S.keys[e.code] = false; });
   window.addEventListener('blur', () => { S.keys = {}; S.mouseHeld = false; }); // don't keep running after alt-tab
 
-  document.addEventListener('mousemove', e => { if (locked()) { S.mouseDX += e.movementX; S.mouseDY += e.movementY; } });
+  document.addEventListener('mousemove', e => {
+    if (!locked()) return;
+    if (S.emoteWheel) { const w = S.wheelAim; w.x = Math.max(-120, Math.min(120, w.x + e.movementX)); w.y = Math.max(-120, Math.min(120, w.y + e.movementY)); S.wheelPick = wheelPick(); return; }
+    S.mouseDX += e.movementX; S.mouseDY += e.movementY;
+  });
   document.addEventListener('mousedown', e => {
     if (!S.started || !S.me || !locked()) return;
+    if (S.emoteWheel) { emote(e.button === 0 ? wheelPick() : null); return; }
     if (e.button === 0 && S.dead) return cycleSpectate(); // dead: click watches someone else
     if (S.buildMode) { if (e.button === 0) placeRamp(); else if (e.button === 2) setBuildMode(false); return; }
     if (e.button === 2) aim(true);

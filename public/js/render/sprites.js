@@ -57,6 +57,38 @@ const GUN_SHAPES = {
     [0.48, 0.7, 0.08, 0.18, 2], [0.55, 0.85, 0.34, 0.42, 3]] },
   shotgun: { w: 0.9, h: 0.3, boxes: [[0, 0.26, 0.32, 0.78, 4], [0.26, 0.44, 0.24, 0.56, 1], [0.44, 1, 0.26, 0.4, 2], [0.44, 0.9, 0.42, 0.52, 2],
     [0.56, 0.76, 0.38, 0.62, 4], [0.28, 0.35, 0.56, 0.88, 4], [0.27, 0.43, 0.36, 0.42, 3], [0.97, 1, 0.2, 0.26, 3]] },
+  // --- the newer guns ---
+  derringer: { w: 0.26, h: 0.22, boxes: [[0.1, 0.95, 0.15, 0.35, 1], [0.1, 0.95, 0.35, 0.5, 2], [0.05, 0.35, 0.5, 0.98, 4], [0.35, 0.5, 0.5, 0.65, 2], [0.2, 0.8, 0.2, 0.28, 3]] },
+  flintlock: { w: 0.62, h: 0.3, boxes: [[0.25, 1, 0.2, 0.36, 2], [0.2, 0.5, 0.18, 0.5, 1], [0.02, 0.3, 0.4, 0.95, 4], [0.28, 0.4, 0.05, 0.22, 2],
+    [0.4, 0.5, 0.5, 0.66, 2], [0.94, 1, 0.14, 0.4, 2], [0.3, 0.9, 0.22, 0.28, 3]] },
+  autopistol: { w: 0.4, h: 0.34, boxes: [[0.05, 0.95, 0.1, 0.38, 1], [0.12, 0.88, 0.2, 0.27, 3], [0.1, 0.34, 0.38, 0.8, 2], [0.34, 0.5, 0.38, 0.55, 2],
+    [0.14, 0.3, 0.8, 1, 2], [0.14, 0.3, 0.92, 1, 3], [0.88, 1, 0.14, 0.3, 2]] },
+  assault: { w: 0.86, h: 0.38, boxes: [[0, 0.2, 0.28, 0.66, 4], [0.2, 0.58, 0.22, 0.5, 1], [0.58, 0.82, 0.26, 0.44, 4], [0.82, 1, 0.32, 0.4, 2],
+    [0.42, 0.52, 0.5, 0.96, 2], [0.47, 0.56, 0.9, 1, 3], [0.27, 0.35, 0.5, 0.86, 2], [0.22, 0.78, 0.33, 0.38, 3], [0.74, 0.78, 0.14, 0.26, 2]] },
+  dmr: { w: 0.9, h: 0.32, boxes: [[0, 0.22, 0.34, 0.74, 2], [0.22, 0.6, 0.3, 0.54, 1], [0.6, 0.86, 0.34, 0.48, 1], [0.86, 1, 0.38, 0.45, 2],
+    [0.3, 0.52, 0.12, 0.28, 2], [0.32, 0.5, 0.14, 0.2, 3], [0.4, 0.5, 0.54, 0.8, 2], [0.26, 0.34, 0.54, 0.88, 2], [0.24, 0.8, 0.4, 0.45, 3]] },
+  marksman: { w: 1.0, h: 0.3, boxes: [[0, 0.24, 0.36, 0.78, 4], [0.24, 0.54, 0.36, 0.58, 1], [0.54, 1, 0.43, 0.5, 2], [0.28, 0.54, 0.1, 0.26, 2],
+    [0.3, 0.52, 0.12, 0.18, 3], [0.36, 0.44, 0.58, 0.82, 2], [0.28, 0.34, 0.58, 0.86, 2], [0.26, 0.9, 0.45, 0.49, 3]] },
+  dragon: { w: 1.25, h: 0.36, boxes: [[0, 0.22, 0.34, 0.8, 2], [0.22, 0.52, 0.3, 0.6, 1], [0.52, 1, 0.4, 0.5, 2], [0.94, 1, 0.34, 0.56, 1],
+    [0.24, 0.56, 0.04, 0.24, 2], [0.26, 0.54, 0.08, 0.16, 3], [0.6, 0.64, 0.5, 0.95, 2], [0.7, 0.74, 0.5, 0.95, 2], [0.24, 0.92, 0.44, 0.47, 3]] },
+  doublebarrel: { w: 0.92, h: 0.3, boxes: [[0, 0.3, 0.32, 0.8, 4], [0.3, 0.44, 0.24, 0.56, 1], [0.44, 1, 0.22, 0.34, 2], [0.44, 1, 0.36, 0.48, 2],
+    [0.5, 0.74, 0.48, 0.6, 4], [0.32, 0.4, 0.56, 0.86, 4], [0.3, 0.42, 0.3, 0.38, 3]] },
+  autoshotgun: { w: 0.86, h: 0.4, boxes: [[0, 0.2, 0.26, 0.66, 2], [0.2, 0.62, 0.2, 0.5, 1], [0.62, 1, 0.24, 0.38, 2], [0.62, 0.9, 0.4, 0.5, 2],
+    [0.36, 0.56, 0.5, 0.78, 1], [0.36, 0.56, 0.72, 0.8, 3], [0.24, 0.32, 0.5, 0.86, 2], [0.22, 0.6, 0.3, 0.36, 3]] },
+  blunderbuss: { w: 0.9, h: 0.36, boxes: [[0, 0.32, 0.36, 0.84, 4], [0.32, 0.76, 0.34, 0.5, 1], [0.76, 0.9, 0.3, 0.54, 1], [0.9, 1, 0.2, 0.64, 1],
+    [0.92, 1, 0.3, 0.54, 2], [0.36, 0.46, 0.5, 0.7, 2], [0.34, 0.74, 0.38, 0.42, 3]] },
+  gatling: { w: 0.95, h: 0.46, boxes: [[0, 0.16, 0.2, 0.5, 2], [0.16, 0.48, 0.14, 0.56, 1], [0.48, 1, 0.18, 0.26, 2], [0.48, 1, 0.3, 0.38, 2],
+    [0.48, 1, 0.42, 0.5, 2], [0.94, 1, 0.14, 0.54, 1], [0.22, 0.42, 0.56, 1, 2], [0.22, 0.42, 0.9, 1, 3], [0.18, 0.46, 0.3, 0.36, 3], [0.26, 0.4, 0.02, 0.14, 2]] },
+  reaper: { w: 0.52, h: 0.38, boxes: [[0, 0.14, 0.24, 0.32, 2], [0.14, 0.8, 0.14, 0.46, 1], [0.8, 0.98, 0.24, 0.36, 2], [0.4, 0.5, 0.46, 0.98, 2],
+    [0.4, 0.5, 0.9, 0.98, 3], [0.2, 0.3, 0.46, 0.84, 2], [0.18, 0.76, 0.26, 0.32, 3], [0.55, 0.78, 0.46, 0.6, 2]] },
+  swarm: { w: 0.6, h: 0.34, boxes: [[0, 0.3, 0.3, 0.8, 1], [0.3, 0.88, 0.2, 0.56, 1], [0.88, 1, 0.34, 0.44, 2], [0.2, 0.9, 0.08, 0.2, 2],
+    [0.22, 0.88, 0.1, 0.16, 3], [0.38, 0.5, 0.56, 0.9, 2], [0.56, 0.8, 0.56, 0.7, 2]] },
+  tommy: { w: 0.8, h: 0.44, boxes: [[0, 0.2, 0.26, 0.6, 4], [0.2, 0.62, 0.2, 0.44, 1], [0.62, 1, 0.26, 0.36, 2], [0.62, 0.78, 0.36, 0.44, 2],
+    [0.36, 0.56, 0.44, 0.96, 2], [0.38, 0.54, 0.5, 0.9, 3], [0.62, 0.72, 0.44, 0.7, 4], [0.24, 0.32, 0.44, 0.8, 4]] },
+  staff: { w: 1.0, h: 0.26, boxes: [[0, 0.82, 0.42, 0.58, 4], [0.1, 0.14, 0.36, 0.64, 2], [0.4, 0.44, 0.36, 0.64, 2], [0.8, 0.86, 0.2, 0.8, 1],
+    [0.86, 1, 0.1, 0.9, 3], [0.9, 0.96, 0.3, 0.7, 1]] },
+  bow: { w: 0.95, h: 0.5, boxes: [[0.05, 0.42, 0.42, 0.62, 4], [0.42, 0.7, 0.4, 0.6, 1], [0.7, 0.76, 0.02, 0.98, 4], [0.66, 0.7, 0.06, 0.2, 2],
+    [0.66, 0.7, 0.8, 0.94, 2], [0.64, 0.66, 0.1, 0.9, 3], [0.2, 0.98, 0.48, 0.52, 3], [0.94, 1, 0.44, 0.56, 1]] },
 };
 const gunCache = {};
 function gunPx(w) {
@@ -70,30 +102,54 @@ function gunPx(w) {
 
 // world size + shape for a floating pickup
 // health / potion / cauldron use Koalerina Cozy Witchcraft 32×32 PNGs (see /img/CREDITS.txt)
-export function pickupSprite(weapon, color) {
+export function pickupSprite(weapon, color, spell) {
   if (weapon === 'ammo') return AMMO_CRATE;
   if (weapon === 'nade') return NADE_SPRITE;
   if (weapon === 'health') return HEALTH_SPRITE;
-  if (weapon === 'scroll') return SCROLL_SPRITE;
+  if (weapon === 'scroll') return spellPotion(spell) || { w: 0.5, h: 0.5, src: '/img/potion.png' };
   const g = GUN_SHAPES[weapon] || GUN_SHAPES.pistol, body = color.map(c => 40 + c * 0.35); // each gun's body carries its color
   return { w: g.w, h: g.h, px: gunPx(weapon in GUN_SHAPES ? weapon : 'pistol'), pal: [null, body, [26, 26, 30], color, [110, 70, 40]], emit: [3] };
 }
 
 const HEALTH_SPRITE = { w: 0.55, h: 0.55, src: '/img/health-potion.png' };
-// a rolled spell scroll with a violet seal
-const SCROLL_SPRITE = {
-  w: 0.55, h: 0.55, emit: [3],
-  pal: [null, [230, 205, 150], [150, 110, 60], [190, 120, 255], [120, 80, 40]],
-  px: function scroll(u, v) {
-    const rolls = (u < 0.2 || u > 0.8) && v > 0.28 && v < 0.72;
-    if (rolls) return (u < 0.1 || u > 0.9) ? 4 : 2;
-    if (u >= 0.2 && u <= 0.8 && v > 0.34 && v < 0.66) {
-      if (Math.hypot(u - 0.5, v - 0.5) < 0.1) return 3; // seal
-      return ((v * 20) | 0) % 3 === 0 && u > 0.28 && u < 0.72 ? 4 : 1; // writing
-    }
-    return 0;
-  },
-};
+// spells come in potions: the violet potion (/img/potion.png), its brew recolored to each
+// spell's color. null until the picture has loaded
+const potionImg = typeof Image !== 'undefined' ? new Image() : null;
+if (potionImg) potionImg.src = '/img/potion.png';
+// (keep in step with SPELL_LOOK in constants.js)
+const SPELL_COLORS = { heal: [230, 60, 70], haste: [255, 210, 60], ward: [70, 110, 255], broom: [255, 140, 40], blink: [60, 230, 220],
+  invis: [200, 200, 230], curse: [190, 70, 255], frost: [190, 235, 255], totem: [40, 190, 90], well: [110, 60, 200], decoy: [255, 120, 190] };
+function hsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (!d) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? ((g - b) / d + (g < b ? 6 : 0)) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+function rgb([h, s, l]) {
+  if (!s) return [l * 255, l * 255, l * 255];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
+const potionArts = {};
+export function spellPotion(spell) {
+  if (!potionImg || !potionImg.complete || !potionImg.naturalWidth) return null;
+  if (potionArts[spell]) return potionArts[spell];
+  const c = document.createElement('canvas'), W = c.width = potionImg.naturalWidth, H = c.height = potionImg.naturalHeight;
+  const g = c.getContext('2d');
+  g.drawImage(potionImg, 0, 0);
+  const img = g.getImageData(0, 0, W, H), d = img.data, [th, ts] = hsl(SPELL_COLORS[spell] || [190, 120, 255]);
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const [h, s, l] = hsl([d[i], d[i + 1], d[i + 2]]);
+    if (s < 0.2 || h < 0.62 || h > 0.97) continue; // only the violet brew (and its sparkles), not the cork or glass
+    d.set(rgb([th, Math.min(1, ts * 0.85 + s * 0.15), l]).map(Math.round), i);
+  }
+  g.putImageData(img, 0, 0);
+  return potionArts[spell] = { w: 0.5, h: 0.5, canvas: c };
+}
 const NADE_SPRITE = { w: 0.55, h: 0.55, src: '/img/potion.png' };
 const AMMO_CRATE = { w: 0.5, h: 0.5, src: '/img/ammo.png' };
 

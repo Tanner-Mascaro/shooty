@@ -14,7 +14,7 @@ export const DAILY = [
   { id: 'win1', text: 'Win a match', goal: 1, xp: 70, on: e => e.type === 'win' },
   { id: 'blade3', text: 'Get 3 blade kills', goal: 3, xp: 70, on: e => e.type === 'kill' && e.weapon === 'blade' },
   { id: 'potion2', text: 'Get 2 potion kills', goal: 2, xp: 70, on: e => e.type === 'kill' && e.weapon === 'nade' },
-  { id: 'cast3', text: 'Cast 3 spells from scrolls', goal: 3, xp: 50, on: e => e.type === 'cast' },
+  { id: 'cast3', text: 'Drink 3 spell potions', goal: 3, xp: 50, on: e => e.type === 'cast' },
   { id: 'streak3', text: 'Get a 3-kill streak', goal: 1, xp: 60, on: e => e.type === 'kill' && e.streak >= 3 },
   { id: 'snipe3', text: 'Get 3 kills with a sniper, crossbow or beam', goal: 3, xp: 60, on: e => e.type === 'kill' && SNIPES.includes(e.weapon) },
   { id: 'wand3', text: 'Get 3 kills with the Hex Wand', goal: 3, xp: 70, on: e => e.type === 'kill' && e.weapon === 'wand' },

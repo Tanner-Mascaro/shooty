@@ -18,10 +18,11 @@ function castShot(T, shooter, a, pch, targets) {
     const ceil = ceilingAt(T, rx, ry, rz);
     if (ceil != null && rz > ceil) { r.dist = d; return r; }
     for (const o of targets) {
-      const h = o.sl ? BODY_H * SLIDE.crouch : BODY_H; // sliding players are lower
-      if (Math.hypot(rx - o.x, ry - o.y) < 0.42 && rz >= o.z && rz <= o.z + h + 0.05) {
+      const size = o.big || 1; // big monsters are bigger targets
+      const h = (o.sl ? BODY_H * SLIDE.crouch : BODY_H) * size; // sliding players are lower
+      if (Math.hypot(rx - o.x, ry - o.y) < 0.42 * size && rz >= o.z && rz <= o.z + h + 0.05) {
         r.dist = d; r.hit = o;
-        r.head = rz >= o.z + h - 0.2;
+        r.head = rz >= o.z + h - 0.2 * size;
         return r;
       }
     }
@@ -30,11 +31,11 @@ function castShot(T, shooter, a, pch, targets) {
 }
 
 // returns { rays, hits: [{ target, dmg, head, ray }] } — one entry per target hit
-// (a shotgun blast can hit several people)
-export function doShoot(T, shooter, targets, weapon, scoped) {
+// (a shotgun blast can hit several people). spreadScale < 1 tightens hip fire (Laser Sight)
+export function doShoot(T, shooter, targets, weapon, scoped, spreadScale = 1) {
   const w = WEAPONS[weapon];
   const airborne = shooter.z - solidAt(T, shooter.x, shooter.y, shooter.z) > 0.05;
-  const spread = w.pellets ? w.spread : airborne ? w.airSpread : scoped ? w.scopedSpread : w.spread;
+  const spread = (w.pellets ? w.spread : airborne ? w.airSpread : scoped ? w.scopedSpread : w.spread) * (scoped && !w.pellets ? 1 : spreadScale);
   const rays = [], byTarget = new Map();
   for (let i = 0; i < (w.pellets || 1); i++) {
     const r = castShot(T, shooter, shooter.a + rnd() * spread, shooter.p + rnd() * spread, targets);

@@ -19,7 +19,7 @@
 // mat:  what a sample is made of, for the client's colors (MAT below)
 // props: things the client draws or animates on top: trees, volcano craters, cottages (huts)
 
-export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10, STONE: 11 }; // STONE: conjured ramps (shared/spells.js)
+export const MAT = { FLOOR: 0, PIT: 1, WALL: 2, ROCK: 3, LAVA: 4, BARK: 5, ROOTS: 6, LEAVES: 7, RACK: 8, CRATE: 9, PUMPKIN: 10, STONE: 11, DOOR: 12 }; // STONE: conjured ramps (shared/spells.js); DOOR: the Crypt's doors (shared/crypt.js)
 
 // enterable cottages: walls, roof and roof pitch per map style (touching B squares make one)
 const COTTAGES = {
@@ -97,7 +97,8 @@ export function buildTerrain(MAP, RES, style) {
       if (style === 'nuke') { // pumpkin: a squat dome to hide behind, drawn as a real pumpkin mesh
         dome(x, y, 0.42, 0.5, MAT.PUMPKIN, 0);
         props.push({ type: 'pumpkin', x, y, r: 0.42 + 0.06 * n });
-      } else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
+      } else if (style === 'crypt') box(cx + 0.18, cy + 0.38, cx + 0.82, cy + 0.62, 0.7, MAT.ROCK); // a gravestone
+      else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.7, 0.5, MAT.LEAVES, 0.2);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
     }
@@ -161,7 +162,7 @@ export function buildTerrain(MAP, RES, style) {
       continue;
     }
     if (c !== '#' || edge(cx, cy)) continue;
-    if (style === 'haunt') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; }
+    if (style === 'haunt' || style === 'crypt') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; }
     if (style === 'castle') {
       // uneven skyline: dense clumps and corners become towers; thin walls stay lower
       let near = 0;

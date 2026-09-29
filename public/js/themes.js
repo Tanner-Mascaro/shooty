@@ -69,6 +69,16 @@ export const THEMES = {
     minimap: [[48, 50, 54], [90, 94, 98], [40, 20, 48]],
     mat: { roughness: 0.92, metalness: 0.04, sun: 0.95 },
   },
+  crypt: {
+    id: 'crypt', name: 'THE CRYPT', fog: [14, 18, 16], fogK: 0.075, skyLo: [34, 40, 36], skyHi: [8, 10, 9],
+    orb: [0, 0, 0], orbGlow: [0, 0, 0], orbA: -0.6, orbE: -1, orbR: 0, ceiling: true,
+    wall: [70, 72, 70], wallTop: [52, 54, 52], band: [110, 255, 140],
+    ambient: [130, 255, 160], ambientVz: 0.06, blood: [120, 10, 10], fire: [140, 255, 150],
+    sprite: 'zombie', pitDeath: 'Swallowed by the bone pit!', enemyPitDeath: 'Swallowed!', pitOverlay: '30,70,40',
+    accent: '140,255,160', bg: '#0c120e', title: '#9fc', drone: [['sawtooth', 38], ['sine', 76.5], ['triangle', 114]], droneCut: 200, droneVol: 0.45,
+    minimap: [[40, 42, 40], [80, 82, 80], [30, 60, 40]],
+    mat: { roughness: 0.95, metalness: 0.02, sun: 0.35 },
+  },
   nuke: {
     id: 'nuke', name: 'PUMPKIN HOLLOW', fog: [62, 40, 52], fogK: 0.04, skyLo: [230, 130, 60], skyHi: [48, 26, 66],
     orb: [255, 170, 70], orbGlow: [120, 50, 20], orbA: -0.8, orbE: 0.25, orbR: 0.17,

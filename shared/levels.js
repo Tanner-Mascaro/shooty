@@ -326,10 +326,85 @@ export const LEVELS = {
   ]),
 };
 
+// The Crypt: Wave Survival's map (not in the vote list, and not symmetric). Laid out from
+// rectangles so the sections line up:
+//   P  where survivors start          Z  monster spawner (only once its section is open)
+//   1-6  door groups (costs: DOORS in shared/config.js); touching digits are one door
+//   a-j  a gun on the wall (WALL_BUYS)    U V Y  elixirs (ELIXIRS)    X  the mystery cauldron
+//
+//        ┌──────────── Bone Pit (5) ─┬── Throne of Bones (6) ──┬─ Flooded Tombs (4) ┐
+//        │                           │                         │                    │
+//        ├──── Chapel (1) ───────────┤      Catacombs (3)      ├──── Ossuary (2) ───┤
+//        │                           │                         │                    │
+//        └────────────────── Graveyard Gate (start) ──────────────────────────────────┘
+function crypt() {
+  const N = 80, g = Array.from({ length: N }, () => Array(N).fill('#'));
+  const room = (x0, y0, x1, y1, c = '.') => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y][x] = c; };
+  const put = (x, y, c) => { g[y][x] = c; };
+  // sections
+  room(22, 58, 57, 77); // Graveyard Gate (start)
+  room(2, 40, 19, 77);  // Chapel
+  room(60, 40, 77, 77); // Ossuary
+  room(25, 20, 54, 54); // Catacombs
+  room(2, 2, 21, 37);   // Bone Pit
+  room(58, 2, 77, 37);  // Flooded Tombs
+  room(25, 2, 54, 16);  // Throne of Bones
+  // doors between them
+  room(20, 66, 21, 68, '1');
+  room(58, 66, 59, 68, '2');
+  room(20, 46, 24, 48, '3'); room(55, 46, 59, 48, '3');
+  room(68, 38, 70, 39, '4');
+  room(9, 38, 11, 39, '5');
+  room(38, 17, 41, 19, '6');
+  // graveyard: rows of tombstones, the gate's spawners at the edges
+  for (let y = 62; y <= 72; y += 5) for (let x = 26; x <= 54; x += 4) if (Math.abs(x - 40) > 3) put(x, y, '+');
+  for (let x = 37; x <= 42; x++) for (let y = 74; y <= 75; y++) put(x, y, 'P');
+  for (const [x, y] of [[23, 59], [56, 59], [23, 76], [56, 76], [31, 59], [48, 59]]) put(x, y, 'Z');
+  put(22, 71, 'a'); put(57, 71, 'b');
+  // chapel: pews and an altar
+  for (let y = 44; y <= 72; y += 4) for (const x of [5, 6, 7, 13, 14, 15]) put(x, y, '+');
+  room(9, 42, 11, 42, '#');
+  for (const [x, y] of [[3, 41], [18, 41], [3, 76], [18, 60]]) put(x, y, 'Z');
+  put(2, 52, 'c'); put(19, 58, 'j'); put(10, 50, 'V');
+  // ossuary: bone stacks in a grid
+  for (let y = 45; y <= 73; y += 7) for (const x of [63, 64, 72, 73]) put(x, y, '#');
+  for (let y = 48; y <= 72; y += 6) put(68, y, '+');
+  for (const [x, y] of [[76, 41], [61, 41], [76, 76], [61, 60]]) put(x, y, 'Z');
+  put(77, 52, 'd'); put(60, 58, 'f'); put(69, 50, 'Y');
+  // catacombs: a grid of pillars round a crypt with the mystery cauldron in it
+  for (let y = 23; y <= 51; y += 6) for (let x = 28; x <= 51; x += 6) {
+    if (x >= 34 && x <= 46 && y >= 32 && y <= 43) continue;
+    room(x, y, x + 1, y + 1, '#');
+  }
+  for (const x of [35, 44]) for (let y = 33; y <= 41; y++) if (y < 36 || y > 38) put(x, y, '#');
+  put(39, 37, 'X'); put(39, 52, 'U');
+  for (const [x, y] of [[26, 21], [53, 21], [26, 53], [53, 53]]) put(x, y, 'Z');
+  put(25, 30, 'e'); put(54, 30, 'i');
+  // bone pit: a bog of bones in the middle, graves around it
+  room(8, 13, 15, 22, 'L');
+  for (let y = 5; y <= 33; y += 7) for (const x of [4, 18]) put(x, y, '+');
+  for (let x = 6; x <= 17; x += 3) { put(x, 28, '+'); put(x, 8, '+'); }
+  for (const [x, y] of [[3, 3], [20, 3], [3, 30], [20, 34]]) put(x, y, 'Z');
+  put(2, 20, 'g');
+  // flooded tombs: sunken pools and sarcophagi
+  room(62, 9, 66, 13, 'L'); room(70, 22, 74, 26, 'L'); room(61, 28, 64, 31, 'L');
+  for (let y = 5; y <= 34; y += 6) put(68, y, '+');
+  for (const [x, y] of [[76, 3], [59, 3], [76, 33], [59, 20]]) put(x, y, 'Z');
+  put(77, 17, 'h');
+  // throne of bones: pillars down both sides, the throne dais at the back
+  for (let x = 28; x <= 51; x += 5) { room(x, 5, x, 6, '#'); room(x, 12, x, 13, '#'); }
+  room(37, 3, 42, 3, '+');
+  for (const [x, y] of [[26, 3], [53, 3], [26, 15], [53, 15], [39, 9]]) put(x, y, 'Z');
+  return g.map(r => r.join(''));
+}
+LEVELS.crypt = crypt();
+
 export const LEVEL_NAMES = {
   hell: 'BRIMSTONE COVEN', robot: "ALCHEMIST'S LAB", witch: 'WITCH SWAMP', haunt: 'HEXED MANOR',
-  ice: 'FROST HOLLOW', castle: 'GOTHIC CASTLE', nuke: 'PUMPKIN HOLLOW',
+  ice: 'FROST HOLLOW', castle: 'GOTHIC CASTLE', nuke: 'PUMPKIN HOLLOW', crypt: 'THE CRYPT',
 };
+// modes that always play on one map
+export const modeLevel = mode => mode === 'survival' ? 'crypt' : null;
 
 // lobby vote carousel, in order
 export const FEATURED_LEVELS = ['witch', 'castle', 'hell', 'ice', 'nuke', 'robot', 'haunt'];

@@ -28,8 +28,8 @@ export const NADE_CHANCE = 0.15;
 //   sight  scales how far it sees                         weight how common it is
 export const PERSONALITIES = {
   soldier: { weight: 3 },
-  rusher: { weight: 2, guns: ['shotgun', 'uzi', 'smg', 'carbine', 'burst'], range: 0.55, rush: true, hunt: true },
-  sniper: { weight: 2, guns: ['sniper', 'crossbow', 'beam', 'revolver', 'deagle'], range: 1.25, camp: true },
+  rusher: { weight: 2, guns: ['shotgun', 'doublebarrel', 'autoshotgun', 'uzi', 'reaper', 'smg', 'swarm', 'carbine', 'burst'], range: 0.55, rush: true, hunt: true },
+  sniper: { weight: 2, guns: ['sniper', 'dragon', 'marksman', 'crossbow', 'bow', 'beam', 'dmr', 'revolver', 'deagle'], range: 1.25, camp: true },
   survivor: { weight: 2, heal: 0.45 },
   hunter: { weight: 1, hunt: true, sight: 1.25 },
 };
@@ -39,7 +39,7 @@ export function randomPersonality() {
   for (const [name, v] of all) if ((r -= v.weight) < 0) return name;
   return 'soldier';
 }
-const LONG_GUNS = ['sniper', 'crossbow', 'beam'];
+const LONG_GUNS = ['sniper', 'crossbow', 'beam', 'marksman', 'dragon', 'bow', 'dmr'];
 
 const ACCEL = 18, AIR_ACCEL = 12, AIR_CAP = 0.28, FRICTION = 5, STOP_SPEED = 1.0;
 const GUN_RANGES = {
@@ -47,6 +47,9 @@ const GUN_RANGES = {
   pistol: [6, 11], deagle: [6, 12], revolver: [6, 12],
   rifle: [8, 15], burst: [8, 15], carbine: [8, 15], beam: [8, 16],
   wand: [7, 14], lmg: [9, 16], crossbow: [10, 19], sniper: [13, 23],
+  derringer: [4, 9], flintlock: [6, 12], autopistol: [5, 10], assault: [8, 15], dmr: [10, 18], marksman: [12, 22], dragon: [14, 25],
+  doublebarrel: [2, 5], autoshotgun: [2.5, 6], blunderbuss: [2, 4.5], gatling: [8, 15], reaper: [5, 10], swarm: [5, 10], tommy: [5, 11],
+  staff: [7, 14], bow: [9, 18],
 };
 
 // random witchy names for bots (not "Bot 3")
@@ -299,6 +302,15 @@ export function newBrain() {
 }
 
 function pickGoal(game, p) {
+  // survival: stick close to a person (or anyone standing) and hold the line with them
+  if (game.mode === 'survival') {
+    const buddy = game.humans.find(o => !o.dead) || game.list.find(o => o !== p && !o.dead);
+    if (buddy) for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 2.5, g = { x: buddy.x + Math.cos(a) * r, y: buddy.y + Math.sin(a) * r };
+      if (Math.hypot(g.x - p.x, g.y - p.y) > 1 && clearPath(game.T, p, g)) return g;
+    }
+    return null;
+  }
   const zone = game.zoneAt && game.zoneAt(); // battle royale: wander inside where the storm is heading
   for (let i = 0; i < 30; i++) {
     const r = zone && Math.max(1.5, zone.nr * 0.8) * Math.sqrt(Math.random()), t = Math.random() * Math.PI * 2;
@@ -315,9 +327,13 @@ export function botTick(game, p) {
   const ranges = gun => (GUN_RANGES[gun] || GUN_RANGES.pistol).map(v => v * (P.range || 1));
   // gun game: everyone fights with their rung of the ladder, so no knife-only or potion bots
   const gunGame = game.mode === 'gungame';
-  const knife = gunGame ? gunGameGun(p.gunLevel) === 'blade' : p.knife, nadeBot = !gunGame && p.nadeBot;
+  // One in the Chamber: out of rounds means it's blade time
+  const chamber = game.mode === 'chamber', noGun = !Object.keys(p.mag).some(w => p.mag[w] > 0);
+  const knife = gunGame ? gunGameGun(p.gunLevel) === 'blade' : chamber ? noGun : p.knife || (game.custom?.weapons === 'blades' && noGun);
+  const nadeBot = !gunGame && !chamber && p.nadeBot;
   const dist = o => Math.hypot(o.x - p.x, o.y - p.y);
-  const hill = game.mode === 'hardpoint' ? game.hardpointTarget(now) : game.mode === 'ctf' ? game.ctfTarget(p) : null; // CTF: the cauldron run is the bot's 'hill'
+  const hill = game.mode === 'hardpoint' ? game.hardpointTarget(now) : game.mode === 'ctf' ? game.ctfTarget(p) // CTF: the cauldron run is the bot's 'hill'
+    : game.mode === 'harvest' ? game.soulTarget(p) : null; // harvest: the nearest soul
   const visibleEnemies = game.enemies(p).filter(o => canSee(T, p, o, sight));
   const foe = visibleEnemies.sort((x, y) => {
     const xThreat = hill && Math.hypot(x.x - hill.x, x.y - hill.y) <= hill.radius + 5 ? 0 : 1;
@@ -514,6 +530,7 @@ export function botTick(game, p) {
   if (infected) wishSpeed = MOVE_SPEED * PLAGUE_SPEED_MULTIPLIER;
   else if (knife && chasing) wishSpeed = L.sprint * 1.12;
   if (p.hasteUntil > now) wishSpeed *= HASTE.speed;
+  wishSpeed *= game.speedScale ? game.speedScale(p, now) : 1;
 
   const dashing = infected && game.gameOn && now < p.dashUntil;
   if (dashing) {
@@ -532,7 +549,7 @@ export function botTick(game, p) {
   }
 
   let speed = Math.hypot(p.vx, p.vy);
-  const cap = infected ? MOVE_SPEED_LIMIT * PLAGUE_SPEED_MULTIPLIER : MOVE_SPEED_LIMIT;
+  const cap = (infected ? MOVE_SPEED_LIMIT * PLAGUE_SPEED_MULTIPLIER : MOVE_SPEED_LIMIT) * (game.speedScale ? game.speedScale(p, now) : 1) * (p.padUntil > now ? 1.3 : 1);
   if (speed > cap) { p.vx *= cap / speed; p.vy *= cap / speed; speed = cap; }
 
   if (speed > 0.01) {
@@ -555,7 +572,7 @@ export function botTick(game, p) {
   }
 
   if (!p.onGround) {
-    p.vz -= MOVE_GRAVITY * dt; p.z += p.vz * dt;
+    p.vz -= MOVE_GRAVITY * (game.gravityScale ? game.gravityScale(now) : 1) * dt; p.z += p.vz * dt;
     const floor = walkHeight(T, p.x, p.y, p.z);
     if (p.z <= floor) { p.z = floor; p.vz = 0; p.onGround = true; }
   } else {

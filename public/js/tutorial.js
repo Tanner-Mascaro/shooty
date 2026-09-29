@@ -17,10 +17,10 @@ const STEPS = [
   { id: 'jump', text: () => 'Jump — ' + how(k('jump'), 'A / ✕', 'JUMP') },
   { id: 'bhop', text: () => 'Bunny hop — hold jump and turn as you land to build speed' },
   { id: 'slide', text: () => 'Slide — ' + how(`hold ${k('slide')} while running`, 'B / ○ while running', 'not on touch — skip it') },
-  { id: 'pickup', text: () => 'Pick something up — walk over a gun, ammo, potion or scroll' },
+  { id: 'pickup', text: () => 'Pick something up — walk over a gun, ammo or a potion' },
   { id: 'reload', text: () => 'Reload — ' + how(k('reload'), 'X / □', 'RELOAD') },
   { id: 'potion', text: () => 'Throw a potion — ' + how(k('nade'), 'LB', 'tap the potion on the hotbar') },
-  { id: 'spell', text: () => 'Cast the spell on your hotbar — ' + how(k('spell1'), 'd-pad up', 'tap it on the hotbar') },
+  { id: 'spell', text: () => 'Drink the potion on your hotbar — ' + how(k('spell1'), 'd-pad up', 'tap it on the hotbar') },
   { id: 'kill', text: () => 'Take down a straw dummy' },
 ];
 

@@ -1,7 +1,8 @@
 // Firing, melee, scoping, reloading and weapon switching. The server decides hits; this only sends
 // requests and plays the local feedback (sound, recoil, screen punch) immediately. Rounds are
 // counted here the same way the server counts them, so the ammo readout never waits on the network.
-import { WEAPONS, GUN_SLOTS, USE_RANGE, HACK_FIRE } from '/shared/config.js';
+import { WEAPONS, GUN_SLOTS, USE_RANGE, HACK_FIRE, magSize, reloadTime, SURVIVAL, gunLook } from '/shared/config.js';
+import { cryptLayout } from '/shared/crypt.js';
 import { S, owned, spare, gunSlots } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
@@ -45,8 +46,8 @@ export function throwNade() {
 export function reload() {
   if (S.clawsOnly || S.dead) return;
   const w = S.weapon, def = WEAPONS[w];
-  if (def.melee || S.reloading || !(S.mag[w] < def.mag) || !(spare(w) > 0)) return;
-  S.reloading = { w, start: performance.now(), until: performance.now() + def.reload };
+  if (def.melee || S.reloading || !(S.mag[w] < magSize(w, S.att)) || !(spare(w) > 0)) return;
+  S.reloading = { w, start: performance.now(), until: performance.now() + reloadTime(w, S.att, S.elixirs?.quick) };
   S.scoped = false; S.mouseHeld = false;
   play('magOut');
 }
@@ -56,7 +57,7 @@ export function updateReload() {
   if (S.clawsOnly) { S.reloading = null; return; }
   const now = performance.now(), r = S.reloading;
   if (r && now >= r.until) {
-    const n = Math.min(WEAPONS[r.w].mag - S.mag[r.w], spare(r.w));
+    const n = Math.min(magSize(r.w, S.att) - S.mag[r.w], spare(r.w));
     S.mag[r.w] += n;
     S.inv[r.w] -= n;
     S.reloading = null;
@@ -67,9 +68,10 @@ export function updateReload() {
 }
 
 // the sniper scopes in; the rifle, SMG and pistol aim down their iron sights (S.scoped covers both)
-const aimable = () => !S.clawsOnly && (S.weapon === 'sniper' || ADS_ZOOM[S.weapon]) && !S.reloading;
-const canScope = () => aimable() && (S.weapon !== 'sniper' || performance.now() >= S.nextFire.sniper); // not while chambering
-const setScoped = on => { S.scoped = on; if (S.weapon === 'sniper') play('scope', on); };
+const scopeGun = () => gunLook(S.weapon) === 'sniper'; // sniper, marksman, dragon rifle
+const aimable = () => !S.clawsOnly && (scopeGun() || ADS_ZOOM[gunLook(S.weapon)]) && !S.reloading;
+const canScope = () => aimable() && (!scopeGun() || performance.now() >= (S.nextFire[S.weapon] || 0)); // not while chambering
+const setScoped = on => { S.scoped = on; if (scopeGun()) play('scope', on); };
 
 // right mouse button, pressed (down) or released; 'toggle' flips on press, 'hold' aims while held
 export function aim(down) {
@@ -105,6 +107,22 @@ export function findUseTarget() {
     consider(p, { pad: i, items: [p.weapon] });
   });
   for (const b of S.boxes) consider(b, { box: b.id, items: b.items });
+  // the Crypt: doors, guns on the walls, elixirs and the mystery cauldron, all for gold
+  if (S.room?.mode === 'survival' && S.level === 'crypt') {
+    const L = cryptLayout(S.MAP);
+    for (const d of L.doors) {
+      if (S.openDoors.has(d.id)) continue;
+      const dx = Math.max(d.x0 - me.x, 0, me.x - d.x1), dy = Math.max(d.y0 - me.y, 0, me.y - d.y1), dd = Math.hypot(dx, dy);
+      if (dd <= 1.5 && dd < bestD + 0.5) { best = { door: d.id, shop: `Open the ${d.name}`, cost: d.cost, items: [] }; bestD = dd; }
+    }
+    const shop = (o, t, r = 1.4) => { const d = Math.hypot(me.x - o.x, me.y - o.y); if (d <= r && d < bestD + 0.3) { best = t; bestD = d; } };
+    for (const b of L.buys) {
+      const owned = S.mag[b.w] !== undefined;
+      shop(b, { buy: b.id, shop: owned ? `Refill ${b.w.toUpperCase()} ammo` : `Buy ${b.w.toUpperCase()}`, cost: owned ? Math.ceil(b.cost * SURVIVAL.refillShare) : b.cost, items: [b.w] });
+    }
+    for (const e of L.elixirs) if (!S.elixirs?.[e.elixir]) shop(e, { elixir: e.id, shop: `Drink ${e.name}`, cost: e.cost, items: [] });
+    for (const c of L.boxes) shop(c, { cauldron: c.id, shop: 'Stir the mystery cauldron', cost: SURVIVAL.boxCost, items: [] }, 1.6);
+  }
   return best;
 }
 
@@ -118,6 +136,12 @@ export function gunToDrop() {
 export function use() {
   const t = S.useTarget;
   if (S.clawsOnly || S.dead || !t) return;
+  if (t.shop) {
+    if (S.gold < t.cost) { play('dry'); return; }
+    const key = ['door', 'buy', 'elixir', 'cauldron'].find(k => t[k] !== undefined);
+    send({ type: 'use', [key]: t[key], drop: gunToDrop() });
+    return;
+  }
   send(t.pad !== undefined ? { type: 'use', pad: t.pad, drop: gunToDrop() } : { type: 'use', box: t.box, drop: gunToDrop() });
 }
 
@@ -166,7 +190,8 @@ export function fire() {
   if (now < S.switchUntil || now < S.nextFire[w] || S.reloading) return;
   S.nextFire[w] = now + WEAPONS[w].cd * (S.hacks ? HACK_FIRE : 1);
   if (!(S.mag[w] > 0)) { play('dry'); reload(); return; }
-  if (!S.hacks) {
+  const infinite = S.custom?.ammo === 'infinite' && !['survival', 'chamber'].includes(S.room?.mode);
+  if (!S.hacks && !infinite) {
     S.mag[w]--;
     if (!S.mag[w] && !spare(w)) { // last round: the empty gun is gone
       delete S.mag[w]; delete S.inv[w];
@@ -176,15 +201,15 @@ export function fire() {
   S.invisUntil = 0; // shooting gives you away (the server ends it too)
   // include look angles so the server aims where the crosshair is (recoil punch included)
   send({ type: 'shoot', weapon: w, scoped: S.scoped, a: S.me.a, p: S.pitch + (S.punch || 0) });
-  play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt', wand: 'beam' }[w] || w);
+  play({ revolver: 'deagle', burst: 'rifle', carbine: 'rifle', lmg: 'smg', uzi: 'smg', crossbow: 'bolt', wand: 'beam' }[gunLook(w)] || gunLook(w));
   S.muzzle = 6; S.fireT = now;
-  const k = KICK[w] || KICK.pistol;
+  const k = KICK[w] || KICK[gunLook(w)] || KICK.pistol;
   S.recoil = k.recoil;
   S.punch = Math.max(S.punch, k.punch);
   S.shake = Math.max(S.shake, k.shake);
   if (k.fovKick) S.fovKick = k.fovKick;
-  if (w === 'sniper') { S.scoped = false; setTimeout(() => play('bolt'), 450); }
-  if (w === 'shotgun') setTimeout(() => play('pump'), 350);
+  if (gunLook(w) === 'sniper') { S.scoped = false; setTimeout(() => play('bolt'), 450); }
+  if (gunLook(w) === 'shotgun') setTimeout(() => play('pump'), 350);
 }
 
 // called every frame: auto weapons keep firing while the button is held

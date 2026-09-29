@@ -1,5 +1,5 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
-import { canBuildIn, MAX_MANA, MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS, GUN_GAME_LADDER, gunGameGun } from '/shared/config.js';
+import { canBuildIn, MAX_MANA, MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS, GUN_GAME_LADDER, gunGameGun, magSize, ELIXIR_HP, gunName } from '/shared/config.js';
 import { LEVEL_NAMES, FEATURED_LEVELS } from '/shared/levels.js';
 import { levelFor } from '/shared/progression.js';
 import { S, nameOf, isEnemy, spare } from './state.js';
@@ -106,7 +106,7 @@ export function showMsg(text, persist) {
 
 // post-match scoreboard; REMATCH readies you for the same map and mode right here, LOBBY (or
 // waiting) goes back to the lobby
-export function showSummary({ headline, rematch, scores, mode, level, won, hardpointScores, ctfScores }) {
+export function showSummary({ headline, rematch, scores, mode, level, won, hardpointScores, ctfScores, soulScores, wave }) {
   clearTimeout(summaryTimer);
   summaryNext = rematch || '';
   $('msg').style.opacity = 0;
@@ -120,7 +120,9 @@ export function showSummary({ headline, rematch, scores, mode, level, won, hardp
   const modeLabel = MODE_NAMES[mode] || mode || '';
   const objectiveScore = mode === 'hardpoint' && hardpointScores
     ? `${teamName('hardpoint', 1)} ${hardpointScores[1] || 0} — ${teamName('hardpoint', 2)} ${hardpointScores[2] || 0}`
-    : mode === 'ctf' && ctfScores ? `${teamName('ctf', 1)} ${ctfScores[1] || 0} — ${teamName('ctf', 2)} ${ctfScores[2] || 0} captures` : '';
+    : mode === 'ctf' && ctfScores ? `${teamName('ctf', 1)} ${ctfScores[1] || 0} — ${teamName('ctf', 2)} ${ctfScores[2] || 0} captures`
+    : mode === 'harvest' && soulScores ? `${teamName('harvest', 1)} ${soulScores[1] || 0} — ${teamName('harvest', 2)} ${soulScores[2] || 0} souls`
+    : mode === 'survival' && wave ? `Reached wave ${wave}` : '';
   $('summarySub').textContent = [modeLabel, map, objectiveScore].filter(Boolean).join(' · ');
 
   const teams = isTeamMode(mode);
@@ -169,6 +171,9 @@ function showVotes() {
     return b;
   }));
   row($('summaryMaps'), FEATURED_LEVELS, LEVEL_NAMES, r.votes || {}, me?.vote, r.level, level => castVote({ type: 'vote', level }));
+  const fixed = (me?.modeVote || r.mode) === 'survival'; // the Crypt, always
+  $('summaryMaps').querySelectorAll('button').forEach(b => { b.disabled = b.disabled || fixed; });
+  $('summaryMaps').title = fixed ? 'Wave Survival always plays in the Crypt' : '';
   row($('summaryModes'), Object.keys(MODE_NAMES), MODE_NAMES, r.modeVotes || {}, me?.modeVote, r.mode, mode => castVote({ type: 'mode', mode }));
 }
 
@@ -293,7 +298,7 @@ let lastScores = '';
 function drawScores() {
   const rows = scoreRows(), mode = S.room && S.room.mode, teams = isTeamMode(mode);
   const hardpointScores = S.hardpoint?.scores || { 1: 0, 2: 0 };
-  const key = JSON.stringify([rows, mode, S.myTeam, hardpointScores, S.room && S.room.players.map(p => p.name)]);
+  const key = JSON.stringify([rows, mode, S.myTeam, hardpointScores, S.soulScores, S.survival?.w, S.room && S.room.players.map(p => p.name)]);
   if (key === lastScores) return; // only touch the DOM when something changed
   lastScores = key;
   const line = r => {
@@ -304,7 +309,12 @@ function drawScores() {
     return d;
   };
   const out = [];
-  if (teams) {
+  if (mode === 'survival') {
+    const h = document.createElement('div');
+    h.className = 'teamHead team1';
+    h.textContent = `SURVIVORS · WAVE ${S.survival?.w || 0}`;
+    out.push(h, ...rows.map(line));
+  } else if (teams) {
     for (const t of [1, 2]) {
       const h = document.createElement('div');
       h.className = 'teamHead team' + t;
@@ -312,6 +322,7 @@ function drawScores() {
       h.textContent = mode === 'plague' ? `${teamName(mode, t)} (${members.length})`
         : mode === 'hardpoint' ? `${teamName(mode, t)} ${hardpointScores[t] || 0}`
         : mode === 'ctf' ? `${teamName(mode, t)} ${S.ctf?.scores?.[t] || 0} ⚱`
+        : mode === 'harvest' ? `${teamName(mode, t)} ${S.soulScores?.[t] || 0} ✦`
         : `${teamName(mode, t)} ${members.reduce((n, r) => n + r.kills, 0)}`;
       out.push(h, ...rows.filter(r => r.team === t).map(line));
     }
@@ -325,7 +336,8 @@ const clock = ms => {
 };
 
 export function updateHud() {
-  const maxHp = S.hacks ? HACK_HP : S.room?.mode === 'plague' && S.myTeam === PLAGUE_TEAM ? PLAGUE_MAX_HP : MAX_HP;
+  const maxHp = S.hacks ? HACK_HP : S.room?.mode === 'plague' && S.myTeam === PLAGUE_TEAM ? PLAGUE_MAX_HP
+    : (S.room?.mode === 'survival' ? MAX_HP : S.custom?.hp ?? MAX_HP) + (S.elixirs?.troll ? ELIXIR_HP : 0);
   $('myhp').style.width = Math.max(0, Math.min(100, S.me.hp / maxHp * 100)) + '%';
   $('mymana').style.width = Math.max(0, Math.min(100, S.mana / MAX_MANA * 100)) + '%';
   $('mymana').parentElement.hidden = !canBuildIn(S.room?.mode); // mana only buys ramps
@@ -373,15 +385,15 @@ export function updateHud() {
 // gun game: your rung and who's leading; battle royale: who's left and what the storm is doing
 function updateModeStatus() {
   const mode = S.started && S.room?.mode, el = $('modeStatus');
-  el.hidden = mode !== 'gungame' && !(mode === 'royale' && S.zone) && !(mode === 'ctf' && S.ctf);
+  el.hidden = mode !== 'gungame' && !(mode === 'royale' && S.zone) && !(mode === 'ctf' && S.ctf) && !['harvest', 'chamber', 'survival'].includes(mode);
   el.classList.toggle('storm', mode === 'royale' && !!S.zone?.shrinking);
   if (mode === 'gungame') {
     const lvl = S.myGunLevel, last = GUN_GAME_LADDER.length - 1;
     let lead = { id: S.myId, gl: lvl };
     for (const [id, o] of Object.entries(S.others)) if ((o.cur?.gl || 0) > lead.gl) lead = { id: +id, gl: o.cur.gl };
-    $('modeRole').textContent = `GUN ${lvl + 1} / ${last + 1} · ${gunGameGun(lvl).toUpperCase()}`;
+    $('modeRole').textContent = `GUN ${lvl + 1} / ${last + 1} · ${gunName(gunGameGun(lvl)).toUpperCase()}`;
     $('modeClock').textContent = '';
-    $('modeObjective').textContent = (lvl >= last ? 'Blade kill to win' : 'Next: ' + gunGameGun(lvl + 1).toUpperCase())
+    $('modeObjective').textContent = (lvl >= last ? 'Blade kill to win' : 'Next: ' + gunName(gunGameGun(lvl + 1)).toUpperCase())
       + (lead.id === S.myId ? ' · You lead' : ` · ${nameOf(lead.id)} leads (${lead.gl + 1})`);
   } else if (mode === 'ctf' && S.ctf) {
     const f = S.ctf, mine = f.c[S.myTeam], theirs = f.c[3 - S.myTeam], them = teamName('ctf', 3 - S.myTeam);
@@ -392,6 +404,24 @@ function updateModeStatus() {
       : mine && !mine.home ? 'Your cauldron is on the ground — touch it to send it home'
       : theirs && theirs.carrier != null ? `${nameOf(theirs.carrier)} has the ${them} cauldron — cover them`
       : `Steal the ${them} cauldron`;
+  } else if (mode === 'harvest') {
+    const sc = S.soulScores || { 1: 0, 2: 0 }, us = teamName('harvest', S.myTeam), them = teamName('harvest', 3 - S.myTeam);
+    $('modeRole').textContent = `${teamName('harvest', 1)} ${sc[1]} — ${sc[2]} ${teamName('harvest', 2)}`;
+    $('modeClock').textContent = '';
+    const near = S.souls.filter(o => Math.hypot(o.x - S.me.x, o.y - S.me.y) < 12);
+    $('modeObjective').textContent = `First to ${S.soulWin || S.room.soulWinScore} souls · `
+      + (near.some(o => o.t !== S.myTeam) ? `${them} soul nearby — reap it!` : near.some(o => o.t === S.myTeam) ? `${us} soul nearby — deny it!` : 'Kill, then grab the soul');
+  } else if (mode === 'chamber') {
+    const alive = (S.room?.players || []).filter(p => p.id === S.myId ? S.lives > 0 : (S.others[p.id]?.cur?.lv ?? 1) > 0).length;
+    $('modeRole').textContent = (S.lives > 0 ? '♥'.repeat(S.lives) : 'OUT') + ` · ${alive} LEFT`;
+    $('modeClock').textContent = '';
+    $('modeObjective').textContent = (S.mag.pistol > 0 ? `${S.mag.pistol} round${S.mag.pistol === 1 ? '' : 's'} loaded — make it count` : 'No rounds — get a blade kill');
+  } else if (mode === 'survival' && S.survival) {
+    const v = S.survival;
+    $('modeRole').textContent = `WAVE ${v.w || 0} · ${S.gold} GOLD`;
+    $('modeClock').textContent = v.ph === 'break' ? clock(v.ms) : '';
+    const boosts = [v.db ? `DOUBLE GOLD ${Math.ceil(v.db / 1000)}s` : '', v.ik ? `INSTA-KILL ${Math.ceil(v.ik / 1000)}s` : ''].filter(Boolean).join(' · ');
+    $('modeObjective').textContent = (v.ph === 'break' ? (v.w ? 'Next wave soon — spend your gold' : 'The dead are stirring…') : `${v.left} monster${v.left === 1 ? '' : 's'} left`) + (boosts ? ' · ' + boosts : '');
   } else if (mode === 'royale' && S.zone) {
     const z = S.zone, left = clock(S.zoneEndsAt - performance.now()), final = z.stage >= z.stages - 1;
     $('modeRole').textContent = `${z.alive} ALIVE`;
@@ -405,8 +435,8 @@ function updateAmmoHud() {
   if (!el) return;
   if (S.dead || w === 'blade' || w === 'claws' || !WEAPONS[w]) { el.hidden = true; return; }
   el.hidden = false;
-  const mag = S.mag[w] ?? 0, full = WEAPONS[w].mag, left = spare(w);
-  $('ammoWeapon').textContent = w;
+  const mag = S.mag[w] ?? 0, full = magSize(w, S.att), left = spare(w);
+  $('ammoWeapon').textContent = gunName(w);
   const count = $('ammoCount');
   count.innerHTML = '';
   count.append(document.createTextNode(String(mag)));

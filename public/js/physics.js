@@ -1,7 +1,8 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
 import { groundAt, kindAt, walkHeight, ceilingAt, houseAt } from '/shared/terrain.js';
-import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE, BROOM, CURSE } from '/shared/config.js';
+import { gunLook } from '/shared/config.js';
+import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE, BROOM, CURSE, MAP_EVENTS, ELIXIR_SPEED, JUMP_PAD, WELL } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { tryJump, tryDash } from '/shared/movement.js';
@@ -9,6 +10,13 @@ import { send } from './net.js';
 import { play, setWind, setSizzle } from './audio.js';
 import { burst } from './particles.js';
 import { settings, held } from './settings.js';
+import { isEnemy } from './state.js';
+
+// custom game settings and map events that change how you move (survival plays it straight)
+const custom = () => S.room?.mode !== 'survival' && S.custom ? S.custom : null;
+const eventOn = kind => S.event === kind && performance.now() < S.eventEndsAt;
+export const gravityScale = () => (custom()?.gravity ?? 1) * (eventOn('lowgrav') ? MAP_EVENTS.lowgrav.grav : 1);
+const speedScale = () => (custom()?.speed ?? 1) * (eventOn('frenzy') ? MAP_EVENTS.frenzy.speed : 1) * (S.elixirs?.swift ? ELIXIR_SPEED : 1);
 
 const PLAYER_R = 0.22;
 let lastInputAt = 0;
@@ -199,7 +207,7 @@ export function updatePlayer(dt) {
   if (!S.started || !S.me) { setWind(0); setSizzle(0); return; }
   const me = S.me;
 
-  const sens = SENS * settings.sens * (!S.scoped ? 1 : S.weapon === 'sniper' ? 0.3 : 0.8);
+  const sens = SENS * settings.sens * (!S.scoped ? 1 : gunLook(S.weapon) === 'sniper' ? 0.3 : 0.8);
   me.a += S.mouseDX * sens;
   S.pitch = Math.max(-1.2, Math.min(1.2, S.pitch - S.mouseDY * sens * (settings.invertY ? -1 : 1)));
   // the gun trails fast mouse movement a little, then settles (see drawViewmodel)
@@ -216,11 +224,13 @@ export function updatePlayer(dt) {
   if (held('left')) sx--;
   fx += S.touchMove.y + S.padMove.y; sx += S.touchMove.x + S.padMove.x; // touch joystick, controller stick
   let wx = cos * fx - sin * sx, wy = sin * fx + cos * sx;
+  if (S.frozenUntil > performance.now()) { wx = wy = 0; S.vx = S.vy = 0; } // Frost Nova: rooted
   const wl = Math.hypot(wx, wy);
   if (wl > 0) { wx /= wl; wy /= wl; }
+  const frozen = S.frozenUntil > performance.now();
   const movementScale = (S.clawsOnly ? PLAGUE_SPEED_MULTIPLIER : 1) * (S.hacks ? HACK_SPEED : 1) * (S.hasteUntil > performance.now() ? HASTE.speed : 1)
-    * (S.cursedUntil > performance.now() ? CURSE.slow : 1);
-  const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? (S.weapon === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
+    * (S.cursedUntil > performance.now() ? CURSE.slow : 1) * speedScale();
+  const wishSpeed = wl > 0 ? MAX_SPEED * movementScale * (S.scoped ? (gunLook(S.weapon) === 'sniper' ? 0.55 : 0.8) : S.weapon === 'blade' ? 1.15 : 1) : 0;
 
   const now = performance.now();
   if (S.dashUntil && (!S.clawsOnly || now >= S.dashUntil)) {
@@ -229,7 +239,7 @@ export function updatePlayer(dt) {
     if (speed > limit) { S.vx *= limit / speed; S.vy *= limit / speed; }
   }
   updateSlide(wx, wy, wl);
-  if (tryJump(S, held('jump'), S.clawsOnly ? PLAGUE_JUMPS : 1)) play('jump');
+  if (!frozen && tryJump(S, held('jump'), S.clawsOnly || S.featherUntil > now ? PLAGUE_JUMPS : 1)) play('jump');
   if (S.clawsOnly && now < S.dashUntil) {
     S.vx = S.dashX * PLAGUE_DASH_SPEED; S.vy = S.dashY * PLAGUE_DASH_SPEED;
   } else if (now < (S.broomUntil || 0)) { // Broom Dash: a straight burst the way you faced
@@ -238,6 +248,13 @@ export function updatePlayer(dt) {
   else if (S.onGround) { applyFriction(dt); accelerate(wx, wy, wishSpeed, ACCEL, dt); }
   else airAccelerate(wx, wy, wishSpeed, dt);
   S.slideDip += ((S.sliding ? 1 : 0) - S.slideDip) * Math.min(1, dt * 12);
+  // Gravity Well: an enemy's well drags you toward its middle
+  if (S.wells.length) S.wells = S.wells.filter(w => now <= w.until);
+  for (const w of S.wells) {
+    if (now > w.until || !isEnemy(w.id) || w.id === S.myId) continue;
+    const dx = w.x - me.x, dy = w.y - me.y, d = Math.hypot(dx, dy);
+    if (d < WELL.radius && d > 0.3) { S.vx += dx / d * WELL.pull * 3 * dt; S.vy += dy / d * WELL.pull * 3 * dt; }
+  }
 
   let speed = Math.hypot(S.vx, S.vy);
   const speedLimit = Math.max(SPEED_LIMIT * movementScale, now < (S.broomUntil || 0) ? BROOM.speed : 0); // a broom dash may exceed the usual cap
@@ -263,8 +280,18 @@ export function updatePlayer(dt) {
     if (Number.isFinite(g) && g >= me.z - 0.12) me.z = g;
     else { S.onGround = false; S.vz = 0; } // walked off a ledge into a pit or hit a wall
   }
+  // jump pads: step on one to be flung up and along
+  if (S.onGround && now >= S.padReady) for (const pad of S.pads) {
+    if (Math.hypot(me.x - pad.x, me.y - pad.y) > JUMP_PAD.r || Math.abs(me.z - pad.z) > 0.3) continue;
+    S.padReady = now + 600;
+    S.vz = JUMP_PAD.vz; S.onGround = false;
+    S.vx += pad.dx * JUMP_PAD.push; S.vy += pad.dy * JUMP_PAD.push;
+    S.fovKick = Math.max(S.fovKick, 0.08);
+    play('jump'); burst(pad.x, pad.y, pad.z + 0.1, 25, 'spark', [120, 220, 255]);
+    break;
+  }
   if (!S.onGround) {
-    S.vz -= GRAVITY * dt;
+    S.vz -= GRAVITY * gravityScale() * dt;
     me.z += S.vz * dt;
     const ceil = ceilingAt(S.T, me.x, me.y, me.z + 0.05); // cottage floors and roofs overhead
     if (S.vz > 0 && ceil != null && me.z + BODY_H > ceil) { me.z = Math.max(g, ceil - BODY_H); S.vz = 0; }
@@ -282,6 +309,6 @@ export function updatePlayer(dt) {
 
   if (now - lastInputAt >= TICK) {
     lastInputAt = now;
-    send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && S.weapon === 'sniper', sl: S.sliding, w: S.weapon, seq: S.mySeq });
+    send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && gunLook(S.weapon) === 'sniper', sl: S.sliding, w: S.weapon, seq: S.mySeq });
   }
 }

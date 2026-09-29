@@ -530,7 +530,76 @@ body.on-home #corner { z-index:210; }
 .skins button.sel .skin-name::after { content:' ✓'; }
 
 /* lobby loadout: profile-style boxes; clicking one opens its picker popup */
-#loadout { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; }
+#loadout { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+#customize, #profile { display:flex; flex-direction:column; gap:12px; }
+#customize .rollBody > div { display:flex; flex-direction:column; gap:10px; }
+#profileLoadout { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; }
+.lookTile { font:inherit; cursor:pointer; min-width:0; }
+.lookTile b { font-size:14px !important; letter-spacing:.04em; text-transform:uppercase; overflow-wrap:anywhere; line-height:1.15; }
+.lookTile:hover b { color:#5a2a90; }
+.swatch {
+  display:inline-block; width:16px; height:16px; border-radius:50%; margin-bottom:3px;
+  background:radial-gradient(circle at 34% 30%, #fff8 0 14%, var(--c, #b8162f) 45%, #0008 100%);
+  border:1.5px solid #3a2410; box-shadow:0 0 8px var(--c, #b8162f);
+}
+.choice.cards .swatch { width:20px; height:20px; }
+#boardCard { margin-top:4px; padding-top:10px; border-top:1.5px solid #5a3820; box-shadow:inset 0 1px 0 rgba(196,160,96,0.55); }
+#boardCard .boardHead { margin-bottom:6px; }
+/* custom game: a parchment button that unrolls into rows of gothic segmented choices */
+#customToggle {
+  width:100%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer;
+  font-family:'Caslon Antique',Georgia,serif; padding:12px 34px 10px;
+}
+#customToggle b { font-size:16px; letter-spacing:.16em; }
+#customToggle .rune { color:#7a3fc0; font-style:normal; }
+#customToggle #customSummary { font-size:12px; color:var(--muted); letter-spacing:.02em; }
+#customToggle .caret { position:absolute; right:16px; top:50%; transform:translateY(-50%); font-style:normal; color:#6a4428; transition:transform .15s; }
+#customToggle[aria-expanded=true] .caret { transform:translateY(-50%) rotate(180deg); }
+#customToggle:hover { filter:brightness(1.04); }
+#customToggle:hover b { color:#5a2a90; }
+#customToggle:active { transform:translateY(1px); }
+#customToggle.changed { background:linear-gradient(165deg, #f4e4ff 0%, #e2cfa8 100%); }
+#customRows { display:flex; flex-direction:column; gap:8px; margin-top:10px; padding:10px 10px 12px; border:1.5px solid #5a3820;
+  box-shadow:inset 0 0 0 1px rgba(196,160,96,0.55); background:rgba(90,60,30,0.06); }
+#customRows .customRow { display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; align-items:center; }
+#customRows .customRow > .label { font-family:'Caslon Antique',Georgia,serif; letter-spacing:.1em; }
+/* every choice in a row the same width, whatever its label */
+#customRows .seg { display:grid; grid-template-columns:repeat(var(--n, 3), minmax(0,1fr)); }
+#customRows .seg[hidden] { display:none; }
+#customRows .seg button { width:100%; margin:0; font-family:'Caslon Antique',Georgia,serif; font-size:10px; letter-spacing:.04em; padding:7px 2px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#customRows .seg button:disabled { opacity:.5; cursor:default; }
+#customRows .note { font-size:12px; color:var(--muted); text-align:center; font-style:italic; }
+@media (max-width:520px) { #customRows .customRow { grid-template-columns:1fr; gap:4px; } }
+#loadout .stat:disabled { cursor:not-allowed; opacity:.75; }
+#loadout .stat:disabled span { color:#7a3fc0; }
+/* mode and attachment pickers: a grid of same-size parchment cards */
+.choice.cards { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; }
+.choice.cards button {
+  position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  min-height:74px; padding:12px 8px 16px; text-align:center; text-transform:none; letter-spacing:0;
+  font-family:'Caslon Antique',Georgia,serif; color:var(--ink);
+  background:linear-gradient(165deg, #f8ecd4 0%, #ead6a8 100%);
+  border:1.5px solid #5a3820; box-shadow:inset 0 0 0 1px rgba(196,160,96,0.85), 0 2px 0 #2a1810;
+  clip-path:polygon(7px 0%, calc(100% - 7px) 0%, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0% calc(100% - 7px), 0% 7px);
+}
+.choice.cards button b { font-size:13px; letter-spacing:.1em; text-transform:uppercase; line-height:1.15; }
+.choice.cards button small { font-size:11px; color:var(--muted); line-height:1.25; }
+.choice.cards button:hover { background:linear-gradient(165deg, #fbf2de 0%, #efdcb2 100%); }
+.choice.cards button:hover b { color:#5a2a90; }
+.choice.cards button.sel, .choice.cards button.voted {
+  background:linear-gradient(165deg, #efe0ff 0%, #d9c2f0 100%); border-color:#5a2a90;
+  box-shadow:inset 0 0 0 1px rgba(201,162,74,0.95), 0 2px 0 #2a1044, 0 0 12px rgba(150,90,220,0.4);
+}
+.choice.cards button.sel b { color:#3a1a6a; }
+.choice.cards button.leading:not(.sel) { border-color:#3a7020; }
+.choice.cards button.locked { opacity:.55; }
+.choice.cards .card-lock {
+  position:absolute; top:4px; right:8px; font:700 9px/1.2 'Caslon Antique',Georgia,serif; letter-spacing:.08em; text-transform:uppercase; color:#8b1e2d;
+}
+.choice.cards button:not(.locked) .card-lock { display:none; }
+#modes.cards button .votes { bottom:3px; }
+@media (max-width:520px) { .choice.cards { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+#attHelp { color:var(--muted); font-size:12px; line-height:1.5; }
 #loadout .stat { font:inherit; cursor:pointer; min-width:0; }
 #loadout .stat b { font-size:17px; letter-spacing:.04em; text-transform:uppercase; overflow-wrap:anywhere; }
 #loadout .stat:hover { border-color:var(--accent); }
@@ -1150,25 +1219,18 @@ body.on-home #openAccount { display:none; } /* the sign-in screen is the account
 :root body #binds button.waiting { color:#fff; filter:none; background:linear-gradient(180deg, #ff8a9c, #b8162f 50%, #5a0612); border-color:#c9a24a; }
 :root body #gameLeave { padding:6px 16px; }
 
-/* --- button groups are a row of gems: the ones you didn't pick are dull and cracked, your pick is whole and glowing --- */
+/* --- button groups are a row of gems: the ones you didn't pick are dull, your pick glows --- */
 :root body .seg { background:none; border:none; box-shadow:none; clip-path:none; padding:2px 0; gap:6px; }
 :root body .seg button:not(.sel) {
-  /* a clean, dimmer gem whose rim is chipped and cracked in three places; the places differ gem to gem */
-  --k1:16% 0; --k2:74% 100%; --k3:100% 38%;
+  /* a clean, dimmer gem; your pick is the bright one */
   border-radius:999px; clip-path:none; font-family:'Caslon Antique',Georgia,serif; color:#eee4f6;
   border:2px solid #8a7648; text-shadow:0 1px 1px rgba(0,0,0,0.7);
   background:
-    linear-gradient(118deg, transparent 38%, rgba(255,255,255,0.35) 39% 43%, rgba(14,4,24,0.85) 43% 56%, transparent 58%) var(--k1) / 8px 9px no-repeat,
-    linear-gradient(64deg, transparent 38%, rgba(14,4,24,0.8) 40% 55%, rgba(255,255,255,0.25) 55% 59%, transparent 60%) var(--k2) / 7px 10px no-repeat,
-    linear-gradient(96deg, transparent 40%, rgba(14,4,24,0.75) 42% 56%, transparent 58%) var(--k3) / 7px 7px no-repeat,
     radial-gradient(ellipse 55% 38% at 50% 16%, rgba(255,255,255,0.3), rgba(255,255,255,0) 72%),
     linear-gradient(180deg, #7a6694 0%, #4c3a64 50%, #2c2040 100%);
   box-shadow:0 0 0 1px #3a2a10, 0 2px 0 #1a1008, inset 0 -3px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
   filter:none;
 }
-:root body .seg button:not(.sel):nth-child(3n+2) { --k1:62% 0; --k2:20% 100%; --k3:0 58%; }
-:root body .seg button:not(.sel):nth-child(3n) { --k1:36% 0; --k2:88% 100%; --k3:0 30%; }
-:root body .seg button:not(.sel):nth-child(4n+1) { --k3:100% 66%; }
 :root body .seg button:not(.sel):hover:not(:disabled) { filter:brightness(1.18); color:#fff; }
 :root body .seg button.sel { font-weight:700; }
 :root body .seg button:disabled { cursor:default; opacity:.6; }
@@ -1353,18 +1415,14 @@ body.map-open #gameGear, body.map-open #gameMap, body.map-open #gameLeave { z-in
 :root body #summaryBoard .team1 .name { color:#9a1628; } :root body #summaryBoard .team2 .name { color:#5a3a80; }
 :root body .svLabel { color:#6a5640; }
 :root body #summaryWait { color:#7a3fc0; }
-/* next map / mode votes: the same gems as the lobby — cracked until picked */
+/* next map / mode votes: the same gems as the lobby */
 :root body .svRow button {
-  --k1:18% 0; --k2:76% 100%;
   border-radius:999px; padding:6px 10px 5px; color:#eee4f6; border:2px solid #8a7648; text-shadow:0 1px 2px rgba(0,0,0,0.8);
   background:
-    linear-gradient(118deg, transparent 38%, rgba(255,255,255,0.3) 39% 43%, rgba(14,4,24,0.85) 43% 56%, transparent 58%) var(--k1) / 7px 8px no-repeat,
-    linear-gradient(64deg, transparent 38%, rgba(14,4,24,0.8) 40% 55%, transparent 58%) var(--k2) / 6px 8px no-repeat,
     radial-gradient(ellipse 48% 28% at 50% 8%, rgba(255,255,255,0.25), rgba(255,255,255,0) 75%),
     linear-gradient(180deg, #6a5684 0%, #4c3a64 45%, #2c2040 100%);
   box-shadow:0 0 0 1px #3a2a10, 0 2px 0 #1a1008;
 }
-:root body .svRow button:nth-child(2n) { --k1:64% 0; --k2:24% 100%; }
 :root body .svRow button:hover { filter:brightness(1.18); color:#fff; }
 :root body .svRow button.leading { border-color:#e8c060; box-shadow:0 0 0 1px #3a2a10, 0 2px 0 #1a1008, 0 0 10px rgba(232,192,96,0.55); }
 :root body .svRow button.mine {
@@ -1608,3 +1666,43 @@ body.touch #tutorialSteps { font-size:11px; }
 #partyList { list-style:none; display:flex; flex-direction:column; gap:3px; font-size:13px; color:#2a1a10; }
 #partyLeave { align-self:flex-start; }
 #homeTutorial { margin-top:4px; }
+
+/* quick play / new private room / tutorial (and Copy invite link): cut gems like the other main buttons */
+.roomLinks { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin-top:2px; }
+:root body :is(.roomBtn, #copyLink#copyLink) {
+  --gem-hi:#9ccbff; --gem:#1f5fc0; --gem-lo:#0b2a66; --gem-glow:rgba(80,150,255,0.45);
+  min-width:0; padding:9px 6px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font:700 12px/1.2 'Caslon Antique',Georgia,serif; letter-spacing:.1em; text-transform:uppercase;
+  border-radius:999px; color:#fff8ec; border:2px solid #c9a24a; text-shadow:0 1px 2px rgba(0,0,0,0.8);
+  background:
+    radial-gradient(ellipse 48% 28% at 50% 8%, rgba(255,255,255,0.3), rgba(255,255,255,0) 75%),
+    radial-gradient(ellipse 70% 40% at 50% 125%, var(--gem-hi), transparent 70%),
+    linear-gradient(180deg, var(--gem) 0%, var(--gem) 40%, var(--gem-lo) 100%);
+  box-shadow:0 0 0 1px #5a3a10, 0 3px 0 #2a1a08, 0 0 12px var(--gem-glow), inset 0 -3px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5);
+  transition:filter .15s, transform .08s;
+}
+:root body #newRoom#newRoom { --gem-hi:#7fdc90; --gem:#1c7a36; --gem-lo:#0a3c16; --gem-glow:rgba(80,220,110,0.45); }
+:root body #tutorialLink#tutorialLink { --gem-hi:#f2c46a; --gem:#a8650e; --gem-lo:#552c04; --gem-glow:rgba(255,180,60,0.45); }
+:root body :is(.roomBtn, #copyLink#copyLink):hover { filter:brightness(1.14) saturate(1.1); color:#fff8ec; }
+:root body #copyLink#copyLink { --gem-hi:#c9a0f5; --gem:#7a3fc0; --gem-lo:#3e1470; --gem-glow:rgba(170,100,240,0.5); width:auto; padding:9px 16px; clip-path:none; }
+:root body :is(.roomBtn, #copyLink#copyLink):active { transform:translateY(2px); }
+@media (max-width:520px) { .roomLinks { grid-template-columns:1fr; } }
+
+/* --- depth: shadows so the scrolls, gems and lettering sit on the page instead of floating flat --- */
+#home, #wait { box-shadow:inset 0 0 220px 30px rgba(0,0,0,0.6); } /* a dark vignette round the edges */
+:root body .title { filter:drop-shadow(0 6px 10px rgba(0,0,0,0.75)) drop-shadow(0 2px 2px rgba(0,0,0,0.6)); }
+:root body :is(#homeTag, #tagline) { text-shadow:0 2px 6px rgba(0,0,0,0.85); }
+:root body #homePanel, :root body #wait .card:not(.spellbook) { filter:drop-shadow(0 14px 22px rgba(0,0,0,0.6)) drop-shadow(0 4px 6px rgba(0,0,0,0.45)); }
+:root body :is(#picker, #wait .modal) > .card { filter:drop-shadow(0 22px 40px rgba(0,0,0,0.75)); }
+/* the parchment boxes: pressed into the page, a little shade along the bottom */
+:root body :is(.stat, .choice.cards button, #customRows) { box-shadow:inset 0 0 0 1px rgba(196,160,96,0.85), inset 0 -10px 14px -8px rgba(90,56,32,0.35), 0 2px 0 #2a1810; }
+:root body .choice.cards button.sel, :root body .choice.cards button.voted {
+  box-shadow:inset 0 0 0 1px rgba(201,162,74,0.95), inset 0 -10px 14px -8px rgba(60,20,110,0.35), 0 2px 0 #2a1044, 0 0 12px rgba(150,90,220,0.4);
+}
+/* gems cast a shadow on the parchment */
+:root body :is(#readyBtn, #pickerDone, #summaryRematch, .roomBtn, #copyLink#copyLink, .seg button, #corner > button) { filter:drop-shadow(0 4px 5px rgba(40,20,5,0.45)); }
+:root body #readyBtn:disabled { filter:grayscale(0.75) brightness(0.9) drop-shadow(0 3px 4px rgba(40,20,5,0.35)); }
+/* in the match: the parchment HUD pieces lift off the view */
+:root body :is(#hud, #scores, #ammoHud) { filter:drop-shadow(0 6px 12px rgba(0,0,0,0.55)); }
+:root body #feed { text-shadow:0 2px 4px rgba(0,0,0,0.85); }
+

@@ -1,5 +1,5 @@
 // One frame: sync camera, draw WebGL world + entities, blit to #c, then HUD on top.
-import { TICK, EYE, SLIDE } from '/shared/config.js';
+import { TICK, EYE, SLIDE, gunLook } from '/shared/config.js';
 import { groundAt } from '/shared/terrain.js';
 import { S } from '../state.js';
 import { settings } from '../settings.js';
@@ -10,6 +10,8 @@ import { syncCamera } from './gl/camera.js';
 import { beginEntities, endEntities, drawPickupBillboards, drawOthersAndCorpses, drawParticlePoints } from './gl/entities.js';
 import { drawZone } from './gl/zone.js';
 import { drawBuilds } from './gl/builds.js';
+import { drawProps } from './gl/props.js';
+import { drawNpcTags, drawEmoteBubbles, drawEmoteWheel, drawGroundWarnings, drawEventTint, drawShopLabels } from './hudExtras.js';
 import { drawTracers, drawPickupGlows, drawEnemyGlows, drawNameTags, drawHardpointMarker, drawCtfMarkers, drawWeaponView, drawHitMarker, drawDamageIndicators, drawFlashes, drawBanner, drawMinimap, drawAmmo, drawUsePrompt, drawSpectate, drawHotbar, drawPotionWarnings } from './hud.js';
 import { updateEmbers, volcanoPlumes, potionTrails, stepParticles } from '../particles.js';
 import { playAt } from '../audio.js';
@@ -17,7 +19,7 @@ import { updateHud } from '../ui.js';
 import { colors } from '../level.js';
 
 function interpolateOthers(now) {
-  for (const o of Object.values(S.others)) {
+  for (const o of [...Object.values(S.others), ...Object.values(S.npcs)]) {
     const a = o.prev, b = o.cur;
     if (!b) continue;
     const k = Math.min(1, (now - o.t) / TICK);
@@ -41,7 +43,7 @@ function updateCorpses(now, dt) {
 
 function setupCamera() {
   const target = S.dead && S.killcam && S.killcamFov ? BASE_FOV * settings.fov * S.killcamFov // killcam zoom (spectate.js)
-    : (!S.scoped ? BASE_FOV : S.weapon === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[S.weapon] || 1)) * settings.fov;
+    : (!S.scoped ? BASE_FOV : gunLook(S.weapon) === 'sniper' ? SCOPE_FOV : BASE_FOV * (ADS_ZOOM[gunLook(S.weapon)] || 1)) * settings.fov;
   S.fov += (target - S.fov) * 0.3;
   const tanH = Math.tan(S.fov / 2) * (1 + S.fovKick), focal = (view.W / 2) / tanH;
   const ox = S.shake ? (Math.random() - 0.5) * S.shake : 0, oy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
@@ -84,6 +86,7 @@ export function render(dt) {
   endEntities();
   drawZone(now);
   drawBuilds();
+  drawProps(now);
 
   renderGL();
   present(S.cam.ox, S.cam.oy);
@@ -92,17 +95,23 @@ export function render(dt) {
   drawTracers(now);
   drawEnemyGlows(now);
   drawNameTags();
+  drawNpcTags();
+  drawShopLabels();
+  drawGroundWarnings(now);
   drawHardpointMarker();
   drawCtfMarkers();
   drawPotionWarnings(now);
   if (!S.dead && !S.buildMode) drawWeaponView(now); // build mode holsters the gun
   drawHitMarker();
   drawFlashes();
+  drawEventTint(now);
   drawDamageIndicators(now);
+  drawEmoteBubbles(now);
   drawBanner(now);
   drawMinimap(now);
   if (!S.dead) { drawAmmo(now); drawUsePrompt(); drawHotbar(now); }
   drawSpectate(now);
+  drawEmoteWheel();
 
   decayEffects(dt);
   updateHud();

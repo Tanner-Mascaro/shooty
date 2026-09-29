@@ -56,6 +56,21 @@ export const S = {
   useTarget: null, // what the use key would pick up right now (see weapons.js findUseTarget)
   aimHeld: false, // right mouse button is down
 
+  // new-mode state from the server (see server/extras.js and server/survival.js)
+  custom: null,     // the room's custom game settings (shared/config.js CUSTOM)
+  att: 'none',      // your attachment (shared/config.js ATTACHMENTS)
+  pads: [], portals: [], powerups: [], // jump pads, portal pairs, power-ups on the map
+  event: null, eventEndsAt: 0, meteors: [], // the current map event and incoming meteors
+  souls: [], soulScores: null, soulWin: 0, // Soul Harvest
+  npcs: {},         // monsters and decoys: id -> { prev, cur, t, now, hitT }
+  totems: [], wells: [], // conjured healing totems and gravity wells
+  survival: null,   // Wave Survival: { w, ph, ms, left, db, ik, drops } from the state message
+  doorPrev: new Map(), openDoors: new Set(), // the Crypt's doors: id -> what closing it covered
+  gold: 0, lives: 0, elixirs: {},
+  furyUntil: 0, featherUntil: 0, frozenUntil: 0, padReady: 0,
+  emotes: {},       // id -> { emote, t, ms }: who's emoting (you included)
+  emoteWheel: false,
+
   // screen effects
   hitFlash: 0, healFlash: 0, killFlash: 0, muzzle: 0, recoil: 0, hitMarker: 0, hitHead: false, damageIndicators: [],
   punch: 0, shake: 0, fovKick: 0, swayX: 0, swayY: 0, fireT: -1e9, swingT: -1e9, quickUntil: 0,
