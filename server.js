@@ -86,6 +86,20 @@ setInterval(() => wss.clients.forEach(s => {
 }), 30000);
 setInterval(() => hub.tick(), TICK);
 
+// Render stops the old server with SIGTERM when it deploys a new one (and Ctrl+C sends SIGINT):
+// tell everyone it's restarting, let stat saves land, then go. Their pages reconnect by themselves
+let stopping = false;
+async function shutdown(signal) {
+  if (stopping) process.exit(1); // asked twice: go now
+  stopping = true;
+  console.log(`\n${signal}: restarting — telling everyone`);
+  hub.announceRestart();
+  await Promise.race([hub.saving, new Promise(r => setTimeout(r, 4000))]);
+  setTimeout(() => process.exit(0), 1500); // time for the message to reach them
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 server.listen(PORT, () => {
   console.log(`
   PISTOLS & POTION v${VERSION} — 3D Shooter

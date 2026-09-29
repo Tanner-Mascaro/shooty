@@ -1629,6 +1629,10 @@ body.touch.ingame #chat { z-index:360; bottom:auto; top:60px; }
 .chalList li.done b { color:#9a1628; }
 #openHistory { align-self:flex-start; }
 #historyModal .card { width:100%; max-width:480px; display:flex; flex-direction:column; gap:12px; }
+/* "the server is restarting": a strip across the top until we're back */
+#restartNote { position:fixed; top:0; left:0; right:0; z-index:1000; padding:10px 16px; text-align:center;
+  background:rgba(40,20,60,0.92); color:#fff6e0; font:600 14px 'IBM Plex Sans',system-ui,sans-serif; letter-spacing:.04em;
+  box-shadow:0 2px 10px rgba(0,0,0,0.4); pointer-events:none; }
 /* the wiki */
 #wikiModal .card { width:100%; max-width:880px; max-height:88vh; display:flex; flex-direction:column; gap:10px; }
 #wikiTabs { display:flex; flex-wrap:wrap; gap:6px; }

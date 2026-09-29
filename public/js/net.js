@@ -28,6 +28,23 @@ import { goToRoom } from './room.js';
 
 let ws = null;
 
+// Lost the server (an update, a blip): say so, wait until it answers again, then reload into the
+// same room (your profile and the ?room= code survive a reload)
+let reconnecting = false;
+function reconnectSoon(text, poll = true) {
+  setWaitText(text);
+  let note = document.getElementById('restartNote');
+  if (!note) { note = document.createElement('div'); note.id = 'restartNote'; document.body.append(note); }
+  note.textContent = text;
+  if (reconnecting || !poll) return;
+  reconnecting = true;
+  const tryAgain = async () => {
+    try { const r = await fetch('/', { cache: 'no-store' }); if (r.ok) return location.reload(); } catch {}
+    setTimeout(tryAgain, 2000);
+  };
+  setTimeout(tryAgain, 2500);
+}
+
 export function send(msg) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
 }
@@ -37,7 +54,12 @@ function open(route) {
   const sock = ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/' + route);
   S.disconnected = false;
   sock.onopen = () => sendHello();
-  sock.onclose = () => { if (sock !== ws) return; S.disconnected = true; setWaitText('Disconnected — refresh to reconnect.'); };
+  sock.onclose = e => {
+    if (sock !== ws) return;
+    S.disconnected = true;
+    if (e.code === 1008) return setWaitText('Disconnected — refresh to reconnect.'); // thrown out for flooding: no auto-retry
+    reconnectSoon(S.restarting ? 'The server is restarting for an update — back in a moment…' : 'Connection lost — reconnecting…');
+  };
   sock.onerror = () => { if (sock !== ws) return; S.disconnected = true; setWaitText('Connection failed — refresh to retry.'); };
   sock.onmessage = e => {
     if (sock !== ws) return;
@@ -653,6 +675,11 @@ const handlers = {
   partyInvite(msg) { showPartyInvite(msg); },
   partyMove(msg) { toast('Following your party leader…'); goToRoom(msg.room); },
   meta(msg) { showMeta(msg); },
+  restarting() {
+    S.restarting = true;
+    if (S.started) banner('SERVER RESTARTING', true);
+    reconnectSoon('The server is restarting for an update — back in a moment…', false); // polling starts when the line drops
+  },
   unlock(msg) {
     if (S.started) banner('★ ' + msg.text.toUpperCase() + ' UNLOCKED', true); else toast(msg.text + ' unlocked!');
     addSystem('Unlocked: ' + msg.text);

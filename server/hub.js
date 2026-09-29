@@ -76,6 +76,11 @@ export class Hub {
     this.partyId = 0;
   }
 
+  // the server is about to restart (server.js shutdown): everyone gets a heads-up
+  announceRestart() {
+    for (const p of Object.values(this.conns)) this.send(p, { type: 'restarting' });
+  }
+
   // --- messaging ---
   send(p, msg) { if (p.socket) this.sendRaw(p, JSON.stringify(msg)); }
   sendRaw(p, data) { if (p.socket) try { p.socket.send(data); } catch {} }
