@@ -437,14 +437,9 @@ body.on-home #corner { z-index:210; }
     0% calc(100% - 8px), 0% 8px
   );
 }
-.maps button .preview {
-  position:absolute; left:auto; right:10px; top:10px; width:64px; height:64px; image-rendering:pixelated;
-  border-radius:2px; opacity:.95; box-shadow:2px 2px 0 rgba(40,24,12,0.35);
-  border:1px solid rgba(90,60,30,0.45); z-index:0;
-}
 .maps button b {
   font-family:'Caslon Antique',Georgia,serif; font-size:19px; font-weight:700; letter-spacing:.08em; color:#3a2414; line-height:1.05;
-  text-shadow:0 1px 0 rgba(255,240,210,0.5); z-index:1; padding-right:64px;
+  text-shadow:0 1px 0 rgba(255,240,210,0.5); z-index:1;
 }
 .maps button small {
   font-size:12px; font-weight:500; letter-spacing:.02em; color:#6a5640; font-style:italic; z-index:1;
@@ -534,6 +529,7 @@ body.on-home #corner { z-index:210; }
 #customize, #profile { display:flex; flex-direction:column; gap:12px; }
 #customize .rollBody > div { display:flex; flex-direction:column; gap:10px; }
 #profileLoadout { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; }
+#profileLoadout .lookTile:last-child:nth-child(odd) { grid-column:1 / -1; }
 .lookTile { font:inherit; cursor:pointer; min-width:0; }
 .lookTile b { font-size:14px !important; letter-spacing:.04em; text-transform:uppercase; overflow-wrap:anywhere; line-height:1.15; }
 .lookTile:hover b { color:#5a2a90; }
@@ -1520,6 +1516,12 @@ body.map-open #gameGear, body.map-open #gameMap, body.map-open #gameLeave { z-in
 #xpText { grid-column:2; font-size:11px; color:#6a5640; text-align:right; }
 .choice.skins button.locked { cursor:not-allowed; }
 .choice.skins button.locked canvas { filter:grayscale(1) brightness(0.35); }
+#camos .camoArt { width:100%; height:44px; object-fit:contain; image-rendering:pixelated; margin-bottom:4px; }
+#camos button.locked .camoArt { filter:grayscale(1) brightness(0.6); }
+#camoGuns { max-height:220px; overflow:auto; }
+#pets canvas { width:48px; height:48px; image-rendering:pixelated; }
+#pets button.locked canvas { filter:saturate(0.4) brightness(0.7); }
+#hats button.locked canvas { filter:saturate(0.5) brightness(0.8); opacity:.7; } /* hats stay visible: something to chase */
 .choice.skins button.locked .skin-name { color:#7a6a58; }
 .skin-lock {
   position:absolute; top:8px; left:50%; transform:translateX(-50%); padding:3px 9px; white-space:nowrap;
@@ -1622,6 +1624,22 @@ body.touch.ingame #chat { z-index:360; bottom:auto; top:60px; }
 .chalList li.done b { color:#9a1628; }
 #openHistory { align-self:flex-start; }
 #historyModal .card { width:100%; max-width:480px; display:flex; flex-direction:column; gap:12px; }
+/* the wiki */
+#wikiModal .card { width:100%; max-width:880px; max-height:88vh; display:flex; flex-direction:column; gap:10px; }
+#wikiTabs { display:flex; flex-wrap:wrap; gap:6px; }
+#wikiTabs button { font-size:12px; padding:5px 10px; }
+#wikiTabs button.sel { background:#5a2a90; color:#fff6e0; }
+#wikiBody { overflow:auto; min-height:0; padding-right:4px; color:#2a1a10; font-size:13px; line-height:1.4; }
+#wikiBody h4 { margin:14px 0 4px; font-family:'Caslon Antique',Georgia,serif; letter-spacing:.08em; text-transform:uppercase; color:#5a2a90; }
+.wikiNote { margin:4px 0 8px; color:#5a4630; font-style:italic; }
+.wikiEntry { margin:6px 0; }
+.wikiEntry b { display:block; font-family:'Caslon Antique',Georgia,serif; letter-spacing:.06em; color:#3a2414; }
+.wikiEntry p { margin:2px 0 0; }
+.wikiTable { width:100%; border-collapse:collapse; margin:4px 0 8px; }
+.wikiTable th { text-align:left; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#6a5640; border-bottom:1px solid rgba(106,74,40,0.5); padding:4px 6px; }
+.wikiTable td { padding:4px 6px; border-bottom:1px solid rgba(106,74,40,0.18); vertical-align:middle; }
+.wikiGunName { display:flex; align-items:center; gap:8px; }
+.wikiGun { height:22px; width:auto; image-rendering:pixelated; }
 #records { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
 #records .stat b { font-size:17px; text-transform:capitalize; overflow-wrap:anywhere; }
 #historyList { list-style:none; display:flex; flex-direction:column; gap:4px; max-height:44vh; overflow:auto; }

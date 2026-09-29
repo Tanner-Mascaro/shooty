@@ -34,7 +34,7 @@ function castShot(T, shooter, a, pch, targets) {
 // (a shotgun blast can hit several people). spreadScale < 1 tightens hip fire (Laser Sight)
 export function doShoot(T, shooter, targets, weapon, scoped, spreadScale = 1) {
   const w = WEAPONS[weapon];
-  const airborne = shooter.z - solidAt(T, shooter.x, shooter.y, shooter.z) > 0.05;
+  const airborne = !shooter.flying && shooter.z - solidAt(T, shooter.x, shooter.y, shooter.z) > 0.05; // on a broom you're steady
   const spread = (w.pellets ? w.spread : airborne ? w.airSpread : scoped ? w.scopedSpread : w.spread) * (scoped && !w.pellets ? 1 : spreadScale);
   const rays = [], byTarget = new Map();
   for (let i = 0; i < (w.pellets || 1); i++) {

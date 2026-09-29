@@ -1,17 +1,19 @@
 // WebSocket connection and handlers for every server -> client message.
 import { EYE, HEAL, PLAGUE_TEAM, teamName, gunGameGun, GUN_GAME_LADDER, HASTE, WARD, BROOM, INVIS, CURSE, FROST, WELL, POWERUPS, MAP_EVENTS, DROPS, SURVIVAL, MOBS, gunLook, gunName } from '/shared/config.js';
 import { applyBuild, removeBuild } from '/shared/spells.js';
-import { cryptLayout, closeDoor, openDoor } from '/shared/crypt.js';
+import { cryptLayout, closeDoor, openDoor, isSurvivalLevel } from '/shared/crypt.js';
 import { groundAt, walkHeight } from '/shared/terrain.js';
 import { S, owned, nameOf, gunSlots } from './state.js';
 import { setLevel, colors } from './level.js';
 import { play, playAt, spatial } from './audio.js';
-import { burst } from './particles.js';
+import { burst, killEffect } from './particles.js';
+import { KILL_EFFECTS } from '/shared/progression.js';
 import { switchWeapon } from './weapons.js';
 import { showWait, hideWait, setWaitText, showMsg, showSummary, updateRematch, banner, callout, toast, pushFeed, pushNote, clearFeed } from './ui.js';
 import { enterSpectate, leaveSpectate } from './spectate.js';
 import { STREAK_NAMES, MULTI_NAMES, SPELL_LOOK, SPELL_NAME, GUN_COLOR, POWER_COLOR, TEAM_RGB, EMOTE_FX } from './constants.js';
 import { prewarmWorld } from './render/gl/scene.js';
+import { lookOf } from './render/sprites.js';
 import { showRoom, sendSavedAtt } from './room.js';
 import { sendHello, showProfile, onAuth, showBoard, showMeta } from './account.js';
 import { showFriends, showInvite } from './friends.js';
@@ -99,7 +101,7 @@ export function setDoors(sv) {
   for (const prev of S.doorPrev.values()) openDoor(S.T, prev);
   S.doorPrev.clear();
   S.openDoors = new Set(sv?.opened || []);
-  if (!sv || S.level !== 'crypt' || !S.T) return;
+  if (!sv || !isSurvivalLevel(S.level) || !S.T) return;
   for (const d of cryptLayout(S.MAP).doors) if (!S.openDoors.has(d.id)) S.doorPrev.set(d.id, closeDoor(S.T, d));
 }
 
@@ -214,7 +216,8 @@ const handlers = {
     if (msg.mode === 'royale') banner('LAST ONE STANDING', true);
     if (msg.mode === 'harvest') banner('REAP THEIR SOULS', true);
     if (msg.mode === 'chamber') banner('ONE ROUND. ONE KILL.', true);
-    if (msg.mode === 'survival') banner('SURVIVE THE CRYPT', true);
+    if (msg.mode === 'survival') banner(S.level === 'ship' ? 'HOLD THE FLEET' : 'SURVIVE THE CRYPT', true);
+    if (msg.mode === 'sky') banner('MOUNT YOUR BROOMS', true);
   },
 
   // full ammo state: on respawn, or when the server disagreed with our count
@@ -428,11 +431,11 @@ const handlers = {
     const fling = { sniper: 6, shotgun: 5, blade: 3, pit: 0 }[msg.weapon] ?? 2; // how hard the body gets thrown
     const a = msg.a || 0;
     const victim = S.room && S.room.players.find(p => p.id === msg.victim);
-    S.corpses.push({ x: msg.x, y: msg.y, z: msg.z, skin: msg.skin || victim && victim.skin, vx: Math.cos(a) * fling, vy: Math.sin(a) * fling, vz: fling * 0.5 + 1,
+    S.corpses.push({ x: msg.x, y: msg.y, z: msg.z, skin: victim && (!msg.skin || msg.skin === victim.skin) ? lookOf(victim) : msg.skin, vx: Math.cos(a) * fling, vy: Math.sin(a) * fling, vz: fling * 0.5 + 1,
       t: now, landed: false, mine: msg.victim === S.myId });
     burst(msg.x, msg.y, msg.z + 0.4, 45, pit ? 'fire' : 'blood');
     burst(msg.x, msg.y, msg.z + 0.4, 25, 'fire');
-    if (msg.fx) { burst(msg.x, msg.y, msg.z + 0.4, 60, 'fire', msg.fx); burst(msg.x, msg.y, msg.z + 0.6, 30, 'spark', msg.fx); } // the killer's kill effect
+    if (msg.fx) killEffect(msg.x, msg.y, msg.z, msg.fx, KILL_EFFECTS[msg.fk]?.style); // the killer's kill effect
     pushFeed(msg);
     announceStreak(msg);
     if (msg.killer === S.myId) {
@@ -471,7 +474,7 @@ const handlers = {
     const won = mode === 'survival' ? msg.wave >= 10 : msg.team ? msg.team === S.myTeam : msg.winner === S.myId;
     let headline, sys, rematch;
     if (mode === 'survival') {
-      headline = `THE CRYPT CLAIMED YOU · WAVE ${msg.wave}`;
+      headline = `${S.level === 'ship' ? 'THE DEEP' : 'THE CRYPT'} CLAIMED YOU · WAVE ${msg.wave}`;
       sys = `Survived ${msg.survived} wave${msg.survived === 1 ? '' : 's'}`;
       rematch = sys + '. Again?';
     } else if (mode === 'plague' && msg.team) {
@@ -609,7 +612,7 @@ const handlers = {
     const prev = S.doorPrev.get(msg.id);
     if (prev) { openDoor(S.T, prev); S.doorPrev.delete(msg.id); }
     S.openDoors.add(msg.id);
-    const d = S.level === 'crypt' && cryptLayout(S.MAP).doors[msg.id];
+    const d = isSurvivalLevel(S.level) && cryptLayout(S.MAP).doors[msg.id];
     if (!d) return;
     burst(d.x, d.y, 1.2, 70, 'spark', [200, 160, 90]);
     playAt('thud', d.x, d.y, 2);
@@ -650,6 +653,15 @@ const handlers = {
   partyInvite(msg) { showPartyInvite(msg); },
   partyMove(msg) { toast('Following your party leader…'); goToRoom(msg.room); },
   meta(msg) { showMeta(msg); },
+  unlock(msg) {
+    if (S.started) banner('★ ' + msg.text.toUpperCase() + ' UNLOCKED', true); else toast(msg.text + ' unlocked!');
+    addSystem('Unlocked: ' + msg.text);
+  },
+  feat(msg) {
+    const text = `Feat complete: ${msg.text}` + (msg.reward ? ` — ${msg.reward} unlocked!` : '');
+    if (S.started) banner('★ ' + (msg.reward ? msg.reward.toUpperCase() + ' UNLOCKED' : msg.text.toUpperCase()), true); else toast(text);
+    addSystem(text);
+  },
   challenge(msg) {
     const text = `Challenge complete: ${msg.text} (+${msg.xp} XP)`;
     if (S.started) banner('✓ ' + msg.text.toUpperCase(), true); else toast(text);

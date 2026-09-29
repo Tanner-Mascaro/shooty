@@ -2,9 +2,9 @@
 // crosshair / scope, hit markers, screen flashes, banner, minimap and weapon list.
 import { MW, MH } from '/shared/levels.js';
 import { WEAPONS, GUN_SLOTS, EYE, BODY_H, BUILDS, SPELL_SLOTS, NADE, magSize, MOBS, gunLook, gunName } from '/shared/config.js';
-import { S, spare, isEnemy, nameOf } from '../state.js';
+import { S, spare, isEnemy, nameOf, myCamo } from '../state.js';
 import { BASE_FOV, SCOPE_FOV, GUN_COLOR, ALLY_OUTLINE_COLOR, ENEMY_OUTLINE_COLOR, SPELL_LOOK, SPELL_NAME, MAX_SPEED, POWER_COLOR, TEAM_RGB } from '../constants.js';
-import { cryptLayout } from '/shared/crypt.js';
+import { cryptLayout, isSurvivalLevel } from '/shared/crypt.js';
 import { pickupSprite, spellPotion } from './sprites.js';
 import { gunArt } from './gunArt.js';
 import { buildingAllowed, setBuildMode, castSlot } from '../spells.js';
@@ -448,7 +448,7 @@ export function drawMinimap(now) {
     for (const u of S.powerups) if (u.active) dot(u.x, u.y, 0.45, `rgb(${POWER_COLOR[u.kind].join(',')})`);
     for (const o of S.souls) dot(o.x, o.y, 0.4, `rgb(${(TEAM_RGB[o.t] || [230, 230, 255]).join(',')})`);
     for (const d of S.survival?.drops || []) dot(d.x, d.y, 0.5, `rgb(${POWER_COLOR[d.k].join(',')})`);
-    if (S.survival && S.level === 'crypt') {
+    if (S.survival && isSurvivalLevel(S.level)) {
       const L = cryptLayout(S.MAP);
       ctx.fillStyle = '#8a5a30';
       for (const d of L.doors) if (!S.openDoors.has(d.id)) ctx.fillRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
@@ -522,11 +522,19 @@ export function drawAmmo(now) {
   const mag = S.mag[w] ?? 0, full = magSize(w, S.att), left = spare(w);
   ctx.textAlign = 'center';
   const r = S.reloading, y = H / 2 + 44;
-  if (r) {
-    const k = Math.min(1, (now - r.start) / (r.until - r.start)), bw = 120;
-    ctx.fillStyle = 'rgba(42,30,18,0.55)'; ctx.fillRect(W / 2 - bw / 2, y, bw, 5);
-    ctx.fillStyle = 'rgb(' + S.theme.accent + ')'; ctx.fillRect(W / 2 - bw / 2, y, bw * k, 5);
-    ctx.font = '700 12px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#f0e6d0'; ctx.fillText('RELOADING', W / 2, y - 6);
+  if (r) { // a ring round the crosshair that fills clockwise, a bright spark at its tip, seconds left under it
+    const k = Math.min(1, (now - r.start) / (r.until - r.start)), cx = W / 2, cy = H / 2, rad = 26, a0 = -Math.PI / 2, a1 = a0 + k * Math.PI * 2;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(20,12,8,0.55)';
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgb(' + S.theme.accent + ')';
+    ctx.shadowColor = 'rgb(' + S.theme.accent + ')'; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.arc(cx, cy, rad, a0, a1); ctx.stroke();
+    ctx.fillStyle = '#fff6e0';
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a1) * rad, cy + Math.sin(a1) * rad, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.lineCap = 'butt';
+    ctx.font = '700 11px Caslon Antique, Georgia, serif'; ctx.fillStyle = 'rgba(240,230,208,0.9)';
+    ctx.fillText(Math.max(0, (r.until - now) / 1000).toFixed(1) + 's', cx, cy + rad + 16);
   } else if (mag <= full / 4 && left > 0) {
     ctx.font = '700 13px Caslon Antique, Georgia, serif'; ctx.fillStyle = '#a88850'; ctx.fillText('RELOAD', W / 2, y);
   } else if (mag <= full / 4) {
@@ -634,9 +642,10 @@ potionImg.src = '/img/potion.png';
 
 // a gun's pickup sprite drawn once into a small canvas
 function weaponIcon(w) {
-  if (icons[w]) return icons[w];
-  const art = gunArt(w);
-  if (art) return icons[w] = art.canvas;
+  const camo = myCamo(w), key = w + (camo ? '|' + camo : '');
+  if (icons[key]) return icons[key];
+  const art = gunArt(w, false, camo);
+  if (art) return icons[key] = art.canvas;
   const sp = w === 'blade' ? BLADE_ICON : pickupSprite(w, GUN_COLOR[w]);
   const c = document.createElement('canvas'), IW = 64, IH = Math.max(8, Math.round(IW * sp.h / sp.w));
   c.width = IW; c.height = IH;
@@ -646,7 +655,7 @@ function weaponIcon(w) {
     if (col) img.data.set([col[0], col[1], col[2], 255], (y * IW + x) * 4);
   }
   g.putImageData(img, 0, 0);
-  return icons[w] = c;
+  return icons[key] = c;
 }
 
 // a parchment tile with cut corners, like the lobby's boxes; the one in hand gets a gold rim and an

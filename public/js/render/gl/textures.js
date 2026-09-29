@@ -138,6 +138,24 @@ const FLOOR_DRAW = {
   },
 };
 
+FLOOR_DRAW.plain = (ctx, w, h) => { // a light grain, so the floor palette's colors show through
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const v = 0.86 + 0.14 * noise(x * 0.15, y * 0.15);
+    ctx.fillStyle = rgb(240 * v, 238 * v, 232 * v);
+    ctx.fillRect(x, y, 1, 1);
+  }
+};
+FLOOR_DRAW.ship = (ctx, w, h) => { // pale boards with grain: the deck's colors come from the floor palette
+  for (let x = 0; x < w; x++) {
+    const board = Math.floor(x / 16), seam = x % 16 < 1;
+    for (let y = 0; y < h; y++) {
+      const v = seam ? 0.5 : (0.82 + 0.1 * noise(board, 3)) * (0.9 + 0.1 * Math.sin(y * 0.3 + board * 1.7 + noise(board, y * 0.03) * 5));
+      ctx.fillStyle = rgb(235 * v, 228 * v, 215 * v);
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+};
+
 const WALL_DRAW = {
   hell(ctx, w, h, theme) {
     const [wr, wg, wb] = theme.wall;
@@ -246,6 +264,16 @@ const WALL_DRAW = {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(0, h - 10, w, 10);
   },
+  ship(ctx, w, h) { // deckhouse: tarred clapboard
+    for (let y = 0; y < h; y++) {
+      const board = Math.floor(y / 14), seam = y % 14 < 2;
+      for (let x = 0; x < w; x++) {
+        const v = seam ? 0.45 : 0.75 + 0.25 * noise(board * 3, x * 0.05);
+        ctx.fillStyle = rgb(118 * v, 86 * v, 58 * v);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  },
   nuke(ctx, w, h, theme) {
     ctx.fillStyle = rgb(...theme.wall);
     ctx.fillRect(0, 0, w, h);
@@ -259,6 +287,14 @@ const WALL_DRAW = {
 };
 
 function pitTexture(theme) {
+  if (theme.sea) return makeTexture((ctx, w, h) => { // swell and moonlit caps
+    const [r, g, b] = theme.sea;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const n = 0.7 + 0.45 * noise(x * 0.09 + noise(y * 0.05, 3) * 3, y * 0.2), cap = noise(x * 0.3, y * 0.6) > 0.83 ? 1.8 : 1;
+      ctx.fillStyle = rgb(r * n * cap, g * n * cap, b * n * cap);
+      ctx.fillRect(x, y, 1, 1);
+    }
+  });
   const [r, g, b] = theme.band;
   return makeTexture((ctx, w, h) => {
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -278,9 +314,9 @@ export function clearTextureCache() {
 
 export function texturesFor(theme) {
   if (cache.has(theme.id)) return cache.get(theme.id);
-  const look = theme.id === 'crypt' ? 'castle' : theme.id; // the Crypt borrows the castle's stonework
-  const floorDraw = FLOOR_DRAW[look] || FLOOR_DRAW.hell;
-  const wallDraw = WALL_DRAW[look] || WALL_DRAW.hell;
+  const look = theme.id === 'crypt' || theme.id === 'yard' ? 'castle' : theme.id; // the Crypt and the graveyard borrow the castle's stonework
+  const floorDraw = theme.id === 'cove' || theme.id === 'yard' ? FLOOR_DRAW.plain : FLOOR_DRAW[look] || FLOOR_DRAW.hell; // colors from the floor palette
+  const wallDraw = theme.id === 'cove' ? WALL_DRAW.ship : WALL_DRAW[look] || WALL_DRAW.hell;
   const floor = makeTexture((ctx, w, h) => floorDraw(ctx, w, h), { size: 256 });
   floor.repeat.set(18, 18);
   const wall = makeTexture((ctx, w, h) => wallDraw(ctx, w, h, theme), { size: 256 });

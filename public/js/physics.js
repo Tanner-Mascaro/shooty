@@ -1,8 +1,8 @@
 // Your movement. Quake-style: holding space re-jumps on landing without ground friction,
 // and strafing + turning in the air adds speed (bhop).
-import { groundAt, kindAt, walkHeight, ceilingAt, houseAt } from '/shared/terrain.js';
+import { groundAt, kindAt, walkHeight, ceilingAt, houseAt, flyBlocked } from '/shared/terrain.js';
 import { gunLook } from '/shared/config.js';
-import { TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE, BROOM, CURSE, MAP_EVENTS, ELIXIR_SPEED, JUMP_PAD, WELL } from '/shared/config.js';
+import { FLY, TICK, BODY_H, SLIDE, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, HACK_SPEED, HASTE, BROOM, CURSE, MAP_EVENTS, ELIXIR_SPEED, JUMP_PAD, WELL } from '/shared/config.js';
 import { S } from './state.js';
 import { SENS, MAX_SPEED, ACCEL, AIR_ACCEL, AIR_CAP, FRICTION, STOP_SPEED, GRAVITY, SPEED_LIMIT, STEP } from './constants.js';
 import { tryJump, tryDash } from '/shared/movement.js';
@@ -216,6 +216,8 @@ export function updatePlayer(dt) {
   S.swayY += (lim(-S.mouseDY / Math.max(dt, 1e-3) * 0.004) - S.swayY) * k;
   S.mouseDX = S.mouseDY = 0;
 
+  if (S.room?.mode === 'sky') { fly(me, dt); sendInput(me); return; }
+
   const cos = Math.cos(me.a), sin = Math.sin(me.a);
   let fx = 0, sx = 0;
   if (held('forward')) fx++;
@@ -307,8 +309,47 @@ export function updatePlayer(dt) {
   setSizzle(inPit() ? 0.25 : 0);
   if (inPit() && Math.random() < 0.3) burst(me.x, me.y, me.z, 1, 'fire');
 
-  if (now - lastInputAt >= TICK) {
-    lastInputAt = now;
-    send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && gunLook(S.weapon) === 'sniper', sl: S.sliding, w: S.weapon, seq: S.mySeq });
+  sendInput(me);
+}
+
+function sendInput(me) {
+  const now = performance.now();
+  if (now - lastInputAt < TICK) return;
+  lastInputAt = now;
+  send({ type: 'input', x: me.x, y: me.y, z: me.z, a: me.a, p: S.pitch + (S.punch || 0), sc: S.scoped && gunLook(S.weapon) === 'sniper', sl: S.sliding, w: S.weapon, seq: S.mySeq });
+}
+
+// Broom Battle: fly where you look. Forward / back follow your aim, up and down included; strafe
+// sideways; jump climbs, crouch dives. The broom carries its momentum; a Broom Dash still bursts
+function fly(me, dt) {
+  const now = performance.now(), frozen = S.frozenUntil > now;
+  let fx = Number(held('forward')) - Number(held('back')) + S.touchMove.y + S.padMove.y;
+  const sx = Number(held('right')) - Number(held('left')) + S.touchMove.x + S.padMove.x;
+  const up = Number(held('jump')) - Number(held('slide'));
+  const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch), cos = Math.cos(me.a), sin = Math.sin(me.a);
+  let wx = cos * cp * fx - sin * sx, wy = sin * cp * fx + cos * sx, wz = sp * fx + up;
+  const wl = Math.hypot(wx, wy, wz);
+  if (wl > 1) { wx /= wl; wy /= wl; wz /= wl; }
+  const scale = (S.hasteUntil > now ? HASTE.speed : 1) * (S.cursedUntil > now ? CURSE.slow : 1) * speedScale() * (S.hacks ? HACK_SPEED : 1);
+  const top = FLY.speed * scale, k = Math.min(1, FLY.accel * dt);
+  S.vz ||= 0;
+  if (frozen) { S.vx = S.vy = S.vz = 0; }
+  else if (now < (S.broomUntil || 0)) { S.vx = Math.cos(S.broomA) * cp * BROOM.speed; S.vy = Math.sin(S.broomA) * cp * BROOM.speed; S.vz = sp * BROOM.speed; }
+  else {
+    S.vx += (wx * top - S.vx) * k; S.vy += (wy * top - S.vy) * k;
+    S.vz += (Math.max(-FLY.climb, Math.min(FLY.climb, wz * top)) - S.vz) * k;
   }
+  // move one axis at a time, so you slide along whatever you hit
+  const tryMove = (nx, ny, nz) => !flyBlocked(S.T, nx, ny, nz, PLAYER_R, BODY_H, FLY.edge);
+  if (tryMove(me.x + S.vx * dt, me.y, me.z)) me.x += S.vx * dt; else S.vx *= -0.2;
+  if (tryMove(me.x, me.y + S.vy * dt, me.z)) me.y += S.vy * dt; else S.vy *= -0.2;
+  const floor = Math.max(0, walkHeight(S.T, me.x, me.y, me.z + 0.1)); // skim over pits, don't sink in
+  const nz = Math.max(floor, Math.min(FLY.ceil, me.z + S.vz * dt));
+  if (tryMove(me.x, me.y, nz)) me.z = nz; else S.vz = 0;
+  if (me.z <= floor + 0.001 && S.vz < 0) S.vz = 0;
+  S.onGround = me.z <= floor + 0.02;
+  S.sliding = false;
+  S.speed = Math.hypot(S.vx, S.vy, S.vz);
+  setWind(Math.max(0, Math.min(1, (S.speed - 2) / 6)) * 0.45);
+  setSizzle(0);
 }

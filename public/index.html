@@ -55,7 +55,7 @@
     </div>
   </div>
 </div>
-<div id="corner"><button type="button" id="openAccount" class="ghost">Account</button><button class="fsToggle ghost">Fullscreen</button><button class="gear ghost">Settings</button></div>
+<div id="corner"><button type="button" id="openWiki" class="ghost">Wiki</button><button type="button" id="openAccount" class="ghost">Account</button><button class="fsToggle ghost">Fullscreen</button><button class="gear ghost">Settings</button></div>
 <div id="wait">
   <div class="smoke" aria-hidden="true"><i></i><i></i><i></i></div>
   <header id="lobbyHead">
@@ -177,11 +177,14 @@
         <div class="rollBody"><div>
           <div id="profileLoadout">
             <button type="button" class="stat lookTile" data-edit="skin"><b id="loSkin"></b><span>Character</span></button>
+            <button type="button" class="stat lookTile" data-edit="hat"><b id="loHat"></b><span>Hat</span></button>
+            <button type="button" class="stat lookTile" data-edit="camo"><b id="loCamo"></b><span>Camo</span></button>
+            <button type="button" class="stat lookTile" data-edit="pet"><b id="loPet"></b><span>Familiar</span></button>
             <button type="button" class="stat lookTile" data-edit="att"><b id="loAtt"></b><span>Attachment</span></button>
             <button type="button" class="stat lookTile" data-edit="title"><b id="loTitle"></b><span>Title</span></button>
             <button type="button" class="stat lookTile" data-edit="effect"><b id="loEffect"></b><span>Kill effect</span></button>
           </div>
-          <small class="acctNote">More unlock as you level up.</small>
+          <small class="acctNote">More unlock as you level up, and hats with feats.</small>
         </div></div>
       </div>
       <div id="profile" class="card">
@@ -202,10 +205,19 @@
       </div>
     </section>
   </div>
+  <div id="wikiModal" class="modal" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="wikiTitle">
+      <div class="modalHead"><b id="wikiTitle">THE GRIMOIRE · WIKI</b><button type="button" class="modalClose" aria-label="Close">✕</button></div>
+      <div id="wikiTabs"></div>
+      <div id="wikiBody"></div>
+    </div>
+  </div>
   <div id="historyModal" class="modal" hidden>
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
       <div class="modalHead"><b id="historyTitle">HISTORY &amp; RECORDS</b><button type="button" class="modalClose" aria-label="Close">✕</button></div>
       <div id="records"></div>
+      <div class="label">FEATS <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">Lifetime goals — each one unlocks a hat for good</small></div>
+      <ul id="featList" class="chalList"></ul>
       <div class="label">LAST 10 MATCHES</div>
       <ul id="historyList"></ul>
     </div>
@@ -283,6 +295,10 @@
           <button data-level="nuke"><b>PUMPKIN HOLLOW</b><small>Harvest moon &amp; jack-o'-lanterns</small></button>
           <button data-level="robot"><b>ALCHEMIST'S LAB</b><small>Potion shelves &amp; brew vats</small></button>
           <button data-level="haunt"><b>HEXED MANOR</b><small>Cursed halls &amp; the Backrooms</small></button>
+          <button data-level="cove"><b>SMUGGLER'S COVE</b><small>Sunset beach, sea channel &amp; moored sloops</small></button>
+          <button data-level="yard"><b>MOONLIT GRAVEYARD</b><small>Gravestones, vaults &amp; open graves</small></button>
+          <button data-level="crypt" hidden><b>THE CRYPT</b><small>Tombs, bones &amp; the catacombs</small></button>
+          <button data-level="ship" hidden><b>THE DROWNED FLEET</b><small>Ghost ships &amp; gangplanks over the deep</small></button>
         </div>
       </div>
       <div class="field" data-sec="att">
@@ -297,6 +313,20 @@
       <div class="field" data-sec="effect">
         <div class="label">KILL EFFECT <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">The burst where your victims fall</small></div>
         <div id="effects" class="choice cards"></div>
+      </div>
+      <div class="field" data-sec="hat">
+        <div class="label">HAT <small id="hatNote" style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px"></small></div>
+        <div id="hats" class="choice skins"></div>
+      </div>
+      <div class="field" data-sec="pet">
+        <div class="label">FAMILIAR <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">A little pet that follows you about</small></div>
+        <div id="pets" class="choice skins"></div>
+      </div>
+      <div class="field" data-sec="camo">
+        <div class="label">CAMO <small style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px">Each gun earns its own with kills</small></div>
+        <div id="camos" class="choice cards"></div>
+        <div class="label" style="margin-top:12px">YOUR GUNS</div>
+        <ul id="camoGuns" class="chalList"></ul>
       </div>
       <div class="field" data-sec="skin">
         <div class="label">CHARACTER <small id="skinStatus" style="letter-spacing:0;font-weight:400;text-transform:none;margin-left:6px"></small></div>
@@ -403,6 +433,7 @@
     <div class="setRow"><span>Gun &amp; hit sounds <small id="sfxVal"></small></span><input type="range" id="sfx" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Background hum <small id="ambientVal"></small></span><input type="range" id="ambient" min="0" max="1" step="0.05"></div>
     <div class="setRow"><span>Lobby music &amp; cackles <small id="musicVal"></small></span><input type="range" id="music" min="0" max="1" step="0.05"></div>
+    <div class="setRow"><span>Match music <small id="matchMusicVal"></small></span><input type="range" id="matchMusic" min="0" max="1" step="0.05"></div>
     <div class="label">VOICE CHAT</div>
     <div class="setRow"><span>Voice</span><select id="voiceMode"><option value="ptt">Push to talk</option><option value="open">Open mic</option><option value="off">Off</option></select></div>
     <div class="setRow"><span>Voice volume <small id="voiceVolVal"></small></span><input type="range" id="voiceVol" min="0" max="1" step="0.05"></div>

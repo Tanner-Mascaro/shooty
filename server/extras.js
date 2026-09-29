@@ -4,7 +4,7 @@
 // (server/room.js); `this` is the Room.
 import { BODY_H, SOUL, POWERUPS, POWERUP_COUNT, POWERUP_RESPAWN, POWERUP_SHIELD, JUMP_PAD, PORTAL, MAP_EVENTS, EVENT_EVERY, METEOR,
   TOTEM, WELL, DECOY, EMOTES, EMOTE_MS, ATTACHMENTS, customValue, isTeamMode, TEAMS } from '../shared/config.js';
-import { MW, MH } from '../shared/levels.js';
+import { MW, MH, isSurvivalLevel } from '../shared/levels.js';
 import { walkHeight, kindAt, hitsWall } from '../shared/terrain.js';
 import { levelFor } from '../shared/progression.js';
 import { log } from './log.js';
@@ -39,7 +39,7 @@ export const extraMethods = {
   // --- jump pads and portals: fixed per map ---
   makeTraversal() {
     this.pads = []; this.portals = [];
-    if (this.level === 'crypt') return;
+    if (isSurvivalLevel(this.level)) return;
     const rand = seeded(this.level), spots = this.spawnSpotsList().filter(s => !this.pickups.some(p => Math.hypot(p.x - s.x, p.y - s.y) < 2));
     // no pads under a ceiling: they'd fling you through it
     if (this.level !== 'haunt') this.pads = spread(spots, JUMP_PAD.count, rand).map((s, i) => {
@@ -303,7 +303,7 @@ export const extraHandlers = {
   att(p, msg) {
     const a = ATTACHMENTS[msg.att];
     if (!a || !Object.hasOwn(ATTACHMENTS, msg.att) || p.att === msg.att) return;
-    if (levelFor(p.stats?.xp || 0) < a.level) return this.hub.notice(p, `${a.name} unlocks at level ${a.level}`);
+    if (this.lookLevel(p) < a.level) return this.hub.notice(p, `${a.name} unlocks at level ${a.level}`);
     p.att = msg.att;
     if (!this.gameOn) this.roster();
   },

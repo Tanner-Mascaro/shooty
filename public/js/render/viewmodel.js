@@ -2,7 +2,7 @@
 // a low-res pixel buffer (the same size as the world's) and scaled up, so it matches the pixel look.
 // Gun space: x right, y up, z forward (meters), with the sight line on y = 0 and the rear sight at
 // z = 0 — so aiming down sights just puts that origin on the view axis and the sights line up.
-import { S } from '../state.js';
+import { S, myCamo } from '../state.js';
 import { gunLook } from '/shared/config.js';
 import { ctx, view, pk } from './canvas.js';
 
@@ -155,24 +155,24 @@ export function drawViewmodel(now) {
   const hip = HIP[w] || HIP.blade, a = ads, loose = 1 - 0.8 * a;
   const moving = S.onGround ? Math.min(S.speed, 4) : 0;
   const bx = Math.sin(S.bobPhase) * moving * 0.004 * loose, by = -Math.abs(Math.cos(S.bobPhase)) * moving * 0.003 * loose;
-  const r = !melee && S.reloading, reload = r ? Math.sin(Math.min(1, (now - r.start) / (r.until - r.start)) * Math.PI) : 0;
+  const r = !melee && S.reloading, away = reloadAway(r ? Math.min(1, (now - r.start) / (r.until - r.start)) : -1);
   const drawIn = Math.max(0, (S.switchUntil - now) / 350);
-  const dip = Math.max(reload, drawIn);
+  const dip = Math.max(away, drawIn);
   const kick = S.recoil * (w === 'sniper' || w === 'shotgun' ? 1 : 0.5);
   const swing = meleePose(now);
 
   const yaw = hip[3] * (1 - a) + S.swayX * 0.012 * loose + swing.yaw;
   const pitch = kick * (0.1 + 0.05 * a) - dip * 0.7 - S.swayY * 0.012 * loose + (melee ? 0.15 : 0) + swing.pitch;
-  const roll = hip[4] * (1 - a) + dip * 0.5 * (reload ? 1 : 0) + (melee ? -0.35 : 0) + (S.slideDip || 0) * 0.3 + swing.roll;
+  const roll = hip[4] * (1 - a) + (melee ? -0.35 : 0) + (S.slideDip || 0) * 0.3 + swing.roll;
   const t = {
-    x: hip[0] * (1 - a) + bx + swing.x, y: hip[1] * (1 - a) + by - dip * 0.12 - (S.slideDip || 0) * 0.02 + swing.y,
+    x: hip[0] * (1 - a) + bx + swing.x, y: hip[1] * (1 - a) + by - dip * 0.26 - (S.slideDip || 0) * 0.02 + swing.y,
     z: hip[2] + ((ADS_Z[w] || hip[2]) - hip[2]) * a - kick * 0.04 + swing.z,
     cr: Math.cos(roll), sr: Math.sin(roll), cp: Math.cos(pitch), sp: Math.sin(pitch), cy: Math.cos(yaw), sy: Math.sin(yaw),
   };
   const F = (vmW() / 2) / Math.tan(VM_FOV / 2);
 
   // accents glow in the gun's own color (same as its pickup), so you can tell what you're holding
-  const pal = gunPalette(held, 0.8 + 0.2 * Math.sin(now / 250));
+  const pal = gunPalette(held, 0.8 + 0.2 * Math.sin(now / 250), myCamo(held));
   if (w === 'claws') { pal.s = [220, 230, 240]; pal.d = [60, 90, 50]; pal.m = [80, 120, 64]; pal.l = [150, 170, 120]; } // a monster's arm
   const bp = now - S.fireT - 450;
   const offs = {
@@ -201,6 +201,11 @@ export function drawViewmodel(now) {
     ctx.fillStyle = g; ctx.fillRect(px - rad, py - rad, rad * 2, rad * 2);
   }
 }
+
+// Reloading: the gun drops out of sight, stays down, and comes back up at the end
+// (progress p 0..1; the reload bar on the HUD shows how long is left)
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const reloadAway = p => p < 0 ? 0 : ease(p / 0.2) - ease((p - 0.82) / 0.18);
 
 // wind-up → slash → recover; returns pose offsets + trail strength
 const SWING_MS = 340;

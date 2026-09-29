@@ -28,7 +28,7 @@ export const ACTIONS = {
 // voice: 'ptt' (push to talk), 'open' (open mic) or 'off' (no voice chat at all)
 const DEFAULTS = {
   fps: 0, showFps: false, fov: 1, crosshair: 1, showMinimap: true, showFeed: true, displayTheme: 'light',
-  volume: 1, sfx: 1, ambient: 1, music: 0.6, voice: 'ptt', voiceVol: 1, sens: 1, invertY: false, ads: 'toggle',
+  volume: 1, sfx: 1, ambient: 1, music: 0.6, matchMusic: 0.4, voice: 'ptt', voiceVol: 1, sens: 1, invertY: false, ads: 'toggle',
   keys: Object.fromEntries(Object.entries(ACTIONS).map(([a, [, k]]) => [a, k])),
 };
 const FPS_CHOICES = [0, 30, 60, 90, 120, 144, 165, 240]; // 0 = as fast as the display refreshes
@@ -52,7 +52,7 @@ function normalize(saved) {
     showFeed: typeof saved.showFeed === 'boolean' ? saved.showFeed : DEFAULTS.showFeed,
     displayTheme: ['light', 'dark', 'system'].includes(saved.displayTheme) ? saved.displayTheme : DEFAULTS.displayTheme,
     volume: num(saved.volume, 0, 1, DEFAULTS.volume), sfx: num(saved.sfx, 0, 1, DEFAULTS.sfx),
-    ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient), music: num(saved.music, 0, 1, DEFAULTS.music),
+    ambient: num(saved.ambient, 0, 1, DEFAULTS.ambient), music: num(saved.music, 0, 1, DEFAULTS.music), matchMusic: num(saved.matchMusic, 0, 1, DEFAULTS.matchMusic),
     sens: num(saved.sens, 0.2, 3, DEFAULTS.sens),
     invertY: typeof saved.invertY === 'boolean' ? saved.invertY : DEFAULTS.invertY,
     ads: ['toggle', 'hold'].includes(saved.ads) ? saved.ads : DEFAULTS.ads,
@@ -164,7 +164,7 @@ function render() {
   $('invertY').checked = settings.invertY;
   $('ads').value = settings.ads;
   $('voiceMode').value = settings.voice;
-  for (const k of ['volume', 'sfx', 'ambient', 'music', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
+  for (const k of ['volume', 'sfx', 'ambient', 'music', 'matchMusic', 'voiceVol']) { $(k).value = settings[k]; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; }
   $('sensVal').textContent = settings.sens.toFixed(2) + '×';
   $('fovVal').textContent = Math.round(settings.fov * 100) + '%';
   $('crosshairVal').textContent = settings.crosshair.toFixed(1) + '×';
@@ -199,7 +199,7 @@ export function initSettings() {
     settings.voice = e.target.value; save(); syncVoice();
     if (settings.voice === 'open') askMic(); // this change is a click: the browser may ask now
   });
-  for (const k of ['volume', 'sfx', 'ambient', 'music', 'voiceVol'])
+  for (const k of ['volume', 'sfx', 'ambient', 'music', 'matchMusic', 'voiceVol'])
     $(k).addEventListener('input', e => { settings[k] = +e.target.value; $(k + 'Val').textContent = Math.round(settings[k] * 100) + '%'; save(); });
   $('fpsCap').addEventListener('change', e => { settings.fps = +e.target.value; save(); });
   $('showFps').addEventListener('change', e => { settings.showFps = e.target.checked; save(); });

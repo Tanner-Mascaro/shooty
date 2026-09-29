@@ -2,20 +2,20 @@
 // owns connections, accounts and friends; a room only sees the players inside it.
 // People can join a match that's already running; it ends early if too few are left.
 import { TICK, RES, MAX_HP, WIN_SCORE, TEAM_WIN_SCORE, WIN_SCORE_OPTIONS, TEAM_WIN_SCORE_OPTIONS, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, HARDPOINT_ROTATION_MS, HARDPOINT_FIRST_MS, HARDPOINT_REVEAL_MS, HARDPOINT_SITE_COUNT, HARDPOINT_RADIUS, MAX_PLAYERS, TEAMS, PLAYER_SKINS, EYE, BODY_H, PIT_DPS, PICKUP_RESPAWN, HEAL, HEAL_RESPAWN, WEAPONS, AMMO, MAX_SPARE, AMMO_CRATES, AMMO_RESPAWN, GUN_CRATES, GUN_CRATE_RESPAWN, GUN_SLOTS, USE_RANGE, BOX_TIME, NADE, NADE_CRATES, NADE_RESPAWN, MOVE_SPEED_LIMIT, startGun, padGuns, HACK_HP, HACK_DMG, HACK_SPEED, HACK_FIRE } from '../shared/config.js';
-import { LEVELS, LEVEL_NAMES, FEATURED_LEVELS, MW, MH } from '../shared/levels.js';
-import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall } from '../shared/terrain.js';
+import { LEVELS, LEVEL_NAMES, MW, MH, MAP_UNLOCKS } from '../shared/levels.js';
+import { buildTerrain, groundAt, walkHeight, kindAt, findPickups, hitsWall, flyBlocked } from '../shared/terrain.js';
 import { doShoot, doMelee } from './combat.js';
 import { newBrain, botTick, BOT_LEVELS, KNIFE_CHANCE, NADE_CHANCE, randomBotName, randomPersonality } from './bot.js';
 import { MODE_NAMES, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, PLAGUE_SKIN, PLAGUE_SPEED_MULTIPLIER, PLAGUE_MAX_HP, isTeamMode, teamName, redBlue, CTF } from '../shared/config.js';
-import { canBuildIn, rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN, WAND_CHAIN, BROOM, BLINK, INVIS, CURSE, FROST, TOTEM, WELL } from '../shared/config.js';
+import { canBuildIn, rampLevels, MAX_MANA, MANA_REGEN, BUILDS, SPELL_SLOTS, STORED_SPELLS, HEAL_SPELL, HASTE, WARD, SCROLL_CRATES, SCROLL_RESPAWN, WAND_CHAIN, BROOM, BLINK, INVIS, CURSE, FROST, TOTEM, WELL, FLY } from '../shared/config.js';
 import { RAMP, canBuild, applyBuild, removeBuild, touchesBuild, rampUnder, fitsLevels } from '../shared/spells.js';
 import { maxPlayers, respawnDelay, RESPAWN_MS, MULTI_KILL_MS, SHUTDOWN_STREAK, GUN_GAME_LADDER, gunGameGun, ROYALE_ZONE } from '../shared/config.js';
 import { tryDash } from '../shared/movement.js';
 import { log } from './log.js';
-import { XP, levelFor, skinUnlocked, TITLES, KILL_EFFECTS } from '../shared/progression.js';
+import { XP, levelFor, skinUnlocked, TITLES, KILL_EFFECTS, HATS, CAMOS, camoMap, FAMILIARS } from '../shared/progression.js';
 import { VERSION } from './version.js';
 import { EVENT_FIRST, SURVIVAL, SOUL, SOUL_WIN_OPTIONS, CHAMBER, CUSTOM_WEAPONS, defaultCustom, magSize, reloadTime, ELIXIR_HP, ELIXIR_SPEED, FURY_DMG, MAP_EVENTS, ATTACHMENTS, EMOTES, EMOTE_MS } from '../shared/config.js';
-import { modeLevel } from '../shared/levels.js';
+import { levelsFor, mapUnlocked } from '../shared/levels.js';
 import { extraMethods, extraHandlers } from './extras.js';
 import { survivalMethods, survivalHandlers } from './survival.js';
 
@@ -28,6 +28,20 @@ const CHAT_MAX = 140; // as in public/js/chat.js
 export const BOTS = process.argv.includes('--bots') || !!process.env.BOTS;
 
 const PLAYER_R = 0.22; // body radius for wall collisions, as in public/js/physics.js
+
+// Broom Battle: the same speed check, in the air: no walls to pass through, no higher than the ceiling
+function flyInput(room, p, msg, elapsed, maxSpeed, now) {
+  const top = Math.max(maxSpeed, FLY.speed * room.speedScale(p, now) * (p.hasteUntil > now ? HASTE.speed : 1)) * 1.3;
+  const maxStep = top * elapsed / 1000 + 0.05;
+  const dx = msg.x - p.x, dy = msg.y - p.y, dz = msg.z - p.z, distance = Math.hypot(dx, dy, dz);
+  const scale = distance > maxStep ? maxStep / distance : 1;
+  const x = p.x + dx * scale, y = p.y + dy * scale, z = Math.min(FLY.ceil, Math.max(0, p.z + dz * scale));
+  if (!flyBlocked(room.T, x, y, z, PLAYER_R, BODY_H, FLY.edge - 0.1)) { p.x = x; p.y = y; p.z = Math.max(walkHeight(room.T, x, y, z + 0.1), z); }
+  p.a = Math.atan2(Math.sin(msg.a), Math.cos(msg.a));
+  p.p = Math.max(-1.2, Math.min(1.2, msg.p));
+  p.sc = !!msg.sc; p.sl = false;
+  if (msg.w === 'blade' || (typeof msg.w === 'string' && Object.hasOwn(p.mag, msg.w))) p.w = msg.w;
+}
 
 // Pick five stable, map-specific hills on broad, flat, open ground. Their order is fixed for
 // each map so teams can learn the rotation instead of chasing a randomly moving objective.
@@ -257,7 +271,7 @@ export class Room {
       gameOn: this.gameOn, bots: BOTS, max: this.max, votes, modeVotes, plagueRemainingMs: this.plagueRemainingMs,
       plagueSelection: this.plagueSelection, plagueSetupValid: this.plagueSetupValid(),
       winScore: this.winScore, teamWinScore: this.teamWinScore, soulWinScore: this.soulWinScore, custom: this.custom, hardpoint: this.hardpointSnapshot(),
-      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, att: p.att || 'none', plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), ready: p.ready, bot: !!p.bot, account: !!p.username, title: !p.bot && TITLES[p.title] && p.title !== 'apprentice' ? TITLES[p.title].name : null, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
+      players: this.list.map(p => ({ id: p.id, name: this.hub.name(p), team: p.team, att: p.att || 'none', plagueStartTeam: p.plagueStartTeam, skin: this.skinOf(p), hat: p.hat && p.hat !== 'none' ? p.hat : null, pet: p.pet && p.pet !== 'none' ? p.pet : null, camos: p.bot || (p.admin && CAMOS[p.camo]) ? (p.camo && CAMOS[p.camo] ? { '*': p.camo } : null) : camoMap(p.camo || 'best', p.meta?.weapons), ready: p.ready, bot: !!p.bot, account: !!p.username, lvl: p.bot ? null : this.lookLevel(p), title: !p.bot && TITLES[p.title] && p.title !== 'apprentice' ? TITLES[p.title].name : null, level: p.level, personality: p.personality, vote: p.vote || null, modeVote: p.modeVote || null })) });
   }
 
   // --- level / pickups ---
@@ -316,10 +330,15 @@ export class Room {
       att: p.att || 'none', elixirs: p.elixirs || {}, ...(this.chamber ? { lives: p.lives } : {}), ...(this.mode === 'survival' ? { gold: p.gold || 0 } : {}) });
   }
 
+  // the level a player's unlocks go by (an admin's is everything: server/hub.js)
+  lookLevel(p) { return this.hub.lookLevel?.(p) ?? levelFor(p.stats?.xp || 0); }
+  // a locked realm is open to the whole lobby if anyone in it has unlocked it
+  mapOpen(level) { return !MAP_UNLOCKS[level] || this.humans.some(h => mapUnlocked(level, this.lookLevel(h))); }
+  // the most-voted map this mode can play on (survival has its own maps); ties keep the current one
   voteWinner() {
-    const counts = {};
-    for (const p of this.humans) if (p.vote && LEVELS[p.vote]) counts[p.vote] = (counts[p.vote] || 0) + 1;
-    let best = this.level === 'crypt' ? 'witch' : this.level, n = 0;
+    const counts = {}, allowed = levelsFor(this.mode).filter(l => this.mapOpen(l));
+    for (const p of this.humans) if (allowed.includes(p.vote)) counts[p.vote] = (counts[p.vote] || 0) + 1;
+    let best = allowed.includes(this.level) ? this.level : allowed[0], n = 0;
     for (const [k, v] of Object.entries(counts)) if (v > n) { n = v; best = k; }
     return best;
   }
@@ -342,9 +361,9 @@ export class Room {
       pl.team = this.mode === 'plague' ? HEALTHY_TEAM : redBlue(this.mode) ? i % 2 + 1 : this.mode === 'survival' ? 1 : 0;
       pl.ready = !!pl.bot;
     });
-    // survival always plays in the Crypt; leaving it goes back to the voted realm
-    const level = modeLevel(mode) || (this.level === 'crypt' ? this.voteWinner() : this.level);
-    if (level !== this.level) { this.setLevel(level === 'crypt' && !modeLevel(mode) ? 'witch' : level); this.broadcast({ type: 'level', level: this.level }); }
+    // survival plays on its own maps; leaving it goes back to the voted realm
+    const level = this.voteWinner();
+    if (level !== this.level) { this.setLevel(level); this.broadcast({ type: 'level', level: this.level }); }
     return true;
   }
 
@@ -444,9 +463,9 @@ export class Room {
     else if (this.chamber) { p.mag = { [CHAMBER.gun]: 1 }; p.inv = {}; }
     else if (p.hacks) this.giveHackLoadout(p);
     else if (this.mode === 'snipers' && this.custom.weapons === 'all') {
-      // both long guns from the start; pads only restock sniper / crossbow
-      p.mag = { sniper: magSize('sniper', p.att), crossbow: magSize('crossbow', p.att) };
-      p.inv = { sniper: AMMO.sniper * 2, crossbow: AMMO.crossbow };
+      // two long guns from the start
+      p.mag = { sniper: magSize('sniper', p.att), marksman: magSize('marksman', p.att) };
+      p.inv = { sniper: AMMO.sniper * 2, marksman: MAX_SPARE('marksman') };
     } else this.startLoadout(p);
     if (this.tutorial && !p.bot) { p.nades = 2; if (!(p.spells || []).length) p.spells = ['haste']; } // something to practice with
     p.lastShot = {};
@@ -532,7 +551,10 @@ export class Room {
     const knife = Math.random() < KNIFE_CHANCE;
     const nadeBot = !knife && this.mode !== 'snipers' && Math.random() < NADE_CHANCE;
     const personality = knife ? 'knife' : nadeBot ? 'potions' : randomPersonality();
-    const bot = { id, bot: true, name, level, skin, knife, nadeBot, personality, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
+    const pick = list => list[Math.floor(Math.random() * list.length)]; // bots show off what's out there
+    const hat = Math.random() < 0.5 ? pick(Object.keys(HATS)) : 'none', camo = Math.random() < 0.5 ? pick(Object.keys(CAMOS)) : null;
+    const effect = Math.random() < 0.4 ? pick(Object.keys(KILL_EFFECTS)) : 'blood', pet = Math.random() < 0.4 ? pick(Object.keys(FAMILIARS)) : 'none';
+    const bot = { id, bot: true, name, level, skin, hat, camo, effect, pet, knife, nadeBot, personality, brain: newBrain(), a: 0, p: 0, seq: 0, nades: 0 };
     this.add(bot);
     log(`${this.hub.name(bot)} joined room ${this.code}`);
     return bot;
@@ -623,7 +645,7 @@ export class Room {
     if (killer && killer.bot && killer !== victim && Math.random() < 0.25) this.emote(killer, Math.random() < 0.5 ? 'hiss' : 'cackle');
     this.broadcast(this.boxList());
     const fx = killer && KILL_EFFECTS[killer.effect]?.color; // the killer's kill effect, if not plain blood
-    this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin, ...(fx ? { fx } : {}),
+    this.broadcast(Object.assign({ type: 'kill', killer: killer ? killer.id : null, victim: victim.id, infected: !!infected, skin, ...(fx ? { fx, fk: killer.effect } : {}),
       respawnMs: Number.isFinite(delay) ? delay : null }, streaks, info, at));
     const how = killer ? `killed ${this.hub.name(victim)} with ${info.weapon}${info.backstab ? ' (backstab)' : info.head ? ' (headshot)' : ''}`
       : info.weapon === 'respawn' ? 'respawned'
@@ -733,7 +755,7 @@ export class Room {
     // vs bots, a battle royale fills its extra seats with more of them
     const bot = this.list.find(p => p.bot);
     if (this.mode === 'royale' && bot) this.fillBots(bot.level);
-    const map = modeLevel(this.mode) || this.voteWinner();
+    const map = this.voteWinner();
     if (map !== this.level) this.setLevel(map);
     if (this.mode === 'hardpoint' && !this.hardpointSites.length) return;
     const now = Date.now();
@@ -851,7 +873,7 @@ export class Room {
     this.broadcast(Object.assign({ type: 'win', mode: this.mode, level: this.level, scores: this.scoreboard() }, result));
     for (const p of this.humans) {
       this.hub.record(p, winners.includes(p) ? { wins: 1, xp: XP.match + XP.win } : { losses: 1, xp: XP.match });
-      this.hub.matchDone?.(p, { mode: this.mode, level: this.level, won: winners.includes(p), kills: p.kills || 0, deaths: p.deaths || 0 });
+      this.hub.matchDone?.(p, { mode: this.mode, level: this.level, won: winners.includes(p), kills: p.kills || 0, deaths: p.deaths || 0, wave: result.wave });
     }
     log(`[${this.code}] ${label} won on ${LEVEL_NAMES[this.level]} — ${this.score()}`);
     for (const p of this.humans) this.hub.presence?.(p);
@@ -1257,7 +1279,7 @@ export class Room {
 Room.prototype.handlers = {
   skin(p, msg) {
     if (this.gameOn || !PLAYER_SKINS.includes(msg.skin) || p.skin === msg.skin) return;
-    if (!skinUnlocked(msg.skin, levelFor(p.stats?.xp || 0))) return this.roster(); // locked: the roster puts your old skin back
+    if (!skinUnlocked(msg.skin, this.lookLevel(p))) return this.roster(); // locked: the roster puts your old skin back
     p.skin = msg.skin;
     p.ready = !!p.bot;
     this.roster();
@@ -1269,10 +1291,11 @@ Room.prototype.handlers = {
   },
 
   vote(p, msg) {
-    if (this.gameOn || !FEATURED_LEVELS.includes(msg.level) || !LEVELS[msg.level]) return;
+    if (this.gameOn || !levelsFor(this.mode).includes(msg.level) || !LEVELS[msg.level]) return;
+    if (!this.mapOpen(msg.level)) return this.hub.notice(p, `${LEVEL_NAMES[msg.level]} unlocks at level ${MAP_UNLOCKS[msg.level]} — or when someone here has it`);
     p.vote = msg.level;
     p.ready = !!p.bot;
-    const winner = modeLevel(this.mode) || this.voteWinner();
+    const winner = this.voteWinner();
     if (winner !== this.level) {
       this.setLevel(winner);
       this.broadcast({ type: 'level', level: this.level });
@@ -1307,7 +1330,7 @@ Room.prototype.handlers = {
     } else if (this.mode === 'harvest') {
       if (!SOUL_WIN_OPTIONS.includes(n) || n === this.soulWinScore) return;
       this.soulWinScore = n;
-    } else if (this.mode === 'ffa' || this.mode === 'snipers' || this.mode === 'build') {
+    } else if (this.mode === 'ffa' || this.mode === 'snipers' || this.mode === 'build' || this.mode === 'sky') {
       if (!WIN_SCORE_OPTIONS.includes(n) || n === this.winScore) return;
       this.winScore = n;
     } else return;
@@ -1523,6 +1546,7 @@ Room.prototype.handlers = {
     if (p.hasteUntil > now) maxSpeed *= HASTE.speed;
     if (p.broomUntil > now - 150) maxSpeed = Math.max(maxSpeed, BROOM.speed * 1.3);
     if (p.curseUntil > now) maxSpeed *= CURSE.slow;
+    if (this.mode === 'sky') { flyInput(this, p, msg, elapsed, maxSpeed, now); return; }
     const maxStep = maxSpeed * elapsed / 1000 + 0.04;
     const dx = msg.x - p.x, dy = msg.y - p.y, distance = Math.hypot(dx, dy);
     const scale = distance > maxStep ? maxStep / distance : 1;
@@ -1564,6 +1588,7 @@ Room.prototype.handlers = {
     if (Number.isFinite(msg.a)) p.a = Math.atan2(Math.sin(msg.a), Math.cos(msg.a));
     if (Number.isFinite(msg.p)) p.p = Math.max(-1.2, Math.min(1.2, msg.p));
     const targets = this.enemies(p);
+    p.flying = this.mode === 'sky';
     const res = w.melee ? doMelee(this.T, p, targets, msg.weapon) : doShoot(this.T, p, targets, msg.weapon, !!msg.scoped, p.att === 'laser' ? 0.65 : 1);
     p.a = prevA; p.p = prevP;
     this.broadcast({ type: 'shot', id: p.id, weapon: msg.weapon, x: p.x, y: p.y, z: p.z,

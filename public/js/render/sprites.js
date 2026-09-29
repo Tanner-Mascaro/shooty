@@ -3,8 +3,10 @@
 // indices that glow (ignore fog).
 
 // the player characters are pixel art in characters.js
-import { PLAYER_SPRITES } from './characters.js';
-export { PLAYER_SPRITES };
+import { PLAYER_SPRITES, spriteFor, wearsHats } from './characters.js';
+export { PLAYER_SPRITES, spriteFor, wearsHats };
+// a player's look for spriteFor: their skin, with their hat on if they wear one
+export const lookOf = p => p && (p.hat && p.hat !== 'none' && wearsHats(p.skin) ? p.skin + '@' + p.hat : p.skin);
 
 export const PLAYER_SKINS = Object.keys(PLAYER_SPRITES);
 export const PLAYER_SKIN_NAMES = {
@@ -14,6 +16,8 @@ export const PLAYER_SKIN_NAMES = {
   ninja: 'Shadow Ninja', nun: 'Unholy Nun', demon: 'Brimstone Demon', slime: 'Cauldron Slime', goose: 'Familiar Goose',
   cowboy: 'Gunslinger', construction: 'Tower Mason', robot: 'Clockwork Golem', ghost: 'Friendly Phantom',
   bodybuilder: 'Iron Brute', astronaut: 'Star Voyager', superhero: 'Caped Crusader',
+  pirateWitch: 'Pirate Witch', skeleton: 'Bone Deckhand', scarecrow: 'Scarecrow', reaper: 'Grim Reaper', stitched: 'Stitched Brute',
+  pumpkinKing: 'Pumpkin King', snowman: 'Frost Snowman', seaWitch: 'Sea Witch', captain: 'Ghost Captain',
 };
 
 // --- pickups ---

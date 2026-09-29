@@ -4,10 +4,10 @@
 // Some bots (KNIFE_CHANCE) never shoot: they sprint at the nearest enemy they can see and stab.
 // Some (NADE_CHANCE) get endless grenades and just lob them.
 // Movement uses the same accelerate / air-strafe / hold-jump bhop model as players.
-import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, BUILDS, rampLevels, canBuildIn, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY } from '../shared/config.js';
+import { TICK, EYE, BODY_H, WEAPONS, GUN_SLOTS, gunGameGun, HASTE, BUILDS, rampLevels, canBuildIn, PLAGUE_SPEED_MULTIPLIER, PLAGUE_JUMPS, PLAGUE_DASH_SPEED, MOVE_SPEED, MOVE_SPEED_LIMIT, MOVE_GRAVITY, FLY } from '../shared/config.js';
 import { tryJump } from '../shared/movement.js';
 import { MW, MH } from '../shared/levels.js';
-import { kindAt, walkHeight, solidAt } from '../shared/terrain.js';
+import { kindAt, walkHeight, solidAt, flyBlocked } from '../shared/terrain.js';
 import { RAMP, DIRS, aimBuild, canBuild, fitsLevels } from '../shared/spells.js';
 
 // speed: walk wish-speed (map units / s); sprint: chase wish-speed; sight/reaction/aim as before
@@ -297,6 +297,25 @@ function applyFriction(p, dt) {
   p.vx *= scale; p.vy *= scale;
 }
 
+// Broom Battle: fly along the ground route toward the goal, at the foe's height (a little above or
+// below, each bot its own way) or cruising, weaving now and then; over anything short enough
+function flyBot(T, p, b, foe, wx, wy, pace, dt, now) {
+  b.flyOff ??= (Math.random() - 0.3) * 2.5;
+  b.cruise ??= 3 + Math.random() * 4;
+  if (Math.random() < 0.01) b.flyOff = (Math.random() - 0.3) * 2.5;
+  const tz = Math.max(0.6, Math.min(FLY.ceil - 1, foe ? foe.z + b.flyOff : b.cruise + Math.sin(now / 2000 + p.id) * 1.5));
+  const top = FLY.speed * Math.min(1, pace || 1) * 0.92, k = Math.min(1, FLY.accel * dt);
+  p.vz ||= 0;
+  p.vx += (wx * top - p.vx) * k; p.vy += (wy * top - p.vy) * k;
+  p.vz += (Math.max(-FLY.climb, Math.min(FLY.climb, (tz - p.z) * 2)) - p.vz) * k;
+  const open = (x, y, z) => !flyBlocked(T, x, y, z, 0.22, BODY_H, FLY.edge);
+  if (open(p.x + p.vx * dt, p.y, p.z)) p.x += p.vx * dt; else { p.vx *= -0.2; p.vz = FLY.climb; b.stuck++; } // hit something: climb over it
+  if (open(p.x, p.y + p.vy * dt, p.z)) p.y += p.vy * dt; else { p.vy *= -0.2; p.vz = FLY.climb; b.stuck++; }
+  const floor = Math.max(0, walkHeight(T, p.x, p.y, p.z + 0.1)), nz = Math.max(floor, Math.min(FLY.ceil, p.z + p.vz * dt));
+  if (open(p.x, p.y, nz)) p.z = nz; else p.vz = 0;
+  p.onGround = p.z <= floor + 0.02;
+}
+
 export function newBrain() {
   return { goal: null, seenAt: 0, nextShot: 0, nextNade: 0, stuck: 0, strafe: 1, bhop: Math.random() < 0.4 };
 }
@@ -532,8 +551,10 @@ export function botTick(game, p) {
   if (p.hasteUntil > now) wishSpeed *= HASTE.speed;
   wishSpeed *= game.speedScale ? game.speedScale(p, now) : 1;
 
-  const dashing = infected && game.gameOn && now < p.dashUntil;
-  if (dashing) {
+  const flying = game.mode === 'sky';
+  if (flying) flyBot(T, p, b, foe, wx, wy, wishSpeed / L.sprint, dt, now);
+  const dashing = !flying && infected && game.gameOn && now < p.dashUntil;
+  if (flying) { /* moved above */ } else if (dashing) {
     p.vx = p.dashX * PLAGUE_DASH_SPEED; p.vy = p.dashY * PLAGUE_DASH_SPEED;
   } else {
     // run on the ground first — jumping with no speed just hops in place
@@ -548,7 +569,7 @@ export function botTick(game, p) {
     if (!p.onGround && (wx || wy)) airAccelerate(p, wx, wy, wishSpeed, dt);
   }
 
-  let speed = Math.hypot(p.vx, p.vy);
+  let speed = flying ? 0 : Math.hypot(p.vx, p.vy);
   const cap = (infected ? MOVE_SPEED_LIMIT * PLAGUE_SPEED_MULTIPLIER : MOVE_SPEED_LIMIT) * (game.speedScale ? game.speedScale(p, now) : 1) * (p.padUntil > now ? 1.3 : 1);
   if (speed > cap) { p.vx *= cap / speed; p.vy *= cap / speed; speed = cap; }
 
@@ -571,7 +592,7 @@ export function botTick(game, p) {
     }
   }
 
-  if (!p.onGround) {
+  if (flying) { /* flyBot keeps its own height */ } else if (!p.onGround) {
     p.vz -= MOVE_GRAVITY * (game.gravityScale ? game.gravityScale(now) : 1) * dt; p.z += p.vz * dt;
     const floor = walkHeight(T, p.x, p.y, p.z);
     if (p.z <= floor) { p.z = floor; p.vz = 0; p.onGround = true; }

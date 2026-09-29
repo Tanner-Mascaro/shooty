@@ -20,6 +20,7 @@ import { initMap } from './mapview.js';
 import { initTouch } from './touch.js';
 import { initGamepad, updateGamepad } from './gamepad.js';
 import { initTutorial } from './tutorial.js';
+import { initWiki } from './wiki.js';
 
 initLobby();
 initSettings();
@@ -30,6 +31,7 @@ initMap();
 initTouch();
 initGamepad();
 initTutorial();
+initWiki();
 connect();
 
 const fpsEl = document.getElementById('fps');

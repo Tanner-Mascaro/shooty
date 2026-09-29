@@ -20,6 +20,11 @@ export const maxPlayers = mode => mode === 'royale' ? ROYALE_MAX_PLAYERS : MAX_P
 export const TEAMS = { 1: 'RED', 2: 'BLUE' }; // team 0 = free-for-all
 export const MODE_NAMES = { ffa: 'Free-for-all', teams: 'Teams', hardpoint: 'Hardpoint', plague: 'Plague', snipers: 'Snipers', gungame: 'Gun Game', royale: 'Battle Royale', build: 'Build Battle', ctf: 'Capture the Cauldron',
   harvest: 'Soul Harvest', chamber: 'One in the Chamber', survival: 'Wave Survival' };
+// Broom Battle ('sky'): parked for now. Add `sky: 'Broom Battle'` to MODE_NAMES and its button in
+// public/index.html to bring it back; the flying code (physics.js fly, room.js flyInput, bot.js
+// flyBot) is all still there. Everyone flies. Look where you want to go, jump to climb, crouch to dive; the
+// broom keeps its momentum. Speed and accel like running, climb in m/s, ceil the highest you may go
+export const FLY = { speed: 8, accel: 2.6, climb: 5, ceil: 12, edge: 1.3 };
 // modes where you can raise Earth Ramps (build mode, the ramp slot and the mana bar)
 export const canBuildIn = mode => mode === 'build';
 export const PLAGUE_DURATION = 3 * 60 * 1000; // healthy players win if anyone survives this long
@@ -63,8 +68,8 @@ export const CHAMBER = { lives: 3, gun: 'pistol' };
 export const SURVIVAL = {
   startGold: 500, hitGold: 10, killGold: 60, headGold: 40, meleeGold: 100, waveGold: 100,
   firstWaveMs: 6000, breakMs: 9000, // a breather between waves
-  boxCost: 950, boxGuns: ['uzi', 'smg', 'shotgun', 'burst', 'carbine', 'rifle', 'lmg', 'deagle', 'revolver', 'beam', 'wand', 'crossbow', 'sniper',
-    'flintlock', 'assault', 'dmr', 'marksman', 'dragon', 'doublebarrel', 'autoshotgun', 'blunderbuss', 'gatling', 'reaper', 'swarm', 'tommy', 'staff', 'bow'],
+  boxCost: 950, boxGuns: ['uzi', 'smg', 'shotgun', 'burst', 'carbine', 'rifle', 'lmg', 'deagle', 'revolver', 'beam', 'wand', 'sniper',
+    'flintlock', 'assault', 'dmr', 'marksman', 'dragon', 'doublebarrel', 'autoshotgun', 'blunderbuss', 'gatling', 'reaper', 'swarm', 'tommy', 'staff'],
   refillShare: 0.5, // buying a wall gun you already carry refills it for this share of the price
   maxAlive: w => Math.min(34, 6 + w * 2), // monsters on the map at once
   count: w => Math.min(160, 5 + Math.round(w * 3.2 + w * w * 0.18)), // monsters in the wave
@@ -72,18 +77,24 @@ export const SURVIVAL = {
   speedScale: w => Math.min(1.6, 1 + (w - 1) * 0.035),
   dropChance: 0.035, dropLife: 25000,
 };
-// door groups in the Crypt map (digits in shared/levels.js): what each costs and what's behind it
+// door groups in each survival map (digits in shared/levels.js): what each costs and what's behind it
 export const DOORS = {
-  1: { cost: 750, name: 'Chapel' }, 2: { cost: 750, name: 'Ossuary' }, 3: { cost: 1000, name: 'Catacombs' },
-  4: { cost: 1250, name: 'Flooded Tombs' }, 5: { cost: 1500, name: 'Bone Pit' }, 6: { cost: 2000, name: 'Throne of Bones' },
+  crypt: {
+    1: { cost: 750, name: 'Chapel' }, 2: { cost: 750, name: 'Ossuary' }, 3: { cost: 1000, name: 'Catacombs' },
+    4: { cost: 1250, name: 'Flooded Tombs' }, 5: { cost: 1500, name: 'Bone Pit' }, 6: { cost: 2000, name: 'Throne of Bones' },
+  },
+  ship: { // the gates on the gangplanks
+    1: { cost: 750, name: 'Merchant Brig' }, 2: { cost: 750, name: "Smuggler's Sloop" }, 3: { cost: 1000, name: 'Docks' },
+    4: { cost: 1250, name: 'Sunken Frigate' }, 5: { cost: 1500, name: 'Ghost Galleon' }, 6: { cost: 2000, name: "Kraken's Wreck" },
+  },
 };
-// guns on the walls (lowercase letters in the Crypt map)
+// guns on the walls (lowercase letters in the survival maps)
 export const WALL_BUYS = {
   a: { w: 'uzi', cost: 500 }, b: { w: 'carbine', cost: 900 }, c: { w: 'shotgun', cost: 1000 }, d: { w: 'smg', cost: 1100 },
   e: { w: 'rifle', cost: 1400 }, f: { w: 'revolver', cost: 1200 }, g: { w: 'lmg', cost: 2200 }, h: { w: 'sniper', cost: 1800 },
   i: { w: 'beam', cost: 2600 }, j: { w: 'burst', cost: 1300 },
 };
-// elixirs you drink once per life (capital letters in the Crypt map)
+// elixirs you drink once per life (capital letters in the survival maps)
 export const ELIXIRS = {
   U: { id: 'troll', name: 'Troll Blood', cost: 2500, text: '+75 max health' },
   V: { id: 'swift', name: 'Swift Tonic', cost: 2000, text: 'Move 15% faster' },
@@ -93,16 +104,31 @@ export const ELIXIR_HP = 75, ELIXIR_SPEED = 1.15, ELIXIR_RELOAD = 0.5;
 // monster drops: walk over them. maxammo refills everyone, double points and insta-kill last
 // `ms`, the nuke kills every monster on the map
 export const DROPS = { maxammo: { name: 'MAX AMMO' }, double: { name: 'DOUBLE GOLD', ms: 20000 }, insta: { name: 'INSTA-KILL', ms: 20000 }, nuke: { name: 'NUKE' } };
-// monster kinds: hp (x the wave's scale), speed, melee damage, cooldown, and when they show up
+// monster kinds: hp (x the wave's scale), speed, melee damage, cooldown, and when they show up.
+// tint: recolors the outfit; float: hovers, see-through; heavy: counts as a boss for the feat
 export const MOBS = {
-  ghoul:  { skin: 'zombie', hp: 70, speed: 1.9, dmg: 18, cd: 900, from: 1 },
-  mummy:  { skin: 'mummy', hp: 150, speed: 1.4, dmg: 30, cd: 1100, from: 3 },
-  wolf:   { skin: 'werewolf', hp: 55, speed: 4.3, dmg: 16, cd: 600, from: 4 },
-  slime:  { skin: 'slime', hp: 45, speed: 3.1, dmg: 45, cd: 0, from: 6, blast: 2.4 }, // bursts when it reaches you
-  wraith: { skin: 'ghost', hp: 60, speed: 2.4, dmg: 12, cd: 2000, from: 7, ranged: 9 }, // hurls hexes from range
-  brute:  { skin: 'demon', hp: 520, speed: 2.1, dmg: 45, cd: 1300, from: 9, big: 1.5 },
-  lord:   { skin: 'vampire', hp: 2600, speed: 2.7, dmg: 55, cd: 1000, from: 10, big: 1.8, boss: true }, // boss waves
+  ghoul:  { name: 'Ghoul', skin: 'zombie', hp: 70, speed: 1.9, dmg: 18, cd: 900, from: 1 },
+  mummy:  { name: 'Mummy', skin: 'mummy', hp: 150, speed: 1.4, dmg: 30, cd: 1100, from: 3 },
+  wolf:   { name: 'Werewolf', skin: 'werewolf', hp: 55, speed: 4.3, dmg: 16, cd: 600, from: 4 },
+  slime:  { name: 'Bursting Slime', skin: 'slime', hp: 45, speed: 3.1, dmg: 45, cd: 0, from: 6, blast: 2.4 }, // bursts when it reaches you
+  wraith: { name: 'Wraith', skin: 'ghost', hp: 60, speed: 2.4, dmg: 12, cd: 2000, from: 7, ranged: 9, float: true }, // hurls hexes from range
+  brute:  { name: 'Brute', skin: 'demon', hp: 520, speed: 2.1, dmg: 45, cd: 1300, from: 9, big: 1.5, heavy: true },
+  lord:   { name: 'Vampire Lord', skin: 'vampire', hp: 2600, speed: 2.7, dmg: 55, cd: 1000, from: 10, big: 1.8, boss: true, heavy: true, tint: [150, 30, 40] }, // boss waves
 };
+// Some survival maps bring their own monsters: each stands in for one of the kinds above
+// (its `role`), with the same stats and behavior unless it says otherwise
+const standIn = (role, name, skin, extra = {}) => ({ ...MOBS[role], tint: undefined, ...extra, name, skin, role });
+Object.assign(MOBS, {
+  sailor:  standIn('ghoul', 'Drowned Sailor', 'sailor'),
+  deckhand: standIn('mummy', 'Barnacled Deckhand', 'deckhand'),
+  crab:    standIn('wolf', 'Giant Crab', 'crab'),
+  puffer:  standIn('slime', 'Pufferfish', 'puffer'),
+  siren:   standIn('wraith', 'Siren', 'siren'),
+  captain: standIn('brute', 'Ghost Captain', 'captain'),
+  kraken:  standIn('lord', 'The Kraken', 'kraken'),
+});
+export const MOB_SETS = { ship: { ghoul: 'sailor', mummy: 'deckhand', wolf: 'crab', slime: 'puffer', wraith: 'siren', brute: 'captain', lord: 'kraken' } };
+export const mobRole = kind => MOBS[kind]?.role || kind;
 export const MOB_R = 0.3; // monster body radius (players are 0.22)
 
 // power-ups on the arena maps: walk over one for a short boost. Where they sit is picked per
@@ -142,7 +168,7 @@ export const CUSTOM = {
 };
 export const CUSTOM_WEAPONS = {
   pistols: ['pistol', 'deagle', 'revolver', 'derringer', 'flintlock', 'autopistol'], shotguns: ['shotgun', 'doublebarrel', 'autoshotgun', 'blunderbuss'],
-  snipers: ['sniper', 'crossbow', 'beam', 'marksman', 'dragon', 'bow'], blades: [],
+  snipers: ['sniper', 'beam', 'marksman', 'dragon'], blades: [],
 };
 export const defaultCustom = () => Object.fromEntries(Object.entries(CUSTOM).map(([k, v]) => [k, v[0]]));
 // a custom setting sent by a player, or undefined if it's not allowed
@@ -176,7 +202,7 @@ export const SHUTDOWN_STREAK = 3;
 // gun game: every kill moves you to the next gun; a kill with the last one (the blade) wins.
 // Getting stabbed knocks you back one gun
 export const GUN_GAME_LADDER = ['pistol', 'autopistol', 'uzi', 'reaper', 'smg', 'swarm', 'tommy', 'shotgun', 'autoshotgun', 'doublebarrel', 'burst', 'carbine',
-  'assault', 'rifle', 'gatling', 'lmg', 'dmr', 'staff', 'beam', 'wand', 'deagle', 'revolver', 'derringer', 'flintlock', 'blunderbuss', 'bow', 'crossbow', 'marksman', 'sniper', 'dragon', 'blade'];
+  'assault', 'rifle', 'gatling', 'lmg', 'dmr', 'staff', 'beam', 'wand', 'deagle', 'revolver', 'derringer', 'flintlock', 'blunderbuss', 'marksman', 'sniper', 'dragon', 'blade'];
 export const gunGameGun = level => GUN_GAME_LADDER[Math.max(0, Math.min(level, GUN_GAME_LADDER.length - 1))];
 
 // battle royale: no respawns, and a storm closes in. Each stage holds, then shrinks the safe
@@ -191,7 +217,8 @@ export const ROYALE_ZONE = [
 // the seven witches are free; the rest unlock with XP levels (shared/progression.js)
 export const PLAYER_SKINS = ['witch', 'robotWitch', 'gothicWitch', 'infernalWitch', 'iceWitch', 'ghostWitch', 'plagueWitch',
   'zombie', 'mummy', 'werewolf', 'vampire', 'knight', 'ninja', 'nun', 'demon', 'slime', 'goose',
-  'cowboy', 'construction', 'robot', 'ghost', 'bodybuilder', 'astronaut', 'superhero'];
+  'cowboy', 'construction', 'robot', 'ghost', 'bodybuilder', 'astronaut', 'superhero',
+  'pirateWitch', 'skeleton', 'scarecrow', 'reaper', 'stitched', 'pumpkinKing', 'snowman', 'seaWitch', 'captain'];
 
 // silly cheat mode: set your display name to one of these (case-insensitive)
 export const HACK_NAMES = new Set(['hacker', 'hackerman', 'godmode', 'cheater']);
@@ -244,7 +271,7 @@ export const WEAPONS = {
   tommy:        { dmg: 14,  head: 1.8, cd: 90,   spread: 0.035, scopedSpread: 0.02,  airSpread: 0.08, auto: true, mag: 50, reload: 2400 },
   staff:        { dmg: 20,  head: 2,   cd: 110,  spread: 0.012, scopedSpread: 0.004, airSpread: 0.04, auto: true, mag: 40, reload: 1800 },
   bow:          { dmg: 72,  head: 1.8, cd: 650,  spread: 0.015, scopedSpread: 0.003, airSpread: 0.05, mag: 1, reload: 900 },
-  blade:    { dmg: 55,  backstab: 150, cd: 450, range: 1.4, melee: true },
+  blade:    { dmg: 55,  backstab: 150, cd: 450, range: 1.75, melee: true }, // a little more reach than claws
   claws:   { dmg: MAX_HP / 2, cd: 450, range: 1.4, melee: true, auto: true },
 };
 // Every gun's ammo runs out; only the blade needs none. A gun you've emptied completely is gone.
@@ -265,11 +292,12 @@ export const GUN_NAMES = { autopistol: 'Auto Pistol', assault: 'Grim Rifle', dmr
   staff: 'Storm Staff', bow: 'Bone Bow', lmg: 'LMG', smg: 'SMG', beam: 'Beam Rifle', wand: 'Hex Wand' };
 export const gunName = w => GUN_NAMES[w] || (w ? w[0].toUpperCase() + w.slice(1) : '');
 export const MAX_SPARE = w => WEAPONS[w].mag * 3; // spare rounds you can carry per gun
-export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'crossbow', 'uzi', 'beam', 'wand',
-  'derringer', 'flintlock', 'autopistol', 'assault', 'dmr', 'marksman', 'dragon', 'doublebarrel', 'autoshotgun', 'blunderbuss', 'gatling', 'reaper', 'swarm', 'tommy', 'staff', 'bow'];
+export const PAD_GUNS = ['rifle', 'sniper', 'shotgun', 'smg', 'deagle', 'burst', 'lmg', 'revolver', 'carbine', 'uzi', 'beam', 'wand',
+  'derringer', 'flintlock', 'autopistol', 'assault', 'dmr', 'marksman', 'dragon', 'doublebarrel', 'autoshotgun', 'blunderbuss', 'gatling', 'reaper', 'swarm', 'tommy', 'staff'];
+// the crossbow and the Bone Bow (its look) are out of rotation: still defined, never handed out
 // the Hex Wand's bolt jumps from whoever it hits to the nearest other enemy within range
 export const WAND_CHAIN = { range: 5, dmg: 22 };
-export const SNIPER_GUNS = ['sniper', 'crossbow', 'beam', 'marksman', 'dragon', 'bow', 'dmr'];
+export const SNIPER_GUNS = ['sniper', 'beam', 'marksman', 'dragon', 'dmr'];
 export const startGun = mode => mode === 'snipers' ? 'sniper' : START_GUN;
 export const padGuns = mode => mode === 'snipers' ? SNIPER_GUNS : PAD_GUNS;
 export const AMMO_CRATES = 22;   // small ammo crates scattered at random spots each match: walk over for a mag per gun

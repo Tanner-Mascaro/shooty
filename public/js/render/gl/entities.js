@@ -3,9 +3,10 @@ import * as THREE from 'three';
 import { S } from '../../state.js';
 import { BODY_H, SLIDE, PLAGUE_TEAM, isTeamMode, redBlue, MOBS } from '/shared/config.js';
 import { walkHeight } from '/shared/terrain.js';
-import { cryptLayout } from '/shared/crypt.js';
+import { PET_SPRITES } from '../pets.js';
+import { cryptLayout, isSurvivalLevel } from '/shared/crypt.js';
 import { GUN_COLOR, POWER_COLOR, TEAM_RGB, SPELL_LOOK } from '../../constants.js';
-import { pickupSprite, boxSprite, PLAYER_SPRITES } from '../sprites.js';
+import { pickupSprite, boxSprite, spriteFor, lookOf } from '../sprites.js';
 import { gunArt } from '../gunArt.js';
 import { getScene, getCamera } from './scene.js';
 
@@ -63,10 +64,10 @@ function spriteTexture(px, pal, w = 32, h = 48, keyExtra = '') {
 }
 
 // a gun drawn from its 3D model (render/gunArt.js): { tex, w, h } in world size, or null
-function gunTexture(w, flip = false) {
-  const key = 'gun|' + w + (flip ? '|l' : '');
+function gunTexture(w, flip = false, camo = null) {
+  const key = 'gun|' + w + (flip ? '|l' : '') + (camo ? '|' + camo : '');
   if (spriteCache.has(key)) return spriteCache.get(key);
-  const art = gunArt(w, flip);
+  const art = gunArt(w, flip, camo);
   if (!art) return null;
   const tex = new THREE.CanvasTexture(art.canvas);
   tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
@@ -311,7 +312,7 @@ export function drawPickupBillboards(now) {
   for (const o of S.souls) token(glyphTexture('', TEAM_RGB[o.t] || [220, 220, 255]), o.x, o.y, o.z + 0.45 + 0.1 * Math.sin(now / 250 + o.id), 0.5 + 0.06 * Math.sin(now / 90 + o.id));
   for (const t of S.totems) token(glyphTexture('♣', SPELL_LOOK.totem.col), t.x, t.y, t.z + 0.2 + 0.05 * Math.sin(now / 200), 0.7);
   // the Crypt: guns on the walls, elixir altars, the mystery cauldron, monster drops
-  if (S.survival && S.level === 'crypt') {
+  if (S.survival && isSurvivalLevel(S.level)) {
     const L = cryptLayout(S.MAP);
     for (const b of L.buys) {
       const sp = gunTexture(b.w);
@@ -395,7 +396,7 @@ export function emoteFor(id, now) {
 }
 
 function drawPlayerBillboard(x, y, z, hScale, wScale, flash, tint, skin, outline, pose, alpha = 1, xray = false, anim = null) {
-  const s = PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
+  const s = spriteFor(skin); // a skin, or "skin@hat"
   if (anim) {
     hScale *= anim.sy || 1; wScale *= anim.sx || 1; z += anim.bob || 0;
     if (anim.back !== undefined && pose) pose = { ...pose, back: anim.back };
@@ -502,17 +503,17 @@ export function drawOthersAndCorpses(now) {
     if (!e) continue;
     if (e.at && now - o.flashT > 250) o.flashT = now; // lunging: drawn with the recoil kick
     const pose = poseFor(o, now);
-    dropShadow(e.x, e.y, e.z, 0.3 * (MOBS[e.k]?.big || 1), e.k === 'wraith' ? 0.5 : 1);
+    dropShadow(e.x, e.y, e.z, 0.3 * (MOBS[e.k]?.big || 1), MOBS[e.k]?.float ? 0.5 : 1);
     if (e.k === 'decoy') { // a double of its caster
       const owner = S.room?.players.find(p => p.id === e.o);
       const tint = S.room && redBlue(S.room.mode) && owner ? TEAM_TINT[owner.team] : null;
-      drawPlayerBillboard(e.x, e.y, e.z, 1, 1, now - o.hitT < 90, tint, owner?.skin, null, pose);
+      drawPlayerBillboard(e.x, e.y, e.z, 1, 1, now - o.hitT < 90, tint, lookOf(owner), null, pose);
       continue;
     }
     const def = MOBS[e.k] || MOBS.ghoul, big = def.big || 1;
-    const tint = e.fr ? [150, 220, 255] : def.boss ? [150, 30, 40] : null;
-    const floaty = e.k === 'wraith' ? 0.25 + 0.08 * Math.sin(now / 300 + e.x) : 0;
-    drawPlayerBillboard(e.x, e.y, e.z + floaty, big, big, now - o.hitT < 90, tint, def.skin, null, pose, e.k === 'wraith' ? 0.75 : 1);
+    const tint = e.fr ? [150, 220, 255] : def.tint || null;
+    const floaty = def.float ? 0.25 + 0.08 * Math.sin(now / 300 + e.x) : 0;
+    drawPlayerBillboard(e.x, e.y, e.z + floaty, big, big, now - o.hitT < 90, tint, def.skin, null, pose, def.float ? 0.75 : 1);
   }
   for (const o of Object.values(S.others)) {
     if (!o.now || o.now.dead) continue; // their corpse is drawn instead
@@ -527,24 +528,81 @@ export function drawOthersAndCorpses(now) {
       o.now.x, o.now.y, o.now.z,
       o.now.sl ? SLIDE.crouch : 1,
       o.now.sl ? 1.15 : 1,
-      now - o.hitT < 90, tint, player && player.skin, killer ? { col: [255, 70, 90] } : null, pose, // only the killcam outlines anyone
+      now - o.hitT < 90, tint, lookOf(player), killer ? { col: [255, 70, 90] } : null, pose, // only the killcam outlines anyone
       o.cur?.iv && !killer ? 0.12 : 1, // Invisibility: a faint shimmer
       killer, emoteFor(o.now.id, now)
     );
-    if (o.now.w && (!o.cur?.iv || killer) && !emoteFor(o.now.id, now)) drawHeldGun(o.now, o.now.sl ? SLIDE.crouch : 1, pose, killer);
+    if (o.now.w && (!o.cur?.iv || killer) && !emoteFor(o.now.id, now)) drawHeldGun(o.now, o.now.sl ? SLIDE.crouch : 1, pose, killer, player?.camos?.[o.now.w] || player?.camos?.['*']);
     if (o.cur?.sh && !o.cur?.iv) { // shielded: a glowing witch's hat hovers over them
       const spr = acquire(playerPool, makeSprite);
       setBillboard(spr, hatTexture(), o.now.x, o.now.y, o.now.z + (BODY_H + 0.08) * (o.now.sl ? SLIDE.crouch : 1) + 0.04 * Math.sin(now / 250 + o.now.id), 0.5, 0.5, false);
       spr.material.opacity = 0.9; spr.material.alphaTest = 0.4;
       spr.material.rotation = 0.12 * Math.sin(now / 500 + o.now.id);
     }
+    if (player?.pet && (!o.cur?.iv || killer)) drawFamiliar(o.now.id, player.pet, o.now, now, false);
+    if (S.room?.mode === 'sky' && (!o.cur?.iv || killer)) drawBroom(o.now, pose, killer);
   }
+  const mine = S.room?.players.find(p => p.id === S.myId);
+  if (mine?.pet && S.me && !S.dead) drawFamiliar(S.myId, mine.pet, S.me, now, true);
+}
+
+// Broom Battle: the broomstick under a rider, bristles trailing behind whichever way they're heading
+let broomArt = null;
+function broomTexture(flip) {
+  broomArt ||= [false, true].map(f => {
+    const c = document.createElement('canvas'), W = 64, H = 12;
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    const rect = (x0, y0, w, h, col) => { g.fillStyle = col; g.fillRect(f ? W - x0 - w : x0, y0, w, h); };
+    rect(14, 5, 50, 2, '#6a4424'); rect(14, 5, 50, 1, '#8a5c34');                // the handle
+    for (let i = 0; i < 16; i++) rect(i, 2 + (i * 7) % 4, 2, 8 - (i * 3) % 5, i % 3 ? '#c8a050' : '#a07830'); // bristles
+    rect(13, 3, 3, 6, '#3a2818');                                                // the binding
+    const tex = new THREE.CanvasTexture(c);
+    tex.magFilter = THREE.NearestFilter; tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  });
+  return broomArt[flip ? 1 : 0];
+}
+function drawBroom(e, pose, xray) {
+  const cam = getCamera();
+  if (!cam) return;
+  camRight.setFromMatrixColumn(cam.matrixWorld, 0);
+  const ax = Math.cos(e.a || 0), ay = Math.sin(e.a || 0), across = ax * camRight.x + ay * camRight.z;
+  const w = 0.35 + 0.95 * Math.abs(across); // end-on when they fly at you or away
+  const spr = acquire(playerPool, makeSprite);
+  setBillboard(spr, broomTexture(across < 0), e.x, e.y, e.z + (pose?.bob || 0) + 0.18, w, 0.2, xray);
+  spr.material.opacity = 1; spr.material.alphaTest = 0.4;
+}
+
+// a familiar trails its witch: fliers at her shoulder, walkers at her heels. Yours drifts round in
+// front of you when you stand still (and behind you, out of sight, while you move)
+const PET_SIZE = 0.34, familiars = new Map(); // player id -> where their familiar is
+function drawFamiliar(id, pet, e, now, mine) {
+  const art = PET_SPRITES[pet];
+  if (!art || !S.T) return;
+  let f = familiars.get(id);
+  if (!f || f.pet !== pet || Math.hypot(f.x - e.x, f.y - e.y) > 6) familiars.set(id, f = { pet, x: e.x, y: e.y, z: e.z + 1, t: now });
+  const dt = Math.min(0.1, (now - f.t) / 1000); f.t = now;
+  const idle = mine && (S.speed || 0) < 0.3;
+  const side = idle ? e.a + 0.7 + 0.25 * Math.sin(now / 2600) : e.a + Math.PI * 0.8, dist = idle ? 1.7 : 0.75;
+  const tx = e.x + Math.cos(side) * dist, ty = e.y + Math.sin(side) * dist;
+  const hop = Math.abs(Math.sin(now / 180 + id)) * 0.12;
+  const tz = art.ground ? walkHeight(S.T, tx, ty, e.z) + (pet === 'frog' || pet === 'pumpkin' ? hop : 0)
+    : e.z + (mine ? 0.72 : 1.0) + 0.08 * Math.sin(now / 320 + id);
+  const k = 1 - Math.exp(-dt * 5);
+  f.x += (tx - f.x) * k; f.y += (ty - f.y) * k; f.z += (tz - f.z) * k;
+  const frame = art.frames[Math.floor(now / (art.ground ? 260 : 140)) % art.frames.length];
+  const tex = spriteTexture(frame, art.pal, 24, 24, 'pet|' + pet + '|' + art.frames.indexOf(frame));
+  const spr = acquire(playerPool, makeSprite);
+  setBillboard(spr, tex, f.x, f.y, f.z, PET_SIZE, PET_SIZE, false);
+  spr.material.opacity = 1; spr.material.alphaTest = 0.4;
+  if (art.ground) dropShadow(f.x, f.y, walkHeight(S.T, f.x, f.y, f.z), 0.14, 0.6);
 }
 
 // the gun in someone's hand: a side view beside them, muzzle toward whichever side of the screen
 // they aim, in front of the body when they face you and behind it when they face away
 const camRight = new THREE.Vector3();
-function drawHeldGun(e, hScale, pose, xray) {
+function drawHeldGun(e, hScale, pose, xray, camo = null) {
   const cam = getCamera();
   if (!cam) return;
   camRight.setFromMatrixColumn(cam.matrixWorld, 0);
@@ -555,7 +613,7 @@ function drawHeldGun(e, hScale, pose, xray) {
   const d = Math.hypot(tx, ty) || 1;
   tx /= d; ty /= d;
   const facing = ax * tx + ay * ty > 0 ? 1 : -1;
-  const art = gunTexture(e.w, side < 0);
+  const art = gunTexture(e.w, side < 0, camo);
   if (!art) return;
   const gw = art.w * HELD_SCALE * (0.4 + 0.6 * Math.abs(across)), gh = art.h * HELD_SCALE; // shorter when aimed at / away from you
   const reach = side * (HAND + (0.5 - GRIP) * gw - 0.06 * pose.kick); // grip in the hand, kicked back after a shot

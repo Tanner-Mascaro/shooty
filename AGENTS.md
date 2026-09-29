@@ -15,6 +15,8 @@ Port override examples:
 - PowerShell: `$env:PORT=4000; npm start`
 - CMD: `set PORT=4000&& npm start`
 
+Admin accounts (everything unlocked: skins, hats, familiars, camos, realms): set `ADMIN_USERS` to a comma-separated list of account usernames, e.g. `ADMIN_USERS=tanner npm start` (and in the host's environment settings in production).
+
 ## Project shape
 
 - `server.js` — creates the HTTP server, WebSocket server, and game tick loop

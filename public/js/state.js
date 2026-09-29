@@ -1,6 +1,8 @@
 // All mutable client state lives on this one object so every module sees the same values.
 import { BASE_FOV } from './constants.js';
 import { isTeamMode } from '/shared/config.js';
+import { camoOf, levelFor, CAMOS } from '/shared/progression.js';
+import { savedCamo } from './profile.js';
 
 export const S = {
   // connection / match
@@ -91,3 +93,8 @@ export const playerInfo = id => (S.room && S.room.players.find(p => p.id === id)
 export const nameOf = id => id === S.myId ? 'You' : (playerInfo(id) || { name: '?' }).name;
 export const teamOf = id => id === S.myId ? S.myTeam : (playerInfo(id) || { team: 0 }).team;
 export const isEnemy = id => !S.room || !isTeamMode(S.room.mode) || teamOf(id) !== S.myTeam;
+
+// the camo your gun shows (your choice, and the kills you've made with it)
+export const myCamo = w => S.admin && CAMOS[savedCamo()] ? savedCamo() : camoOf(savedCamo(), w, S.weaponKills);
+// the level your unlocks go by (an admin account has everything: server/hub.js ADMIN_USERS)
+export const myLevel = () => S.admin ? 999 : levelFor(S.xp);

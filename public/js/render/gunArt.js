@@ -14,12 +14,12 @@ const FACES = [
   [[2, 3, 7, 6], [0, 1, 0], 1.18],   // top (+y)
 ];
 
-export function gunArt(held, flip = false) {
-  const key = held + (flip ? '|l' : '|r');
+export function gunArt(held, flip = false, camo = null) {
+  const key = held + (flip ? '|l' : '|r') + (camo ? '|' + camo : '');
   if (cache.has(key)) return cache.get(key);
   const parts = modelFor(held);
   if (!parts) return null;
-  const pal = gunPalette(held), c = Math.cos(TILT), s = Math.sin(TILT);
+  const pal = gunPalette(held, 1, camo), c = Math.cos(TILT), s = Math.sin(TILT);
   // gun space -> picture: u along the barrel, v down the screen; depth toward the viewer (right, above)
   const proj = ([x, y, z]) => ({ u: z, v: -(y * c - x * s), d: x * c + y * s });
   let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;

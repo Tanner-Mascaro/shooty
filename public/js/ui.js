@@ -1,6 +1,6 @@
 // DOM bits: lobby screen, center messages, toasts, HP bar, scoreboard and kill feed.
 import { canBuildIn, MAX_MANA, MAX_HP, PLAGUE_MAX_HP, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, MODE_NAMES, HACK_HP, WEAPONS, GUN_GAME_LADDER, gunGameGun, magSize, ELIXIR_HP, gunName } from '/shared/config.js';
-import { LEVEL_NAMES, FEATURED_LEVELS } from '/shared/levels.js';
+import { LEVEL_NAMES, levelsFor, MAP_UNLOCKS, mapUnlocked } from '/shared/levels.js';
 import { levelFor } from '/shared/progression.js';
 import { S, nameOf, isEnemy, spare } from './state.js';
 import { settings } from './settings.js';
@@ -170,10 +170,8 @@ function showVotes() {
     b.addEventListener('click', () => vote(k));
     return b;
   }));
-  row($('summaryMaps'), FEATURED_LEVELS, LEVEL_NAMES, r.votes || {}, me?.vote, r.level, level => castVote({ type: 'vote', level }));
-  const fixed = (me?.modeVote || r.mode) === 'survival'; // the Crypt, always
-  $('summaryMaps').querySelectorAll('button').forEach(b => { b.disabled = b.disabled || fixed; });
-  $('summaryMaps').title = fixed ? 'Wave Survival always plays in the Crypt' : '';
+  const players = r.players.filter(p => !p.bot && p.lvl), open = l => !MAP_UNLOCKS[l] || players.some(p => mapUnlocked(l, p.lvl));
+  row($('summaryMaps'), levelsFor(r.mode).filter(open), LEVEL_NAMES, r.votes || {}, me?.vote, r.level, level => castVote({ type: 'vote', level }));
   row($('summaryModes'), Object.keys(MODE_NAMES), MODE_NAMES, r.modeVotes || {}, me?.modeVote, r.mode, mode => castVote({ type: 'mode', mode }));
 }
 

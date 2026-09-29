@@ -2,21 +2,21 @@
 // who's here and ready, bots, and the ready button.
 // Switching rooms reloads the page with a new ?room= code; your profile survives the reload.
 import { WIN_SCORE, TEAM_WIN_SCORE, HARDPOINT_SCORE_LIMIT, HARDPOINT_MATCH_MS, PLAGUE_DURATION, PLAGUE_TEAM, HEALTHY_TEAM, isTeamMode, teamName, PLAYER_SKINS as SKIN_ORDER, MODE_NAMES, GUN_GAME_LADDER, redBlue, CTF,
-  SOUL, CHAMBER, CUSTOM, ATTACHMENTS, defaultCustom } from '/shared/config.js';
-import { S } from './state.js';
+  SOUL, CHAMBER, CUSTOM, ATTACHMENTS, defaultCustom, gunName } from '/shared/config.js';
+import { gunArt } from './render/gunArt.js';
+import { S, myLevel } from './state.js';
 import { send, switchRoom } from './net.js';
 import { initAudio, cackle } from './audio.js';
 import { toast } from './ui.js';
-import { PLAYER_SKIN_NAMES, PLAYER_SPRITES } from './render/sprites.js';
+import { PLAYER_SKIN_NAMES, PLAYER_SPRITES, spriteFor, wearsHats } from './render/sprites.js';
 import { savedSkin, saveSkin } from './profile.js';
-import { LEVELS, LEVEL_NAMES } from '/shared/levels.js';
-import { buildTerrain, MAT, noise } from '/shared/terrain.js';
-import { THEMES } from './themes.js';
+import { LEVELS, LEVEL_NAMES, levelsFor, MAP_UNLOCKS, mapUnlocked } from '/shared/levels.js';
 import { muted, toggleMute, voiceOn } from './voice.js';
 import { canFriend } from './friends.js';
-import { levelFor, unlockLevel, skinUnlocked, TITLES, KILL_EFFECTS } from '/shared/progression.js';
-import { savedTitle, savedEffect, saveLook } from './profile.js';
-import { sendHello } from './account.js';
+import { levelFor, unlockLevel, skinUnlocked, TITLES, KILL_EFFECTS, HATS, hatNeeds, CAMOS, CAMO_CHOICES, goldGuns, camoUnlocked, nextCamo, camoOf, FAMILIARS, petNeeds } from '/shared/progression.js';
+import { savedTitle, savedEffect, saveLook, savedHat, saveHat, savedCamo, saveCamo, savedPet, savePet } from './profile.js';
+import { sendHello, hatUnlocked, petUnlocked } from './account.js';
+import { PET_SPRITES } from './render/pets.js';
 
 const $ = id => document.getElementById(id);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -31,7 +31,7 @@ function renderSkinPreview(canvas, skin) {
     canvas.getContext('2d').drawImage(cached, 0, 0);
     return;
   }
-  const sprite = PLAYER_SPRITES[skin], ctx = canvas.getContext('2d');
+  const sprite = spriteFor(skin), ctx = canvas.getContext('2d'); // a skin, or "skin@hat"
   const W = 40, H = 60; // 2x the 20 x 30 art
   canvas.width = W; canvas.height = H;
   const img = ctx.createImageData(W, H), data = img.data;
@@ -53,7 +53,7 @@ const skinCards = () => [...document.querySelectorAll('#skins button')];
 function updateSkinUI() {
   const skin = savedSkin(), name = PLAYER_SKIN_NAMES[skin] || skin;
   $('skinStatus').textContent = 'Playing as ' + name;
-  const level = levelFor(S.xp);
+  const level = myLevel();
   skinCards().forEach(b => {
     const locked = !skinUnlocked(b.dataset.skin, level);
     b.classList.toggle('sel', b.dataset.skin === skin);
@@ -64,7 +64,7 @@ function updateSkinUI() {
 }
 
 function pickSkin(skin) {
-  if (S.room && S.room.gameOn || !skinUnlocked(skin, levelFor(S.xp))) return;
+  if (S.room && S.room.gameOn || !skinUnlocked(skin, myLevel())) return;
   if (savedSkin() !== skin) {
     saveSkin(skin);
     send({ type: 'skin', skin });
@@ -95,12 +95,136 @@ function initSkinGrid() {
       b.append(lock);
     }
     b.addEventListener('click', () => {
-      if (!skinUnlocked(skin, levelFor(S.xp))) return toast(`${PLAYER_SKIN_NAMES[skin] || skin} unlocks at level ${unlockLevel(skin)}`);
+      if (!skinUnlocked(skin, myLevel())) return toast(`${PLAYER_SKIN_NAMES[skin] || skin} unlocks at level ${unlockLevel(skin)}`);
       setDraft(skin);
     });
     return b;
   }));
   updateSkinUI();
+}
+
+// --- hats: witches only; previews show them on your character (or the Swamp Witch) ---
+let hatGridFor = null;
+const hatWearer = () => wearsHats(savedSkin()) ? savedSkin() : 'witch';
+function buildHatGrid() {
+  hatGridFor = hatWearer();
+  $('hats').replaceChildren(...Object.keys(HATS).map(hat => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.hat = hat;
+    const canvas = document.createElement('canvas');
+    renderSkinPreview(canvas, hat === 'none' ? hatGridFor : hatGridFor + '@' + hat);
+    const art = document.createElement('div');
+    art.className = 'skin-art';
+    art.append(canvas);
+    const title = document.createElement('span');
+    title.className = 'skin-name';
+    title.textContent = HATS[hat].name;
+    const lock = document.createElement('span');
+    lock.className = 'skin-lock';
+    b.append(art, title, lock);
+    b.addEventListener('click', () => {
+      if (!hatUnlocked(hat)) return toast(`${HATS[hat].name}: ${hatNeeds(hat)}`);
+      setDraft(hat);
+    });
+    return b;
+  }));
+}
+function updateHatUI() {
+  if (hatGridFor !== hatWearer()) buildHatGrid();
+  document.querySelectorAll('#hats button').forEach(b => {
+    const hat = b.dataset.hat, h = HATS[hat], locked = !hatUnlocked(hat), lock = b.querySelector('.skin-lock');
+    b.classList.toggle('locked', locked);
+    if (!(pickerSec === 'hat' && draft)) b.classList.toggle('sel', hat === savedHat());
+    const f = h.feat && S.feats?.find(x => x.id === h.feat);
+    lock.hidden = !locked;
+    lock.textContent = h.feat ? (f ? f.n + ' / ' + f.goal : 'Feat') : 'Level ' + h.level;
+    b.title = locked ? hatNeeds(hat) : '';
+  });
+  $('hatNote').textContent = wearsHats(savedSkin()) ? 'Feat hats: see History & records' : 'Only witches wear hats — pick a witch to show yours';
+  $('loHat').textContent = HATS[savedHat()]?.name || HATS.none.name;
+}
+
+// --- familiars: cards like the characters' ---
+let petGridBuilt = false;
+function petCanvas(pet) {
+  const c = document.createElement('canvas'), art = PET_SPRITES[pet], n = 36;
+  c.width = c.height = n;
+  if (!art) return c;
+  const g = c.getContext('2d'), img = g.createImageData(n, n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const col = art.pal[art.frames[0]((x + 0.5) / n, (y + 0.5) / n)];
+    if (col) img.data.set([col[0], col[1], col[2], 255], (y * n + x) * 4);
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+function updatePetUI() {
+  if (!petGridBuilt) {
+    petGridBuilt = true;
+    $('pets').replaceChildren(...Object.keys(FAMILIARS).map(pet => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.pet = pet;
+      const art = document.createElement('div'), title = document.createElement('span'), lock = document.createElement('span');
+      art.className = 'skin-art'; art.append(petCanvas(pet));
+      title.className = 'skin-name'; title.textContent = FAMILIARS[pet].name;
+      lock.className = 'skin-lock';
+      b.append(art, title, lock);
+      b.addEventListener('click', () => petUnlocked(pet) ? setDraft(pet) : toast(`${FAMILIARS[pet].name}: ${petNeeds(pet)}`));
+      return b;
+    }));
+  }
+  document.querySelectorAll('#pets button').forEach(b => {
+    const pet = b.dataset.pet, f = FAMILIARS[pet], locked = !petUnlocked(pet), lock = b.querySelector('.skin-lock');
+    b.classList.toggle('locked', locked);
+    if (!(pickerSec === 'pet' && draft)) b.classList.toggle('sel', pet === savedPet());
+    const feat = f.feat && S.feats?.find(x => x.id === f.feat);
+    lock.textContent = f.feat ? (feat ? feat.n + ' / ' + feat.goal : 'Feat') : 'Level ' + f.level;
+    b.title = locked ? petNeeds(pet) : '';
+  });
+  $('loPet').textContent = FAMILIARS[savedPet()]?.name || FAMILIARS.none.name;
+}
+
+// --- camos: cards show your favorite gun in each finish; the list shows every gun's progress ---
+const CAMO_NAMES = { best: 'Best earned', none: 'Plain steel', ...Object.fromEntries(Object.entries(CAMOS).map(([k, c]) => [k, c.name])) };
+const favGun = () => Object.entries(S.weaponKills || {}).filter(([w]) => gunArt(w)).sort((a, b) => b[1] - a[1])[0]?.[0] || 'rifle';
+const camoGunsWith = c => Object.entries(S.weaponKills || {}).filter(([w, n]) => gunArt(w) && camoUnlocked(c, n, goldGuns(S.weaponKills))).length;
+const camoOpen = c => c === 'best' || c === 'none' || !!S.admin || camoGunsWith(c) > 0;
+let camoGridKey = '';
+function updateCamoUI() {
+  const gun = favGun(), key = gun + '|' + JSON.stringify(S.weaponKills || {});
+  if (key !== camoGridKey) {
+    camoGridKey = key;
+    $('camos').replaceChildren(...CAMO_CHOICES.map(c => {
+      const b = document.createElement('button'), name = document.createElement('b'), note = document.createElement('small');
+      b.type = 'button'; b.dataset.camo = c;
+      const art = gunArt(gun, false, c === 'best' ? camoOf('best', gun, S.weaponKills) : c === 'none' ? null : c);
+      if (art) { const img = document.createElement('canvas'); img.className = 'camoArt'; img.width = art.canvas.width; img.height = art.canvas.height; img.getContext('2d').drawImage(art.canvas, 0, 0); b.append(img); }
+      name.textContent = CAMO_NAMES[c];
+      const n = CAMOS[c] ? camoGunsWith(c) : 0;
+      note.textContent = c === 'best' ? "Each gun's top finish" : c === 'none' ? 'No camo' : c === 'obsidian' ? `Every gun, once 10 are gold (${goldGuns(S.weaponKills)}/10)`
+        : n ? `On ${n} gun${n === 1 ? '' : 's'}` : `${CAMOS[c].kills} kills with a gun`;
+      b.append(name, note);
+      if (!camoOpen(c)) { const lock = document.createElement('span'); lock.className = 'card-lock'; lock.textContent = 'Locked'; b.append(lock); }
+      b.addEventListener('click', () => camoOpen(c) ? setDraft(c) : toast(`${CAMO_NAMES[c]}: ${note.textContent}`));
+      return b;
+    }));
+    const guns = Object.entries(S.weaponKills || {}).filter(([w]) => gunArt(w)).sort((a, b) => b[1] - a[1]);
+    $('camoGuns').replaceChildren(...(guns.length ? guns.map(([w, n]) => {
+      const li = document.createElement('li'), next = nextCamo(n), has = camoOf('best', w, S.weaponKills);
+      li.innerHTML = '<span class="chalText"></span><b></b><span class="chalBar"><i></i></span><small></small>';
+      li.children[0].textContent = gunName(w) + (has ? ' · ' + CAMOS[has].name : '');
+      li.children[1].textContent = next ? CAMOS[next.camo].name + ' next' : '✓ all';
+      li.children[2].firstChild.style.width = (next ? Math.round(100 * n / next.need) : 100) + '%';
+      li.children[3].textContent = next ? `${n} / ${next.need} kills` : `${n} kills`;
+      return li;
+    }) : [Object.assign(document.createElement('li'), { textContent: 'Get kills with a gun to start earning its camos.' })]));
+  }
+  document.querySelectorAll('#camos button').forEach(b => {
+    b.classList.toggle('locked', !camoOpen(b.dataset.camo));
+    if (!(pickerSec === 'camo' && draft)) b.classList.toggle('sel', b.dataset.camo === savedCamo());
+  });
+  $('loCamo').textContent = CAMO_NAMES[savedCamo()] || CAMO_NAMES.best;
 }
 
 // --- attachments (one per player, picked in the lobby; the server checks your level) ---
@@ -109,7 +233,7 @@ try { savedAtt = localStorage.getItem('att') || 'none'; } catch {}
 if (!ATTACHMENTS[savedAtt]) savedAtt = 'none';
 export const sendSavedAtt = () => { if (savedAtt !== 'none') send({ type: 'att', att: savedAtt }); };
 function pickAtt(att) {
-  if (!ATTACHMENTS[att] || levelFor(S.xp) < ATTACHMENTS[att].level) return toast(`${ATTACHMENTS[att]?.name} unlocks at level ${ATTACHMENTS[att]?.level}`);
+  if (!ATTACHMENTS[att] || myLevel() < ATTACHMENTS[att].level) return toast(`${ATTACHMENTS[att]?.name} unlocks at level ${ATTACHMENTS[att]?.level}`);
   savedAtt = att;
   try { localStorage.setItem('att', att); } catch {}
   send({ type: 'att', att });
@@ -122,14 +246,14 @@ function buildAttGrid() {
     b.append(name, text);
     if (a.level > 1) { const lock = document.createElement('span'); lock.className = 'card-lock'; lock.textContent = 'Level ' + a.level; b.append(lock); }
     b.addEventListener('click', () => {
-      if (levelFor(S.xp) < a.level) return toast(`${a.name} unlocks at level ${a.level}`);
+      if (myLevel() < a.level) return toast(`${a.name} unlocks at level ${a.level}`);
       setDraft(k);
     });
     return b;
   }));
 }
 function updateAttUI() {
-  const level = levelFor(S.xp);
+  const level = myLevel();
   document.querySelectorAll('#atts button').forEach(b => {
     b.classList.toggle('locked', level < ATTACHMENTS[b.dataset.att].level);
     if (!(pickerSec === 'att' && draft)) b.classList.toggle('sel', b.dataset.att === savedAtt);
@@ -155,14 +279,14 @@ function buildLookGrids() {
     b.append(name);
     if (t.level > 1) { const lock = document.createElement('span'); lock.className = 'card-lock'; lock.textContent = 'Level ' + t.level; b.append(lock); }
     b.addEventListener('click', () => {
-      if (levelFor(S.xp) < t.level) return toast(`${t.name} unlocks at level ${t.level}`);
+      if (myLevel() < t.level) return toast(`${t.name} unlocks at level ${t.level}`);
       setDraft(k);
     });
     return b;
   }));
 }
 function updateLookUI() {
-  const level = levelFor(S.xp);
+  const level = myLevel();
   for (const [sec, [table, saved, sel]] of Object.entries(LOOKS)) document.querySelectorAll(sel + ' button').forEach(b => {
     b.classList.toggle('locked', level < table[b.dataset[sec]].level);
     if (!(pickerSec === sec && draft)) b.classList.toggle('sel', b.dataset[sec] === saved());
@@ -220,7 +344,7 @@ function updateCustomUI(r) {
   });
   const changed = Object.keys(CUSTOM).filter(k => c[k] !== def[k]).map(k => CUSTOM_LABELS[k][0] + ': ' + CUSTOM_LABELS[k][1](c[k]));
   const goal = r.mode === 'harvest' ? `First to ${r.soulWinScore} souls` : r.mode === 'teams' ? `First team to ${r.teamWinScore}`
-    : ['ffa', 'snipers', 'build'].includes(r.mode) ? `First to ${r.winScore} kills` : '';
+    : ['ffa', 'snipers', 'build', 'sky'].includes(r.mode) ? `First to ${r.winScore} kills` : '';
   $('customSummary').textContent = survival ? 'not used in Wave Survival' : [goal, ...changed].filter(Boolean).join(' · ') || 'standard rules';
   $('customToggle').classList.toggle('changed', !survival && changed.length > 0);
   $('customNote').textContent = survival ? 'Wave Survival plays by its own rules.' : 'Anyone in the lobby can change these. They apply from the next match.';
@@ -249,63 +373,21 @@ function setLocalModeVote(mode) {
 
 // --- map grid: a card per realm; clicking one votes for it ---
 const cards = () => [...document.querySelectorAll('#levels button')];
-const mapPreviewCache = {};
-
-// a top-down picture of a map, shaded by height and material (built once per map)
-function mapPreview(name) {
-  let c = mapPreviewCache[name];
-  if (c) return c;
-  const T = buildTerrain(LEVELS[name], 2, name), th = THEMES[name];
-  c = document.createElement('canvas');
-  c.width = T.TW; c.height = T.TH;
-  const ctx = c.getContext('2d'), img = ctx.createImageData(T.TW, T.TH), pit = th.minimap[2];
-  const floor = { hell: [70, 28, 22], robot: [74, 50, 36], witch: [32, 52, 28], haunt: [90, 78, 48], ice: [150, 180, 210], castle: [72, 76, 80], nuke: [78, 84, 44] }[name] || th.minimap[0];
-  for (let k = 0; k < T.TW * T.TH; k++) {
-    const kind = T.kind[k], m = T.mat[k], h = T.hgt[k];
-    let r, g, bl;
-    if (kind === 2) { r = pit[0]; g = pit[1]; bl = pit[2]; }
-    else if (m === MAT.LAVA) { r = 255; g = 200; bl = 50; }
-    else if (kind === 1) {
-      const shade = 0.55 + 0.45 * Math.min(1, h / 2.2), top = th.wallTop || th.wall;
-      const base = m === MAT.ROCK ? (name === 'ice' ? [160, 195, 225] : [110, 50, 38]) : m === MAT.LEAVES || m === MAT.ROOTS ? [40, 85, 35] : m === MAT.BARK ? [70, 50, 32] : m === MAT.RACK ? [86, 58, 40] : m === MAT.CRATE ? [120, 95, 50] : m === MAT.PUMPKIN ? [230, 110, 25] : top;
-      const mott = 0.85 + 0.2 * noise((k % T.TW) * 0.4, (k / T.TW | 0) * 0.4);
-      r = base[0] * shade * mott; g = base[1] * shade * mott; bl = base[2] * shade * mott;
-    } else {
-      const mott = 0.8 + 0.3 * noise((k % T.TW) * 0.5, (k / T.TW | 0) * 0.5);
-      r = floor[0] * mott; g = floor[1] * mott; bl = floor[2] * mott;
-    }
-    img.data.set([r, g, bl, 255], k * 4);
-  }
-  ctx.putImageData(img, 0, 0);
-  return mapPreviewCache[name] = c;
+// a locked realm is open to everyone here if anyone in the lobby has unlocked it
+const mapOpenHere = level => !MAP_UNLOCKS[level] || mapUnlocked(level, myLevel())
+  || !!S.room?.players.some(p => !p.bot && p.lvl && mapUnlocked(level, p.lvl));
+function updateMapLocks() {
+  cards().forEach(b => {
+    const need = MAP_UNLOCKS[b.dataset.level];
+    if (!need) return;
+    let lock = b.querySelector('.card-lock');
+    if (!lock) { lock = document.createElement('span'); lock.className = 'card-lock'; b.append(lock); }
+    const open = mapOpenHere(b.dataset.level), mine = mapUnlocked(b.dataset.level, myLevel());
+    b.classList.toggle('locked', !open);
+    lock.hidden = mine;
+    lock.textContent = open ? 'Unlocked by the lobby' : 'Level ' + need;
+  });
 }
-
-function paintPreview(view, name) {
-  const c = mapPreview(name);
-  view.width = c.width; view.height = c.height;
-  view.getContext('2d').drawImage(c, 0, 0);
-}
-
-function drawMapCard(b) {
-  if (b.querySelector('canvas.preview')) return;
-  const view = document.createElement('canvas');
-  view.className = 'preview';
-  paintPreview(view, b.dataset.level);
-  b.prepend(view);
-}
-
-function initMapGrid() {
-  // paint previews one frame each so opening the lobby doesn't hitch
-  const list = cards();
-  let i = 0;
-  const pump = () => {
-    if (i >= list.length) return;
-    drawMapCard(list[i++]);
-    requestAnimationFrame(pump);
-  };
-  requestAnimationFrame(pump);
-}
-
 function setLocalMapVote(level) {
   cards().forEach(b => {
     const mine = b.dataset.level === level;
@@ -324,28 +406,31 @@ export function updateLoadout() {
   const leading = S.level || r?.level;
   const pickedMap = me?.vote || sentMap;
   const level = pickedMap || leading || 'witch';
-  $('loMap').textContent = mode === 'survival' ? LEVEL_NAMES.crypt : LEVEL_NAMES[level] || level;
-  // Wave Survival always plays in the Crypt: no realm to pick
-  const mapBox = document.querySelector('[data-edit=map]');
-  mapBox.disabled = mode === 'survival';
-  mapBox.querySelector('span').textContent = mode === 'survival' ? 'Realm · fixed for survival' : 'Realm';
-  mapBox.title = mode === 'survival' ? 'Wave Survival always plays in the Crypt' : '';
+  // Wave Survival has its own maps: the Realm picker offers only those, the others only the realms
+  const maps = levelsFor(mode);
+  cards().forEach(b => { b.hidden = !maps.includes(b.dataset.level); });
+  updateMapLocks();
+  const shown = maps.includes(level) ? level : maps.includes(leading) ? leading : maps[0];
+  $('loMap').textContent = LEVEL_NAMES[shown] || shown;
   if (skinGridBuilt) updateSkinUI();
   updateAttUI();
   updateLookUI();
+  updateHatUI();
+  updateCamoUI();
+  updatePetUI();
   showDraft(); // room updates must not wipe what's picked in an open popup
 }
 
 // clicking a loadout box opens a popup with just that picker. Picks there are a draft: Done
 // sends it, ✕ / Esc / clicking outside keeps what you had
-const PICKER_TITLES = { mode: 'CHOOSE MODE', map: 'CHOOSE REALM', skin: 'CHOOSE CHARACTER', att: 'CHOOSE ATTACHMENT', title: 'CHOOSE TITLE', effect: 'CHOOSE KILL EFFECT' };
+const PICKER_TITLES = { pet: 'CHOOSE FAMILIAR', camo: 'CHOOSE CAMO', hat: 'CHOOSE HAT', mode: 'CHOOSE MODE', map: 'CHOOSE REALM', skin: 'CHOOSE CHARACTER', att: 'CHOOSE ATTACHMENT', title: 'CHOOSE TITLE', effect: 'CHOOSE KILL EFFECT' };
 const PICKER_BUTTONS = { mode: ['#modes button', 'mode'], map: ['#levels button', 'level'], skin: ['#skins button', 'skin'], att: ['#atts button', 'att'],
-  title: ['#titles button', 'title'], effect: ['#effects button', 'effect'] };
+  title: ['#titles button', 'title'], effect: ['#effects button', 'effect'], hat: ['#hats button', 'hat'], camo: ['#camos button', 'camo'], pet: ['#pets button', 'pet'] };
 let pickerFrom = null, pickerSec = null, draft = null;
 let sentMode = null, sentMap = null; // votes sent but not yet echoed back by the server
 
 // what a mode is about, shown in the Mode popup for whichever mode is highlighted there
-function modeHelpText(mode) {
+export function modeHelpText(mode) {
   const r = S.room;
   const win = r?.winScore ?? WIN_SCORE, teamWin = r?.teamWinScore ?? TEAM_WIN_SCORE;
   return mode === 'plague'
@@ -353,13 +438,14 @@ function modeHelpText(mode) {
     : mode === 'hardpoint' ? `Red vs blue. Hold the rotating hill for 1 point per second. Contested hills stop scoring; first to ${HARDPOINT_SCORE_LIMIT} wins or the leader at ${Math.floor(HARDPOINT_MATCH_MS / 60000)}:${String(Math.floor(HARDPOINT_MATCH_MS / 1000) % 60).padStart(2, '0')}.`
     : mode === 'ctf' ? `Red vs blue. Steal the other coven's cauldron and bring it to your base while yours is home. First to ${CTF.caps} captures, or the leader after ${CTF.ms / 60000} minutes. Carriers drop it when they fall.`
     : mode === 'teams' ? `Red vs blue. First team to ${teamWin} kills wins.`
-    : mode === 'snipers' ? `Sniper, crossbow, and beam rifle only. First to ${win} kills wins.`
+    : mode === 'snipers' ? `Sniper, marksman and beam rifles only. First to ${win} kills wins.`
     : mode === 'build' ? `Every player for themselves, with Earth Ramps: press build mode, click to raise one, stack them for height. First to ${win} kills wins.`
     : mode === 'gungame' ? `Every kill hands you the next gun, ${GUN_GAME_LADDER.length} in all. A kill with the final blade wins; getting stabbed knocks you back one.`
     : mode === 'royale' ? 'One life each. Loot guns from crates and the fallen while the storm closes in. Last one standing wins.'
     : mode === 'harvest' ? `Red vs blue. Every kill drops a soul: reap enemy souls to score, grab your own team's to deny them. First to ${r?.soulWinScore ?? SOUL.win} souls wins.`
     : mode === 'chamber' ? `A pistol with one round, a blade and ${CHAMBER.lives} lives. Every hit kills; every kill loads another round. Last one with lives left wins.`
-    : mode === 'survival' ? 'You and your friends (and ally bots) against endless waves of monsters in the Crypt. Earn gold, open doors to new sections, buy guns off the walls and roll the mystery cauldron. Play solo or together.'
+    : mode === 'sky' ? `Everyone flies a broomstick. Look where you want to go and press forward; jump climbs, crouch dives. Swoop low to grab guns. First to ${win} kills wins.`
+    : mode === 'survival' ? 'You and your friends (and ally bots) against endless waves of monsters, in the Crypt or aboard the Drowned Fleet. Earn gold, open doors (or gangplank gates) to new sections, buy guns off the walls and roll the mystery cauldron. Play solo or together.'
     : `Every player for themselves. First to ${win} kills wins.`;
 }
 function updateModeHelp() {
@@ -388,6 +474,9 @@ function commitDraft() {
     if (pickerSec === 'mode') { sentMode = draft; setLocalModeVote(draft); send({ type: 'mode', mode: draft }); }
     else if (pickerSec === 'map') { sentMap = draft; setLocalMapVote(draft); send({ type: 'vote', level: draft }); }
     else if (pickerSec === 'att') pickAtt(draft);
+    else if (pickerSec === 'hat') { saveHat(draft); sendHello(); }
+    else if (pickerSec === 'camo') { saveCamo(draft); sendHello(); }
+    else if (pickerSec === 'pet') { savePet(draft); sendHello(); }
     else if (pickerSec === 'title' || pickerSec === 'effect') {
       saveLook(pickerSec === 'title' ? draft : savedTitle(), pickerSec === 'effect' ? draft : savedEffect());
       sendHello(); // the server takes your look with your name
@@ -442,7 +531,8 @@ export function initRoom() {
   }, true);
   $('readyBtn').addEventListener('click', () => { initAudio(); cackle(); send({ type: 'ready' }); showLoading(true); });
   $('loadingCancel').addEventListener('click', () => { send({ type: 'unready' }); showLoading(false); });
-  document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => setDraft(b.dataset.level)));
+  document.querySelectorAll('#levels button').forEach(b => b.addEventListener('click', () => mapOpenHere(b.dataset.level) ? setDraft(b.dataset.level)
+    : toast(`${LEVEL_NAMES[b.dataset.level]} unlocks at level ${MAP_UNLOCKS[b.dataset.level]} — or play it with someone who has it`)));
   document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setDraft(b.dataset.mode)));
   buildAttGrid();
   buildLookGrids();
@@ -495,7 +585,6 @@ export function warmLobby() {
   if (lobbyWarmed) return;
   lobbyWarmed = true;
   initSkinGrid();
-  initMapGrid();
 }
 
 export function showRoom() {
@@ -522,7 +611,7 @@ export function showRoom() {
   const win = r.winScore ?? WIN_SCORE, teamWin = r.teamWinScore ?? TEAM_WIN_SCORE;
   updateModeHelp();
   document.body.classList.toggle('snipers', r.mode === 'snipers');
-  const scoreOn = r.mode === 'ffa' || r.mode === 'snipers' || r.mode === 'teams' || r.mode === 'build' || r.mode === 'harvest';
+  const scoreOn = r.mode === 'ffa' || r.mode === 'snipers' || r.mode === 'teams' || r.mode === 'build' || r.mode === 'harvest' || r.mode === 'sky';
   $('scoreSetup').hidden = !scoreOn;
   $('scoreSetup').querySelector('.label').textContent = r.mode === 'harvest' ? 'SOULS TO WIN' : 'KILLS TO WIN';
   $('scorePick').hidden = r.mode === 'teams' || r.mode === 'harvest';
@@ -661,7 +750,7 @@ export function showRoom() {
   $('waitMsg').textContent =
     r.gameOn ? 'Match in progress — joining...'
     : r.players.length < minPlayers ? 'Waiting for players — send friends the invite link, or add bots'
-    : r.mode === 'survival' && !me?.ready ? `Wave Survival in the Crypt — hit I'm Ready to start${bots.length ? ` with ${bots.length} ally bot${bots.length === 1 ? '' : 's'}` : ' (add bots as allies if you like)'}`
+    : r.mode === 'survival' && !me?.ready ? `Wave Survival ${r.level === 'ship' ? 'aboard the Drowned Fleet' : 'in the Crypt'} — hit I'm Ready to start${bots.length ? ` with ${bots.length} ally bot${bots.length === 1 ? '' : 's'}` : ' (add bots as allies if you like)'}`
     : r.plagueSetupValid === false ? 'Choose at least one infected and one healthy player in the list above.'
     : me && me.ready ? (aloneWithBots
       ? 'Starting match…'

@@ -6,6 +6,7 @@
 //   sprite         enemy billboard in render/sprites.js
 //   drone          ambient hum oscillators [type, Hz]; droneVol scales how loud it is
 //   ceiling        a ceiling over the level (no sky)
+//   sea            its pits are open water: this color, well below the decks
 //   mat            WebGL material hints (roughness, metalness, sun intensity)
 
 export const THEMES = {
@@ -78,6 +79,36 @@ export const THEMES = {
     accent: '140,255,160', bg: '#0c120e', title: '#9fc', drone: [['sawtooth', 38], ['sine', 76.5], ['triangle', 114]], droneCut: 200, droneVol: 0.45,
     minimap: [[40, 42, 40], [80, 82, 80], [30, 60, 40]],
     mat: { roughness: 0.95, metalness: 0.02, sun: 0.35 },
+  },
+  ship: {
+    id: 'ship', name: 'THE DROWNED FLEET', fog: [18, 30, 40], fogK: 0.04, skyLo: [44, 66, 86], skyHi: [8, 12, 26],
+    orb: [225, 235, 255], orbGlow: [60, 84, 120], orbA: 1.25, orbE: 0.32, orbR: 0.14, sea: [24, 62, 80],
+    wall: [84, 60, 40], wallTop: [70, 50, 34], band: [120, 210, 255],
+    ambient: [140, 225, 255], ambientVz: 0.08, blood: [130, 12, 12], fire: [140, 220, 255],
+    sprite: 'zombie', pitDeath: 'Dragged under by the deep!', enemyPitDeath: 'Drowned!', pitOverlay: '20,60,90',
+    accent: '120,210,255', bg: '#08121a', title: '#8cf', drone: [['sine', 41], ['triangle', 61.7], ['sine', 123]], droneCut: 190, droneVol: 0.45,
+    minimap: [[34, 40, 44], [110, 80, 52], [24, 62, 80]],
+    mat: { roughness: 0.9, metalness: 0.02, sun: 0.8 },
+  },
+  cove: {
+    id: 'cove', name: "SMUGGLER'S COVE", fog: [70, 44, 50], fogK: 0.032, skyLo: [250, 150, 90], skyHi: [60, 40, 90],
+    orb: [255, 200, 120], orbGlow: [140, 70, 40], orbA: 2.6, orbE: 0.12, orbR: 0.2, sea: [36, 96, 118],
+    wall: [120, 86, 56], wallTop: [140, 104, 70], band: [255, 170, 90],
+    ambient: [255, 210, 150], ambientVz: 0.05, blood: [140, 15, 15], fire: [255, 170, 80],
+    sprite: 'cowboy', pitDeath: 'Swept out to sea!', enemyPitDeath: 'Enemy swept away!', pitOverlay: '30,90,120',
+    accent: '255,170,90', bg: '#2a1620', title: '#fb8', drone: [['sine', 46], ['triangle', 69], ['sine', 138]], droneCut: 220, droneVol: 0.35,
+    minimap: [[180, 150, 100], [120, 90, 60], [36, 96, 118]],
+    mat: { roughness: 0.85, metalness: 0.02, sun: 1.2 },
+  },
+  yard: {
+    id: 'yard', name: 'MOONLIT GRAVEYARD', fog: [30, 28, 44], fogK: 0.05, skyLo: [70, 66, 100], skyHi: [12, 10, 24],
+    orb: [235, 235, 255], orbGlow: [90, 90, 140], orbA: -1.4, orbE: 0.4, orbR: 0.18, sea: [26, 20, 16],
+    wall: [96, 96, 104], wallTop: [74, 74, 82], band: [170, 150, 255],
+    ambient: [180, 160, 255], ambientVz: 0.06, blood: [130, 12, 12], fire: [180, 150, 255],
+    sprite: 'zombie', pitDeath: 'Fell into an open grave!', enemyPitDeath: 'Buried!', pitOverlay: '40,30,20',
+    accent: '180,160,255', bg: '#100e1a', title: '#bbf', drone: [['sawtooth', 39], ['sine', 58.5], ['triangle', 117]], droneCut: 180, droneVol: 0.4,
+    minimap: [[44, 58, 40], [96, 96, 104], [26, 20, 16]],
+    mat: { roughness: 0.92, metalness: 0.02, sun: 0.75 },
   },
   nuke: {
     id: 'nuke', name: 'PUMPKIN HOLLOW', fog: [62, 40, 52], fogK: 0.04, skyLo: [230, 130, 60], skyHi: [48, 26, 66],

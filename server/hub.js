@@ -3,11 +3,11 @@
 //
 // Rooms are joined by URL: /?room=CODE joins (or creates) that private room; /?play=1 is
 // quick play (any public room with space). Bare / is the sign-in menu — no room until they pick.
-import { PLAYER_SKINS, isHackName } from '../shared/config.js';
+import { PLAYER_SKINS, isHackName, gunName } from '../shared/config.js';
 import { Room } from './room.js';
 import { log } from './log.js';
 import { STATS, hashToken, newToken, hashPassword, checkPassword } from './profiles.js';
-import { levelFor, skinUnlocked, titleOk, effectOk } from '../shared/progression.js';
+import { levelFor, skinUnlocked, titleOk, effectOk, hatOk, FEATS, featDone, featView, featReward, petOk, CAMO_CHOICES, CAMOS, goldGuns, HATS, FAMILIARS } from '../shared/progression.js';
 import { currentChallenges, countEvent, challengeView } from '../shared/challenges.js';
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I/L mix-ups
@@ -51,10 +51,16 @@ function cleanMeta(meta) {
     best: m.best && typeof m.best === 'object' ? m.best : {},
     weapons: m.weapons && typeof m.weapons === 'object' ? m.weapons : {},
     matches: m.matches | 0, wins: m.wins | 0,
+    heads: m.heads | 0, mobs: m.mobs | 0, bosses: m.bosses | 0, krakens: m.krakens | 0, // lifetime counts for feats
+    modeWins: m.modeWins && typeof m.modeWins === 'object' ? m.modeWins : {},
     challenges: currentChallenges(m.challenges),
     tutorial: !!m.tutorial,
   };
 }
+
+// Accounts that have everything unlocked (skins, hats, familiars, camos, realms...): usernames,
+// comma-separated, in the ADMIN_USERS environment variable. Nobody else can turn this on.
+const ADMINS = new Set((process.env.ADMIN_USERS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
 
 export class Hub {
   constructor(profiles) {
@@ -245,7 +251,9 @@ export class Hub {
     this.setProfile(p, pid);
     p.name = saved.name; p.username = saved.username;
     p.stats = Object.fromEntries(STATS.map(s => [s, saved[s] || 0]));
-    if (!skinUnlocked(p.skin, levelFor(p.stats.xp))) p.skin = 'witch'; // a skin this profile hasn't unlocked yet
+    p.admin = !!p.username && ADMINS.has(p.username.toLowerCase());
+    if (p.admin) log(`${this.who(p)} is an admin: everything unlocked`);
+    if (!skinUnlocked(p.skin, this.lookLevel(p))) p.skin = 'witch'; // a skin this profile hasn't unlocked yet
     p.meta = cleanMeta(saved.meta);
     this.checkLook(p);
     this.send(p, { type: 'settings', settings: saved.settings }); // null: the browser sends its own
@@ -261,7 +269,7 @@ export class Hub {
 
   async sendProfile(p) {
     const rank = await this.profiles.rank(p.stats).catch(() => null);
-    this.send(p, Object.assign({ type: 'profile', name: p.name, username: p.username, rank }, p.stats));
+    this.send(p, Object.assign({ type: 'profile', name: p.name, username: p.username, rank, admin: !!p.admin }, p.stats));
   }
 
   // --- history, records, challenges, titles (meta: see cleanMeta) ---
@@ -270,7 +278,7 @@ export class Hub {
     const m = p.meta;
     m.challenges = currentChallenges(m.challenges);
     this.send(p, { type: 'meta', history: m.history, best: m.best, weapons: m.weapons, matches: m.matches, wins: m.wins,
-      challenges: challengeView(m.challenges), tutorial: !!m.tutorial });
+      challenges: challengeView(m.challenges), feats: featView(m), tutorial: !!m.tutorial });
   }
   saveMeta(p) {
     if (!p.pid || !p.meta) return;
@@ -280,10 +288,19 @@ export class Hub {
   // something that counts toward challenges happened (see shared/challenges.js); kills also feed records
   progress(p, e) {
     if (!p || p.bot || !p.pid || !p.meta) return;
-    const m = p.meta;
+    const m = p.meta, feats = this.featsDone(m);
+    let camo = false;
     if (e.type === 'kill') {
+      const gold = goldGuns(m.weapons);
       m.weapons[e.weapon] = (m.weapons[e.weapon] || 0) + 1;
+      const tier = Object.values(CAMOS).find(c => c.kills === m.weapons[e.weapon]);
+      if (tier && e.weapon !== 'claws') { this.unlocked(p, `${gunName(e.weapon)} — ${tier.name} camo`); camo = true; }
+      if (gold < CAMOS.obsidian.goldGuns && goldGuns(m.weapons) >= CAMOS.obsidian.goldGuns) { this.unlocked(p, 'Obsidian camo, on every gun'); camo = true; }
       m.best.streak = Math.max(m.best.streak || 0, e.streak || 0);
+      if (e.head) m.heads++;
+      if (e.mob) m.mobs++;
+      if (e.boss) m.bosses++;
+      if (e.kind === 'kraken') m.krakens++;
     }
     m.challenges = currentChallenges(m.challenges);
     const finished = countEvent(m.challenges, e);
@@ -292,28 +309,51 @@ export class Hub {
       this.send(p, { type: 'challenge', text: c.text, xp: c.xp });
       log(`${this.who(p)} finished the challenge "${c.text}" (+${c.xp} XP)`);
     }
-    if (finished.length) { this.sendMeta(p); this.saveMeta(p); }
+    if (this.featNews(p, feats) || finished.length || camo) { this.sendMeta(p); this.saveMeta(p); }
+    if (camo && p.room) p.room.roster(); // everyone sees the new finish
+  }
+  // something new to wear: a banner for them
+  unlocked(p, text) {
+    this.send(p, { type: 'unlock', text });
+    log(`${this.who(p)} unlocked ${text}`);
+  }
+  // feats: which are done now, and news of any finished since `before` (true if there was some)
+  featsDone(m) { return Object.keys(FEATS).filter(id => featDone(id, m)); }
+  featNews(p, before) {
+    const fresh = this.featsDone(p.meta).filter(id => !before.includes(id));
+    for (const id of fresh) {
+      this.send(p, { type: 'feat', text: FEATS[id].text, reward: featReward(id) });
+      log(`${this.who(p)} finished the feat "${FEATS[id].text}"`);
+    }
+    return fresh.length > 0;
   }
   // a match you were in finished: into your history, and your records
   matchDone(p, info) {
     if (!p || p.bot || !p.pid || !p.meta) return;
-    const m = p.meta;
+    const m = p.meta, feats = this.featsDone(m);
     m.history.unshift({ t: Date.now(), mode: info.mode, level: info.level, won: info.won, kills: info.kills, deaths: info.deaths });
     m.history.length = Math.min(m.history.length, 10);
     m.best.kills = Math.max(m.best.kills || 0, info.kills);
     m.matches = (m.matches || 0) + 1;
     if (info.won) m.wins = (m.wins || 0) + 1;
+    if (info.won) m.modeWins[info.mode] = (m.modeWins[info.mode] || 0) + 1;
+    if (info.wave) m.best.wave = Math.max(m.best.wave || 0, info.wave);
+    this.featNews(p, feats);
     this.progress(p, { type: 'match' });
     if (info.won) this.progress(p, { type: 'win', mode: info.mode });
     this.sendMeta(p);
     this.saveMeta(p);
   }
-  // your title and kill effect, if your level has them (sent from the browser like your skin)
+  // your title, kill effect and hat, if you've unlocked them (sent from the browser like your skin)
   checkLook(p) {
-    const level = levelFor(p.stats?.xp || 0);
+    const level = this.lookLevel(p);
     if (!titleOk(p.title, level)) p.title = 'apprentice';
     if (!effectOk(p.effect, level)) p.effect = 'blood';
+    if (p.admin ? !HATS[p.hat] : !hatOk(p.hat, level, p.meta)) p.hat = 'none';
+    if (p.admin ? !FAMILIARS[p.pet] : !petOk(p.pet, level, p.meta)) p.pet = 'none';
   }
+  // the level unlocks are checked against: an admin has them all
+  lookLevel(p) { return p.admin ? 999 : levelFor(p.stats?.xp || 0); }
 
   // top players, to one player or everyone, once pending stat saves have landed
   async sendBoard(to) {
@@ -376,9 +416,12 @@ Hub.prototype.handlers = {
     const before = this.who(p), first = !p.tokenHash, oldName = p.name, oldSkin = p.skin;
     if (PLAYER_SKINS.includes(msg.skin)) p.skin = msg.skin;
     else if (!PLAYER_SKINS.includes(p.skin)) p.skin = 'witch';
-    const oldLook = p.title + p.effect;
+    const oldLook = p.title + p.effect + p.hat + p.camo + p.pet;
     if (typeof msg.title === 'string') p.title = msg.title;
     if (typeof msg.effect === 'string') p.effect = msg.effect;
+    if (typeof msg.hat === 'string') p.hat = msg.hat;
+    if (CAMO_CHOICES.includes(msg.camo)) p.camo = msg.camo;
+    if (typeof msg.pet === 'string') p.pet = msg.pet;
     p.tokenHash = hashToken(msg.token);
     const pid = await this.profiles.resolve(p.tokenHash);
     if (!await this.useProfile(p, pid, cleanName(msg.name) || null)) return;
@@ -387,7 +430,7 @@ Hub.prototype.handlers = {
       log(`${before} is ${p.name}${p.username ? ' (account ' + p.username + ')' : ''} — ${STATS.map(s => p.stats[s] + ' ' + s).join(', ')}`);
       this.sendBoard(p);
     } else if (p.name !== oldName) log(`${before} renamed to ${p.name}`);
-    if (p.room && (p.skin !== oldSkin || p.title + p.effect !== oldLook)) p.room.roster();
+    if (p.room && (p.skin !== oldSkin || p.title + p.effect + p.hat + p.camo + p.pet !== oldLook)) p.room.roster();
   },
 
   // your game settings changed (FPS, keys, ...): keep them on your profile
@@ -409,7 +452,8 @@ Hub.prototype.handlers = {
     if (!await this.profiles.claim(p.pid, username, await hashPassword(password)))
       return this.send(p, { type: 'auth', error: 'That username is taken' });
     p.username = username;
-    log(`${this.who(p)} created account ${username}`);
+    p.admin = ADMINS.has(username.toLowerCase());
+    log(`${this.who(p)} created account ${username}` + (p.admin ? ' (an admin: everything unlocked)' : ''));
     this.send(p, { type: 'auth', ok: true });
     await this.sendProfile(p);
     this.sendFriends(p);

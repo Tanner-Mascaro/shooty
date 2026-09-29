@@ -399,15 +399,170 @@ function crypt() {
 }
 LEVELS.crypt = crypt();
 
+// The Drowned Fleet: Wave Survival on a ghost fleet at anchor. The sea is a pit (you drown);
+// ships are joined by gangplanks over the water, and each gangplank is shut by a gate you buy
+// (the door digits). Same furniture as the Crypt, plus:
+//   R  a ship's rail (low: you can shoot over it, and hop it into the sea)
+//   I  a mast with its sail           #  a cabin or deckhouse wall
+//
+//   ┌ Sunken Frigate (4) ┬── Kraken's Wreck (6) ──┬ Ghost Galleon (5) ┐
+//   │                    ├────── The Docks (3) ────┤                   │
+//   ├ Merchant Brig (1) ─┼──── Flagship (start) ───┼─ Smuggler's Sloop (2)
+function ship() {
+  const N = 80, g = Array.from({ length: N }, () => Array(N).fill('L'));
+  const inGrid = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+  // a hull: deck inside, rail round the edge; `bow` tapers one end to a point over `taper` rows
+  const hull = (x0, y0, x1, y1, bow, taper) => {
+    const inside = (x, y) => {
+      if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+      const t = bow === 'n' ? y - y0 : bow === 's' ? y1 - y : bow === 'w' ? x - x0 : bow === 'e' ? x1 - x : taper;
+      if (t >= taper) return true;
+      const half = (bow === 'n' || bow === 's' ? x1 - x0 : y1 - y0) / 2, mid = bow === 'n' || bow === 's' ? (x0 + x1) / 2 : (y0 + y1) / 2;
+      const off = Math.abs((bow === 'n' || bow === 's' ? x : y) - mid);
+      return off <= 1 + (half - 1) * (t + 1) / (taper + 1);
+    };
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (!inside(x, y)) continue;
+      const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !inside(x + dx, y + dy));
+      g[y][x] = edge ? 'R' : '.';
+    }
+  };
+  const room = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y][x] = c; };
+  // things go on open deck only: a typo in a coordinate fails loudly at startup
+  const put = (x, y, c) => {
+    if (!inGrid(x, y) || g[y][x] !== '.') throw new Error(`ship map: (${x}, ${y}) is "${inGrid(x, y) ? g[y][x] : 'off the map'}", not deck, for "${c}"`);
+    g[y][x] = c;
+  };
+  const deckhouse = (x0, y0, x1, y1) => room(x0, y0, x1, y1, '#');
+
+  hull(25, 50, 54, 77, 'n', 8);  // Flagship (start)
+  hull(3, 52, 19, 76, 'n', 5);   // Merchant Brig
+  hull(60, 52, 76, 76, 'n', 5);  // Smuggler's Sloop
+  hull(24, 24, 55, 42, null, 0); // The Docks
+  hull(3, 3, 20, 44, 's', 6);    // Sunken Frigate
+  hull(59, 3, 76, 44, 's', 6);   // Ghost Galleon
+  hull(26, 3, 53, 17, null, 0);  // Kraken's Wreck
+
+  // gangplanks (3 wide, over open water) with their gates
+  room(19, 64, 25, 66, '.'); room(21, 64, 23, 66, '1');
+  room(54, 64, 60, 66, '.'); room(56, 64, 58, 66, '2');
+  room(38, 42, 41, 52, '.'); room(38, 45, 41, 47, '3');
+  room(20, 32, 24, 34, '.'); room(21, 32, 23, 34, '4');
+  room(55, 32, 59, 34, '.'); room(56, 32, 58, 34, '5');
+  room(38, 17, 41, 24, '.'); room(38, 19, 41, 21, '6');
+
+  // flagship: two masts, the captain's cabin astern, cargo on deck
+  deckhouse(33, 72, 46, 75);
+  put(39, 58, 'I'); put(39, 66, 'I');
+  for (const [x, y] of [[29, 60], [50, 60], [30, 69], [49, 69], [35, 63], [44, 63]]) put(x, y, '+');
+  for (let x = 37; x <= 42; x++) put(x, 70, 'P');
+  for (const [x, y] of [[27, 71], [52, 71], [31, 56], [48, 56]]) put(x, y, 'Z');
+  put(26, 62, 'a'); put(53, 62, 'b');
+  // merchant brig: crates of cargo, a mast
+  put(11, 62, 'I');
+  for (const [x, y] of [[6, 60], [16, 60], [7, 68], [15, 68], [11, 72]]) put(x, y, '+');
+  deckhouse(8, 74, 14, 75);
+  for (const [x, y] of [[5, 58], [17, 58], [4, 72], [18, 73]]) put(x, y, 'Z');
+  put(4, 65, 'c'); put(18, 69, 'j'); put(11, 66, 'V');
+  // smuggler's sloop
+  put(68, 62, 'I');
+  for (const [x, y] of [[63, 60], [73, 60], [64, 68], [72, 68], [68, 72]]) put(x, y, '+');
+  deckhouse(65, 74, 71, 75);
+  for (const [x, y] of [[62, 58], [74, 58], [61, 73], [75, 72]]) put(x, y, 'Z');
+  put(75, 65, 'd'); put(61, 69, 'f'); put(68, 66, 'Y');
+  // the docks: a warehouse round the mystery cauldron, stacks of crates
+  deckhouse(35, 29, 44, 29); deckhouse(35, 37, 44, 37); deckhouse(35, 30, 35, 32); deckhouse(35, 34, 35, 36); deckhouse(44, 30, 44, 32); deckhouse(44, 34, 44, 36);
+  put(39, 33, 'X');
+  for (let x = 28; x <= 51; x += 4) if (x < 34 || x > 45) { put(x, 27, '+'); put(x, 39, '+'); }
+  for (const [x, y] of [[26, 26], [53, 26], [26, 40], [53, 40]]) put(x, y, 'Z');
+  put(25, 29, 'e'); put(39, 41, 'U');
+  // sunken frigate: stove-in deck (holes to the sea), three masts
+  for (const y of [12, 22, 32]) put(11, y, 'I');
+  room(6, 16, 8, 18, 'L'); room(14, 26, 16, 27, 'L'); room(7, 36, 9, 37, 'L');
+  for (let y = 8; y <= 32; y += 8) { put(5, y, '+'); put(17, y, '+'); }
+  for (const [x, y] of [[5, 5], [16, 5], [5, 30], [12, 40]]) put(x, y, 'Z');
+  put(4, 20, 'g');
+  // ghost galleon
+  for (const y of [12, 22, 32]) put(67, y, 'I');
+  room(70, 13, 72, 15, 'L'); room(62, 25, 64, 26, 'L');
+  for (let y = 8; y <= 32; y += 8) { put(62, y, '+'); put(73, y, '+'); }
+  for (const [x, y] of [[62, 5], [74, 5], [74, 30], [67, 40]]) put(x, y, 'Z');
+  put(75, 20, 'h');
+  // kraken's wreck: a broken hull round a pool where the beast went down
+  room(36, 8, 43, 12, 'L');
+  for (let x = 29; x <= 50; x += 7) { put(x, 6, '+'); put(x, 14, '+'); }
+  for (const [x, y] of [[28, 5], [51, 5], [28, 15], [51, 15], [39, 5]]) put(x, y, 'Z');
+  put(52, 10, 'i');
+  return g.map(r => r.join(''));
+}
+LEVELS.ship = ship();
+
+// Realms you unlock by leveling up (MAP_UNLOCKS). Point-symmetric like the others: drawn as the
+// top half on a blank 80 x 40 sheet, then mirrored.
+function sheet() {
+  const W = 80, H = 40, g = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => x === 0 || y === 0 || x === W - 1 ? '#' : '.'));
+  const room = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y][x] = c; };
+  const put = (x, y, c) => { g[y][x] = c; };
+  return { g, room, put, done: () => mirror(g.map(r => r.join(''))) };
+}
+
+// Smuggler's Cove: a beach at sunset split by a channel of sea, crossed by plank bridges and a
+// moored sloop on each side; fishing huts and crates up the sand, rocks at the cliff foot
+function cove() {
+  const { room, put, done } = sheet();
+  room(1, 34, 78, 39, 'L');                                          // the channel (mirrored: 34..45)
+  for (const x0 of [11, 38, 65]) room(x0, 34, x0 + 3, 39, '.');      // bridges across it
+  // a sloop moored in the channel, with a gangplank up to the beach
+  for (let y = 31; y <= 38; y++) for (let x = 20; x <= 31; x++) {
+    const edge = y === 31 || y === 38 || x === 20 || x === 31;
+    put(x, y, edge ? 'R' : '.');
+  }
+  put(22, 31, '.'); put(21, 32, 'R'); room(25, 29, 26, 31, '.');     // bow step and gangplank gap
+  put(25, 31, '.'); put(26, 31, '.'); put(26, 35, 'I'); put(23, 36, '+'); put(29, 33, '+'); put(28, 36, 'G');
+  // fishing huts
+  room(6, 6, 9, 8, 'B'); room(30, 5, 33, 7, 'B'); room(56, 8, 59, 10, 'B'); room(46, 20, 49, 22, 'B');
+  // rocks at the foot of the cliffs
+  room(15, 12, 16, 13, '#'); room(64, 4, 65, 5, '#'); room(70, 20, 71, 21, '#'); room(4, 24, 5, 25, '#');
+  // crates and barrels
+  for (const [x, y] of [[12, 20], [13, 20], [22, 10], [40, 14], [41, 14], [52, 27], [60, 17], [35, 26], [8, 30], [72, 30], [44, 30], [18, 27]]) put(x, y, '+');
+  put(40, 4, 'S'); put(15, 30, 'M'); put(62, 26, 'H'); put(33, 18, 'N'); put(71, 11, 'M');
+  return done();
+}
+LEVELS.cove = cove();
+
+// Moonlit Graveyard: rows of gravestones, stone mausoleums you fight round, a chapel, and open
+// graves to fall into
+function yard() {
+  const { room, put, done } = sheet();
+  // mausoleums (the stone vaults) and the chapel
+  room(8, 8, 11, 11, '#'); room(64, 6, 67, 9, '#'); room(34, 24, 37, 27, '#'); room(22, 30, 24, 32, '#'); room(55, 28, 57, 30, '#');
+  room(37, 5, 42, 8, 'B');
+  // rows of graves, with an open one here and there
+  for (let y = 14; y <= 22; y += 4) for (let x = 5; x <= 74; x += 3) if (Math.abs(x - 40) > 3 && !(x > 30 && x < 38 && y > 20)) put(x, y, '+');
+  for (const [x, y] of [[13, 18], [47, 16], [65, 22], [28, 36], [52, 37]]) { put(x, y, 'L'); put(x + 1, y, 'L'); }
+  // the old wall's broken pieces
+  room(18, 3, 22, 3, '#'); room(50, 12, 54, 12, '#'); room(4, 34, 8, 34, '#'); room(70, 34, 74, 34, '#'); room(44, 36, 46, 36, '#');
+  put(40, 3, 'S'); put(14, 27, 'G'); put(60, 34, 'M'); put(29, 10, 'H'); put(72, 14, 'N'); put(45, 29, 'G');
+  return done();
+}
+LEVELS.yard = yard();
+
 export const LEVEL_NAMES = {
   hell: 'BRIMSTONE COVEN', robot: "ALCHEMIST'S LAB", witch: 'WITCH SWAMP', haunt: 'HEXED MANOR',
-  ice: 'FROST HOLLOW', castle: 'GOTHIC CASTLE', nuke: 'PUMPKIN HOLLOW', crypt: 'THE CRYPT',
+  ice: 'FROST HOLLOW', castle: 'GOTHIC CASTLE', nuke: 'PUMPKIN HOLLOW', crypt: 'THE CRYPT', ship: 'THE DROWNED FLEET',
+  cove: "SMUGGLER'S COVE", yard: 'MOONLIT GRAVEYARD',
 };
-// modes that always play on one map
-export const modeLevel = mode => mode === 'survival' ? 'crypt' : null;
+// realms you have to reach a level to vote for
+export const MAP_UNLOCKS = { cove: 5, yard: 12 };
+export const mapUnlocked = (level, playerLevel) => (MAP_UNLOCKS[level] || 1) <= playerLevel;
+// Wave Survival's own maps (voted on like realms, but only in survival); the first is the default
+export const SURVIVAL_LEVELS = ['crypt', 'ship'];
+export const isSurvivalLevel = level => SURVIVAL_LEVELS.includes(level);
+// the maps a mode can be voted onto (Broom Battle needs open sky: not the manor, under its roof)
+export const levelsFor = mode => mode === 'survival' ? SURVIVAL_LEVELS : mode === 'sky' ? FEATURED_LEVELS.filter(l => l !== 'haunt') : FEATURED_LEVELS;
 
 // lobby vote carousel, in order
-export const FEATURED_LEVELS = ['witch', 'castle', 'hell', 'ice', 'nuke', 'robot', 'haunt'];
+export const FEATURED_LEVELS = ['witch', 'castle', 'hell', 'ice', 'nuke', 'robot', 'haunt', 'cove', 'yard'];
 
 // the hexed manor is two places: the manor (top-left and bottom-right quarters) and the
 // Backrooms (the other two); walls, floors and ceilings change with it

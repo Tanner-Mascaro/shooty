@@ -51,8 +51,8 @@ export function applyVolume() {
   syncMusic();
 }
 
-// --- lobby music: a few spooky tunes, one picked at random, with the odd witch cackle ---
-// Plays on the home screen and in the lobby, fades out while a match is on.
+// --- music: a few spooky lobby tunes, one picked at random, with the odd witch cackle, and a
+// driving tune under each match (by mode) at its own volume ---
 const midi = n => 440 * Math.pow(2, (n - 69) / 12);
 let musicGain = null, musicTimer = 0, nextNote = 0, step = 0, track = null;
 
@@ -175,6 +175,101 @@ const TRACKS = [
   },
 ];
 
+// drums for the livelier tunes
+const kick = (t, v = 1) => { tone(musicGain, { freq:130, to:45, dur:0.22, vol:0.34 * v, delay:t }); noise(musicGain, { freq:600, to:120, dur:0.05, vol:0.2 * v, delay:t }); };
+const snare = (t, v = 1) => { noise(musicGain, { filter:'bandpass', freq:1800, q:0.7, dur:0.14, vol:0.22 * v, delay:t }); tone(musicGain, { type:'triangle', freq:190, to:150, dur:0.08, vol:0.1 * v, delay:t }); };
+const hat = (t, v = 1) => noise(musicGain, { filter:'highpass', freq:7000, dur:0.04, vol:0.07 * v, delay:t });
+// a squeezebox note: two detuned squares through a soft low-pass
+function reed(freq, dur, vol, t) {
+  const at = actx.currentTime + t, f = actx.createBiquadFilter(), g = actx.createGain();
+  f.type = 'lowpass'; f.frequency.value = 1600; f.Q.value = 0.6;
+  g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(vol, at + 0.03);
+  g.gain.setValueAtTime(vol, at + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  for (const d of [-7, 7]) { const o = actx.createOscillator(); o.type = 'square'; o.frequency.value = freq; o.detune.value = d; o.connect(f); o.start(at); o.stop(at + dur + 0.05); }
+  f.connect(g); g.connect(musicGain);
+}
+
+TRACKS.push(
+  { // Sea shanty: D dorian in six-eight, squeezebox tune over a stomping bass
+    step: 0.2,
+    play(n, t) {
+      const MEL = [62, 0, 65, 69, 0, 69, 67, 0, 65, 64, 0, 62, 62, 0, 65, 69, 0, 72, 71, 0, 69, 67, 0, 0,
+        69, 0, 71, 72, 0, 69, 67, 0, 64, 65, 0, 67, 69, 0, 67, 65, 0, 64, 62, 0, 0, 62, 0, 0];
+      const BASS = [38, 38, 43, 45, 38, 38, 43, 38];
+      const i = n % 6, bar = Math.floor(n / 6) % 8, m = MEL[n % MEL.length];
+      if (m) reed(midi(m), 0.34, 0.05, t);
+      if (i === 0) { tone(musicGain, { type:'triangle', freq:midi(BASS[bar] - 12), dur:0.45, vol:0.22, delay:t }); kick(t, 0.7); }
+      if (i === 3) { [BASS[bar] + 12, BASS[bar] + 15, BASS[bar] + 19].forEach(c => tone(musicGain, { type:'triangle', freq:midi(c), dur:0.2, vol:0.03, delay:t })); snare(t, 0.4); }
+      return i === 0 && bar === 7;
+    },
+  },
+  { // Graveyard lullaby: slow harp arpeggios in F minor, a low hum under them
+    step: 0.3,
+    play(n, t) {
+      const CH = [[41, [53, 56, 60, 65]], [37, [49, 53, 56, 61]], [44, [51, 56, 60, 63]], [36, [52, 55, 60, 64]]];
+      const bar = Math.floor(n / 8) % 4, i = n % 8, [bass, notes] = CH[bar];
+      const f = midi(notes[[0, 1, 2, 3, 2, 1, 2, 3][i]] + 12);
+      tone(musicGain, { type:'triangle', freq:f, dur:1.6, vol:0.09, delay:t, attack:0.003 });
+      tone(musicGain, { freq:f * 3, dur:0.4, vol:0.012, delay:t, attack:0.003 });
+      if (i === 0) pad(midi(bass), 2.6, 0.08, t, 0.8);
+      return i === 0 && bar === 3;
+    },
+  },
+  { // Midnight gallop: a hurrying E minor ride, hooves in the drums
+    step: 0.16,
+    play(n, t) {
+      const MEL = [76, 0, 74, 76, 79, 0, 76, 0, 74, 0, 71, 0, 72, 71, 69, 0, 71, 0, 67, 69, 71, 0, 74, 0, 72, 0, 71, 0, 69, 0, 0, 0];
+      const BASS = [40, 40, 36, 38];
+      const i = n % 8, bar = Math.floor(n / 8) % 4, m = MEL[n % MEL.length];
+      if (i % 2 === 0) tone(musicGain, { type:'triangle', freq:midi(BASS[bar] - (i === 0 ? 12 : 0)), dur:0.14, vol:0.14, delay:t });
+      if (i === 0 || i === 3 || i === 5) kick(t, 0.5); // da-da-dum, da-da-dum
+      if (m) { tone(musicGain, { type:'triangle', freq:midi(m), dur:0.3, vol:0.08, delay:t, attack:0.005 }); tone(musicGain, { freq:midi(m) * 2, dur:0.15, vol:0.02, delay:t }); }
+      return i === 0 && bar === 3 && n % 64 === 56;
+    },
+  },
+);
+
+// in a match: driving tunes under the fight, at their own (quieter) volume. By mode
+const MATCH_TRACKS = {
+  battle: { // Hex rush: a pumping A minor bass line, backbeat, and stabs
+    step: 0.13,
+    play(n, t) {
+      const BASS = [45, 45, 57, 45, 45, 57, 43, 55, 41, 41, 53, 41, 43, 43, 55, 44];
+      const i = n % 16;
+      tone(musicGain, { type:'sawtooth', freq:midi(BASS[i] - 12), dur:0.12, vol:0.06, delay:t, attack:0.003 });
+      if (i % 4 === 0) kick(t); if (i % 8 === 4) snare(t); if (i % 2 === 1) hat(t);
+      if (n % 64 === 0) [57, 60, 64].forEach(c => pad(midi(c), 8, 0.03, t, 2));
+      if (n % 64 === 32) [53, 57, 60].forEach(c => pad(midi(c), 8, 0.03, t, 2));
+      return false;
+    },
+  },
+  siege: { // Siege: slow war drums and a tolling low bell, for survival
+    step: 0.3,
+    play(n, t) {
+      const i = n % 8;
+      if (i === 0 || i === 3 || i === 5) kick(t, i ? 0.6 : 1);
+      if (i === 6) snare(t, 0.5);
+      if (n % 16 === 0) tone(musicGain, { freq:midi(40), dur:4, vol:0.12, delay:t, attack:0.005 });
+      if (n % 32 === 0) [52, 55, 59].forEach(c => pad(midi(c), 9, 0.035, t, 3));
+      if (n % 32 === 16) [48, 52, 55].forEach(c => pad(midi(c), 9, 0.035, t, 3));
+      return false;
+    },
+  },
+  sky: { // Broom chase: a bright, windy tune in D major-ish mixolydian
+    step: 0.14,
+    play(n, t) {
+      const MEL = [74, 0, 76, 78, 0, 81, 0, 78, 76, 0, 74, 0, 72, 0, 74, 0, 76, 78, 0, 76, 74, 0, 72, 69, 0, 71, 72, 0, 74, 0, 0, 0];
+      const BASS = [38, 38, 36, 36, 43, 43, 38, 38];
+      const i = n % 8, bar = Math.floor(n / 8) % 8, m = MEL[n % MEL.length];
+      if (i % 2 === 0) tone(musicGain, { type:'triangle', freq:midi(BASS[bar] - 12), dur:0.2, vol:0.14, delay:t });
+      if (i === 0) kick(t, 0.7); if (i === 4) snare(t, 0.6); hat(t, 0.6);
+      if (m) tone(musicGain, { type:'triangle', freq:midi(m), dur:0.26, vol:0.07, delay:t, attack:0.005 });
+      return false;
+    },
+  },
+};
+const matchTrack = () => S.room?.mode === 'survival' ? MATCH_TRACKS.siege : S.room?.mode === 'sky' ? MATCH_TRACKS.sky : MATCH_TRACKS.battle;
+
 function scheduleMusic() {
   while (nextNote < actx.currentTime + 0.4) {
     if (track.play(step, nextNote - actx.currentTime) && Math.random() < 0.35) laugh(musicGain, nextNote - actx.currentTime + track.step * 2); // now and then…
@@ -184,12 +279,15 @@ function scheduleMusic() {
 
 // a different tune: picked at random each time the music starts, and again when you sign in
 export function newTrack() {
+  if (inMatch) return;
   const others = TRACKS.filter(x => x !== track);
   track = others[Math.floor(Math.random() * others.length)];
   step = 0;
   if (actx) nextNote = Math.max(nextNote, actx.currentTime + 0.1);
 }
 
+// lobby music in the lobby, match music (its own slider) in a match
+let lobbyTrack = null, inMatch = false;
 export function syncMusic() {
   if (!actx) return;
   if (!musicGain) {
@@ -197,10 +295,15 @@ export function syncMusic() {
     musicGain.connect(master);
     const wet = actx.createGain(); wet.gain.value = 0.5; musicGain.connect(wet); wet.connect(verb);
   }
-  const on = !S.started && settings.music > 0;
-  musicGain.gain.setTargetAtTime(on ? 0.5 * settings.music : 0, actx.currentTime, on ? 0.6 : 0.25);
+  const match = !!S.started, vol = match ? 0.35 * (settings.matchMusic ?? 0.4) : 0.5 * settings.music, on = vol > 0;
+  if (match !== inMatch) { // switching between the lobby's tunes and the match's
+    inMatch = match;
+    if (match) { lobbyTrack = track; track = matchTrack(); } else track = lobbyTrack; // back from a match: carry on with the same tune
+    step = 0; nextNote = actx.currentTime + 0.4;
+  }
+  musicGain.gain.setTargetAtTime(on ? vol : 0, actx.currentTime, on ? 0.6 : 0.25);
   if (on && !musicTimer) {
-    if (!track) newTrack(); // back from a match: carry on with the same tune where it left off
+    if (!track) newTrack();
     nextNote = actx.currentTime + 0.1;
     musicTimer = setInterval(scheduleMusic, 120);
   } else if (!on && musicTimer) {

@@ -61,6 +61,9 @@ function buildColors() {
       // soft shadow where floor meets walls / props
       const ao = 0.62 + 0.38 * wallProx(i, j);
       r *= ao; g *= ao; b *= ao;
+    } else if (m === MAT.PIT && theme.sea) { // open water: darker out past the hulls, a moonlit ripple here and there
+      const v = 0.8 + 0.3 * noise(x * 1.5, y * 1.5), glint = noise(x * 5, y * 2) > 0.8 ? 1.5 : 1;
+      [r, g, b] = theme.sea.map(c => c * v * glint);
     } else if (m === MAT.PIT) { r = 255; g = 200; b = 50; EM[k] = 2; }
     else {
       [r, g, b] = SHAPE_COLORS[m](x, y, T.hgt[k], n, theme);
@@ -79,7 +82,11 @@ function buildColors() {
 // obstacle surface colors by material: (world x, y, height, noise 0..1, theme) -> [r, g, b]
 const SHAPE_COLORS = {
   [MAT.ROCK](x, y, h, n, theme) {
-    if (theme.id === 'crypt') { // weathered gravestones
+    if (theme.id === 'cove') { // sun-warmed sandstone
+      const v = 0.75 + 0.3 * noise(x * 3, y * 3) + n * 0.08, band = Math.sin(h * 9 + noise(x, y) * 3) > 0.6 ? 0.85 : 1;
+      return [196 * v * band, 150 * v * band, 104 * v * band];
+    }
+    if (theme.id === 'crypt' || theme.id === 'yard') { // weathered gravestones
       const v = 0.7 + 0.3 * noise(x * 6, y * 6) + n * 0.1, moss = noise(x * 9, y * 9) > 0.75;
       return moss ? [70 * v, 90 * v, 60 * v] : [120 * v, 118 * v, 112 * v];
     }
@@ -201,6 +208,35 @@ const FLOORS = {
     else if (noise(x * 2, y * 2) > 0.7) { r *= 0.8; g *= 0.9; b *= 0.8; } // moss
     const dark = 1 - 0.7 * glow;
     return [r * dark, g * dark, b * dark];
+  },
+  cove(x, y, n, glow) {
+    // warm sand, wet and darker near the water, with shells and driftwood here and there
+    const v = 0.85 + 0.2 * noise(x * 1.2, y * 1.2) + n * 0.06, ripple = 0.95 + 0.05 * Math.sin(x * 3 + noise(x, y) * 4);
+    let r = 214 * v * ripple, g = 184 * v * ripple, b = 128 * v * ripple;
+    if (noise(x * 9, y * 9) > 0.9) { r = 240; g = 226; b = 214; } // shells
+    else if (noise(x * 2.5 + 7, y * 0.7) > 0.86) { r = 120; g = 90; b = 60; } // driftwood
+    const wet = 1 - 0.45 * glow;
+    return [r * wet, g * wet, b * wet * 1.08];
+  },
+  yard(x, y, n, glow) {
+    // long dead grass, bare earth trodden into paths, the odd bone in the dirt
+    const v = 0.7 + 0.35 * noise(x * 1.8, y * 1.8) + n * 0.08;
+    const path = Math.abs(x - 40) < 1.6 || noise(x * 0.35 + 3, y * 0.35) > 0.72;
+    let r = path ? 74 * v : 50 * v, g = path ? 62 * v : 66 * v, b = path ? 50 * v : 42 * v;
+    if (noise(x * 8, y * 8) > 0.9) { r = 160; g = 154; b = 136; }
+    const dark = 1 - 0.5 * glow;
+    return [r * dark, g * dark, b * dark];
+  },
+  ship(x, y, n, glow) {
+    // weathered deck planks running bow to stern, tarred seams, a nail at each board's end
+    const px = x * 4, plank = Math.floor(px), fx = px - plank;
+    const board = Math.floor(y * 0.7 + hash(plank, 3) * 5), fy = y * 0.7 + hash(plank, 3) * 5 - board;
+    const tone = (0.72 + 0.28 * hash(plank, board)) * (0.9 + 0.2 * noise(x * 0.8, y * 3)) + n * 0.06;
+    let r = 104 * tone, g = 82 * tone, b = 60 * tone;
+    if (fx < 0.1 || fy < 0.03) { r = 30; g = 24; b = 20; }
+    else if (fy < 0.09 && Math.abs(fx - 0.5) < 0.12) { r = 60; g = 60; b = 66; }
+    const wet = 1 - 0.35 * glow; // darker, wetter planks at the edge of the water
+    return [r * wet, g * wet, b * wet * 1.05];
   },
   castle(x, y, n, glow) {
     // cool slate flagstones with dark mortar (matches wall brick greys)

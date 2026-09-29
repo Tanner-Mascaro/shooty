@@ -14,6 +14,11 @@
 //          edge -> wall, under a ceiling (the client draws it at CEILING_H)
 //   nuke   # clusters -> cars / a bus, + -> junk crates, B clusters -> big enterable houses
 //          facing the street, edge -> block wall
+//   cove   # clusters -> sandstone rocks, + -> crates, B -> fishing huts, R / I -> a moored sloop's
+//          rail and mast (as ship), edge -> sea cliffs
+//   yard   # -> stone mausoleum walls, + -> gravestones, B -> a stone chapel, L -> open graves
+//   ship   # -> deckhouse walls, + -> cargo crates, R -> a ship's rail, I -> a mast (with a sail
+//          prop), edge -> open sea (the map's L all round)
 //
 // kind: 0 = ground (walkable, may slope), 1 = blocked (anything taller than STEP_H), 2 = pit
 // mat:  what a sample is made of, for the client's colors (MAT below)
@@ -27,6 +32,8 @@ const COTTAGES = {
   nuke: { wall: MAT.BARK, roof: MAT.CRATE, peak: 1.15 },
   hell: { wall: MAT.ROCK, roof: MAT.ROCK, peak: 0.9 },
   ice: { wall: MAT.BARK, roof: MAT.ROCK, peak: 1.0 },
+  cove: { wall: MAT.BARK, roof: MAT.CRATE, peak: 0.8 },
+  yard: { wall: MAT.WALL, roof: MAT.ROCK, peak: 1.3 },
 };
 // Every cottage has two storeys. Players are 0.8 tall, jump ~0.43 and step up 0.3.
 //   floor: the upper floor you stand on; slab: its thickness (ground floor headroom = floor - slab)
@@ -80,9 +87,10 @@ export function buildTerrain(MAP, RES, style) {
   const inside = (x, y) => Math.min(x - 1, y - 1, MW - 1 - x, MH - 1 - y);
   raise(0, 0, MW, MH, (x, y) => {
     const e = inside(x, y);
-    if (style === 'hell' || style === 'ice') return e < noise(x * 1.3, y * 1.3) * 0.5 - 0.1 ? [2.2 + noise(x * 0.7 + 5, y * 0.7) + Math.min(1, -e) * 0.6, MAT.ROCK] : null;
+    if (style === 'hell' || style === 'ice' || style === 'cove') return e < noise(x * 1.3, y * 1.3) * 0.5 - 0.1 ? [2.2 + noise(x * 0.7 + 5, y * 0.7) + Math.min(1, -e) * 0.6, MAT.ROCK] : null;
     if (style === 'witch') return e < noise(x * 1.1, y * 1.1) * 0.3 - 0.05 ? [1.7 + 0.7 * noise(x * 1.5, y * 1.5), MAT.LEAVES] : null;
     if (style === 'castle') return e < 0 ? [3.8 + Math.min(2, -e) * 0.9 + noise(x * 0.6, y * 0.6) * 1.6, MAT.WALL] : null;
+    if (style === 'ship') return null; // open sea to the horizon
     return e < 0 ? [2.8, MAT.WALL] : null;
   });
   if (style === 'witch') // trees poking out of the hedge
@@ -97,7 +105,8 @@ export function buildTerrain(MAP, RES, style) {
       if (style === 'nuke') { // pumpkin: a squat dome to hide behind, drawn as a real pumpkin mesh
         dome(x, y, 0.42, 0.5, MAT.PUMPKIN, 0);
         props.push({ type: 'pumpkin', x, y, r: 0.42 + 0.06 * n });
-      } else if (style === 'crypt') box(cx + 0.18, cy + 0.38, cx + 0.82, cy + 0.62, 0.7, MAT.ROCK); // a gravestone
+      } else if (style === 'crypt' || style === 'yard') box(cx + 0.18, cy + 0.38, cx + 0.82, cy + 0.62, 0.7, MAT.ROCK); // a gravestone
+      else if (style === 'ship' || style === 'cove') box(cx + 0.12, cy + 0.12, cx + 0.88, cy + 0.88, 0.75, MAT.CRATE); // cargo
       else if (style === 'robot' || style === 'haunt' || style === 'castle') box(cx + 0.2, cy + 0.2, cx + 0.8, cy + 0.8, 0.55, MAT.CRATE);
       else if (style === 'witch') dome(x, y, 0.7, 0.5, MAT.LEAVES, 0.2);
       else dome(x + (n - 0.5) * 0.2, y, 0.5, 0.55, MAT.ROCK, 0.3);
@@ -161,7 +170,21 @@ export function buildTerrain(MAP, RES, style) {
       props.push({ type: 'hut', x: x0 + W / 2, y: y0 + D / 2, h: wallH, w: W, d: D, t, peak: look.peak, style, doorDir, doorHalf, stairs });
       continue;
     }
+    if ((style === 'ship' || style === 'cove') && c === 'R') { // rail: a thin, low bulwark you can see and shoot over (and hop, into the sea)
+      const R = (a, b) => at(a, b) === 'R'; // joins up with the next rail square, like the lab's racks
+      // on a bow's slant the squares only touch at corners: keep those whole, so no gap opens between them
+      const slant = [[1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => R(cx + dx, cy + dy) && !R(cx + dx, cy) && !R(cx, cy + dy));
+      const m = slant ? 0 : 0.36;
+      box(cx + (R(cx - 1, cy) ? 0 : m), cy + (R(cx, cy - 1) ? 0 : m), cx + 1 - (R(cx + 1, cy) ? 0 : m), cy + 1 - (R(cx, cy + 1) ? 0 : m), 0.4, MAT.BARK);
+      continue;
+    }
+    if ((style === 'ship' || style === 'cove') && c === 'I') { // mast: a thick pole; the client hangs the yard and sail on it
+      box(cx + 0.3, cy + 0.3, cx + 0.7, cy + 0.7, 5.5, MAT.BARK);
+      props.push({ type: 'mast', x, y, h: 5.5 });
+      continue;
+    }
     if (c !== '#' || edge(cx, cy)) continue;
+    if (style === 'ship' || style === 'yard') { box(cx, cy, cx + 1, cy + 1, style === 'yard' ? 2.4 : 2.2, MAT.WALL); continue; }
     if (style === 'haunt' || style === 'crypt') { box(cx, cy, cx + 1, cy + 1, CEILING_H, MAT.WALL); continue; }
     if (style === 'castle') {
       // uneven skyline: dense clumps and corners become towers; thin walls stay lower
@@ -230,7 +253,7 @@ export function buildTerrain(MAP, RES, style) {
       const vx = cells.reduce((s, c) => s + c[0] + 0.5, 0) / cells.length, vy = cells.reduce((s, c) => s + c[1] + 0.5, 0) / cells.length;
       const R = Math.max(...cells.map(c => Math.hypot(c[0] + 0.5 - vx, c[1] + 0.5 - vy))) + 1.4;
       const H = Math.min(2.8, 1.5 + 0.3 * cells.length), rc = 0.2, rim = H * (1 - rc) ** 1.5;
-      const icy = style === 'ice';
+      const icy = style === 'ice' || style === 'cove'; // no lava in these
       raise(vx - R, vy - R, vx + R, vy + R, (px, py) => {
         const d = Math.hypot(px - vx, py - vy), t = d / R;
         if (t >= 1) return null;
@@ -239,7 +262,7 @@ export function buildTerrain(MAP, RES, style) {
         const ang = Math.atan2(py - vy, px - vx), streak = Math.sin(ang * 5 + d * 1.7 + H) > 0.94 && t < 0.6; // glowing lava runs
         return [H * (1 - t) ** 1.5 * (0.9 + 0.2 * noise(px * 2.5, py * 2.5)), streak ? MAT.LAVA : MAT.ROCK];
       });
-      props.push({ type: 'volcano', x: vx, y: vy, top: rim - 0.2 * H });
+      props.push({ type: style === 'cove' ? 'rock' : 'volcano', x: vx, y: vy, top: rim - 0.2 * H }); // cove rocks don't smoke
     }
   }
 
@@ -590,6 +613,20 @@ export function kindAt(T, x, y) {
   const i = Math.floor(x * T.RES), j = Math.floor(y * T.RES);
   if (i < 0 || j < 0 || i >= T.TW || j >= T.TH) return 1;
   return T.kind[j * T.TW + i];
+}
+
+// Broom Battle: is a flier of radius r and height h, feet at z, blocked at (x, y)? By anything that
+// reaches above their feet, a roof over their head, or the edge of the map (FLY.edge in from it)
+export function flyBlocked(T, x, y, z, r, h, edge = 1.3) {
+  const W = T.TW / T.RES, H = T.TH / T.RES;
+  if (x < edge || y < edge || x > W - edge || y > H - edge) return true;
+  for (const [dx, dy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) {
+    const px = x + dx, py = y + dy;
+    if (walkHeight(T, px, py, z + 0.1) > z + 0.1) return true;
+    const c = ceilingAt(T, px, py, z + 0.1);
+    if (c != null && c < z + h) return true;
+  }
+  return false;
 }
 
 // does a player of radius r standing at (x, y) overlap a wall (or the map edge)?

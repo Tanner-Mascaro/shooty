@@ -1,17 +1,16 @@
-// Wave Survival in the Crypt: survivors (people and ally bots, team 1) against endless waves
+// Wave Survival (the Crypt, the Drowned Fleet): survivors (people and ally bots, team 1) against endless waves
 // of monsters. Monsters are NPCs (room.npcs), not players: they find their way to the nearest
 // survivor over a flow field that's rebuilt as people move and doors open, then claw, burst
 // or hurl hexes. Gold from hits and kills buys doors, guns off the walls, elixirs and rolls of
 // the mystery cauldron. Mixed into Room (server/room.js); `this` is the Room.
-import { BODY_H, WEAPONS, AMMO, MAX_SPARE, SURVIVAL, MOBS, MOB_R, DROPS, ELIXIR_HP, magSize } from '../shared/config.js';
+import { BODY_H, WEAPONS, AMMO, MAX_SPARE, SURVIVAL, MOBS, MOB_SETS, MOB_R, DROPS, ELIXIR_HP, magSize } from '../shared/config.js';
 import { walkHeight, kindAt, hitsWall } from '../shared/terrain.js';
 import { cryptLayout, openRegions, closeDoor, openDoor } from '../shared/crypt.js';
+import { LEVEL_NAMES } from '../shared/levels.js';
 import { log } from './log.js';
 
 const FAR = 0xffff;
-const MOB_NAMES = { ghoul: 'Ghoul', mummy: 'Mummy', wolf: 'Werewolf', slime: 'Bursting Slime', wraith: 'Wraith', brute: 'Brute', lord: 'Vampire Lord' };
-
-// which monster comes next in wave w
+// which monster comes next in wave w (by role: a map with its own monsters swaps them in, see MOB_SETS)
 function pickKind(w, s) {
   if (s.bossLeft > 0) { s.bossLeft--; return w >= 10 ? 'lord' : 'brute'; }
   if (w % 4 === 0 && w % 5 !== 0 && Math.random() < 0.8) return 'wolf'; // wolf-pack waves
@@ -59,13 +58,13 @@ export const survivalMethods = {
       drops: s.drops.map(d => ({ id: d.id, k: d.kind, x: d.x, y: d.y, z: d.z })) };
   },
 
-  // which map cells monsters can walk through (walls, pits, gravestones and shut doors can't)
+  // which map cells monsters can walk through (walls, pits, the sea, gravestones, crates, rails, masts and shut doors can't)
   buildPass() {
     const s = this.survival, { W, H } = s.layout;
     s.pass = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const c = this.map[y][x], door = s.cellDoor[y * W + x];
-      s.pass[y * W + x] = c !== '#' && c !== 'L' && c !== '+' && (door < 0 || s.opened.has(door)) ? 1 : 0;
+      s.pass[y * W + x] = !'#L+RI'.includes(c) && (door < 0 || s.opened.has(door)) ? 1 : 0;
     }
     s.fieldAt = 0;
   },
@@ -148,7 +147,8 @@ export const survivalMethods = {
     const mobs = this.npcs.filter(n => n.kind !== 'decoy' && !n.dead);
     if (s.phase === 'wave') {
       if (s.toSpawn > 0 && now >= s.nextSpawnAt && mobs.length < SURVIVAL.maxAlive(s.wave)) {
-        if (this.spawnMob(pickKind(s.wave, s), now)) s.toSpawn--;
+        const role = pickKind(s.wave, s);
+        if (this.spawnMob(MOB_SETS[this.level]?.[role] || role, now)) s.toSpawn--;
         s.nextSpawnAt = now + Math.max(180, 900 - s.wave * 40);
       }
       if (s.toSpawn <= 0 && !mobs.length) this.waveCleared(now);
@@ -257,7 +257,7 @@ export const survivalMethods = {
     dmg = this.hurt(p, dmg, now);
     p.hp -= dmg;
     this.broadcast({ type: 'hit', who: p.id, by: m.id, dmg, head: false, weapon: 'claws', fromX: m.x, fromY: m.y, x: p.x, y: p.y, z: p.z + BODY_H * 0.6 });
-    if (p.hp <= 0) this.killPlayer(p, null, { weapon: m.kind, mob: MOB_NAMES[m.kind], head: false, a: Math.atan2(p.y - m.y, p.x - m.x) });
+    if (p.hp <= 0) this.killPlayer(p, null, { weapon: m.kind, mob: MOBS[m.kind].name, head: false, a: Math.atan2(p.y - m.y, p.x - m.x) });
   },
 
   // gold for hurting monsters, and more for finishing them
@@ -272,7 +272,7 @@ export const survivalMethods = {
       by.kills++;
       this.earn(by, SURVIVAL.killGold + (info.head ? SURVIVAL.headGold : 0) + (WEAPONS[info.weapon]?.melee ? SURVIVAL.meleeGold : 0));
       this.hub.record(by, { xp: 2 });
-      this.hub.progress?.(by, { type: 'kill', weapon: info.weapon, head: !!info.head, backstab: !!info.backstab, streak: 0 });
+      this.hub.progress?.(by, { type: 'kill', weapon: info.weapon, head: !!info.head, backstab: !!info.backstab, streak: 0, mob: true, boss: !!MOBS[m.kind].heavy, kind: m.kind });
     }
     if (s && Math.random() < SURVIVAL.dropChance * (MOBS[m.kind].boss ? 10 : 1) && kindAt(this.T, m.x, m.y) !== 2) {
       const kinds = Object.keys(DROPS);
@@ -302,11 +302,11 @@ export const survivalMethods = {
     if (this.list.some(p => !p.dead)) return false;
     const wave = this.survival.wave;
     for (const p of this.humans) this.hub.record(p, { xp: Math.min(400, wave * 10) });
-    this.finish(wave >= 10 ? this.humans : [], { mode: 'survival', wave, survived: wave - 1 }, `The Crypt (survivors reached wave ${wave})`);
+    this.finish(wave >= 10 ? this.humans : [], { mode: 'survival', wave, survived: wave - 1 }, `${LEVEL_NAMES[this.level]} (survivors reached wave ${wave})`);
     return true;
   },
 
-  // the use key in the Crypt: { door } / { buy } / { elixir } / { cauldron } by index
+  // the use key in a survival map: { door } / { buy } / { elixir } / { cauldron } by index
   survivalUse(p, msg) {
     const s = this.survival;
     if (!s || p.bot) return;

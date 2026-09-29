@@ -16,6 +16,33 @@ export function burst(x, y, z, n, kind, color) {
   }
 }
 
+// a kill effect (shared/progression.js KILL_EFFECTS) where the victim fell: plain ones are a
+// colored burst, styled ones move their own way
+const rnd = (a, b) => a + Math.random() * (b - a);
+function puff(x, y, z, o) {
+  const life = rnd(o.life[0], o.life[1]), a = Math.random() * Math.PI * 2, sp = rnd(0, o.speed);
+  S.particles.push({ x: x + rnd(-o.spread, o.spread), y: y + rnd(-o.spread, o.spread), z: z + rnd(-0.1, 0.3),
+    vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: rnd(o.vz[0], o.vz[1]), g: o.g, life, max: life,
+    col: typeof o.col === 'function' ? o.col() : o.col, size: 0.04, emit: o.emit ?? true });
+}
+const HUES = [[255, 80, 80], [255, 170, 60], [255, 240, 80], [90, 230, 110], [80, 170, 255], [190, 110, 255]];
+const STYLES = {
+  petals: (x, y, z, c) => { for (let i = 0; i < 50; i++) puff(x, y, z + 0.5, { life: [1.5, 2.6], speed: 1.6, spread: 0.2, vz: [0.8, 2.2], g: 1.1, col: () => c.map(v => v * rnd(0.7, 1.1)), emit: false }); },
+  bubbles: (x, y, z, c) => { for (let i = 0; i < 70; i++) puff(x, y, z, { life: [0.8, 1.8], speed: 0.8, spread: 0.3, vz: [0.6, 2.4], g: -0.8, col: () => Math.random() < 0.3 ? [240, 250, 255] : c }); },
+  confetti: (x, y, z) => { for (let i = 0; i < 90; i++) puff(x, y, z + 0.4, { life: [1.2, 2.2], speed: 3, spread: 0.1, vz: [2, 5], g: 5, col: () => HUES[Math.floor(Math.random() * HUES.length)] }); },
+  lightning: (x, y, z, c) => {
+    for (let i = 0; i < 40; i++) { const h = rnd(0, 6); puff(x + rnd(-0.15, 0.15), y + rnd(-0.15, 0.15), z + h, { life: [0.15, 0.4], speed: 0.3, spread: 0.05, vz: [0, 0], g: 0, col: [255, 255, 255] }); }
+    for (let i = 0; i < 50; i++) puff(x, y, z + 0.2, { life: [0.3, 0.7], speed: 4, spread: 0.1, vz: [0.5, 3], g: 7, col: c });
+  },
+  souls: (x, y, z, c) => { for (let i = 0; i < 45; i++) puff(x, y, z + 0.4, { life: [2, 3.4], speed: 0.25, spread: 0.18, vz: [0.8, 1.4], g: -0.1, col: () => c.map(v => v * rnd(0.8, 1.1)) }); },
+  bats: (x, y, z, c) => { for (let i = 0; i < 60; i++) puff(x, y, z + 0.6, { life: [0.9, 1.6], speed: 4.5, spread: 0.15, vz: [1.5, 3.5], g: -0.5, col: c, emit: false }); },
+  rainbow: (x, y, z) => { for (let i = 0; i < 120; i++) { const k = i % HUES.length; puff(x, y, z + 0.3, { life: [0.8, 1.8], speed: 1 + k * 0.5, spread: 0.05, vz: [1, 2.5], g: 2, col: HUES[k] }); } },
+};
+export function killEffect(x, y, z, color, style) {
+  if (STYLES[style]) return STYLES[style](x, y, z, color);
+  burst(x, y, z + 0.4, 60, 'fire', color); burst(x, y, z + 0.6, 30, 'spark', color);
+}
+
 // a glowing violet trail behind every potion in flight, so you can see them coming
 export function potionTrails(dt) {
   for (const n of S.thrown) {

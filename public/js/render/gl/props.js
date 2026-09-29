@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { S } from '../../state.js';
 import { getScene } from './scene.js';
-import { cryptLayout } from '/shared/crypt.js';
+import { cryptLayout, isSurvivalLevel } from '/shared/crypt.js';
 import { CEILING_H, walkHeight } from '/shared/terrain.js';
 import { JUMP_PAD, PORTAL } from '/shared/config.js';
 
@@ -64,7 +64,7 @@ function clear(list) {
 }
 
 function syncDoors() {
-  const closed = S.level === 'crypt' && S.survival && S.MAP ? cryptLayout(S.MAP).doors.filter(d => !S.openDoors.has(d.id)) : [];
+  const closed = isSurvivalLevel(S.level) && S.survival && S.MAP ? cryptLayout(S.MAP).doors.filter(d => !S.openDoors.has(d.id)) : [];
   const key = S.level + '|' + closed.map(d => d.id).join(',');
   if (key === doorKey) return;
   doorKey = key;

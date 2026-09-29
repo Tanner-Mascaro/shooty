@@ -2,14 +2,13 @@
 // bars and names, emote bubbles, the emote wheel, meteor and gravity-well rings on the ground,
 // the map event's screen tint and the Crypt's shop labels.
 import { BODY_H, MOBS, EMOTES, METEOR, WELL, MAP_EVENTS, SURVIVAL } from '/shared/config.js';
-import { cryptLayout } from '/shared/crypt.js';
+import { cryptLayout, isSurvivalLevel } from '/shared/crypt.js';
 import { S, nameOf, isEnemy } from '../state.js';
 import { EMOTE_LOOK, SPELL_LOOK } from '../constants.js';
 import { ctx, view } from './canvas.js';
 import { project, occluded } from './world.js';
 import { settings, keyName } from '../settings.js';
 
-const MOB_LABEL = { ghoul: 'Ghoul', mummy: 'Mummy', wolf: 'Werewolf', slime: 'Bursting Slime', wraith: 'Wraith', brute: 'Brute', lord: 'VAMPIRE LORD' };
 
 // a ring on the ground (x, y at height z), broken where it goes behind you
 function groundRing(x, y, z, r, style, width = 2.5) {
@@ -46,7 +45,7 @@ export function drawNpcTags() {
     ctx.fillStyle = def.boss ? '#c02040' : '#d06030'; ctx.fillRect(p.x - w / 2, p.y, w * k, 4);
     if (def.boss) {
       ctx.font = '700 13px Caslon Antique, Georgia, serif';
-      ctx.fillStyle = '#ffd0d8'; ctx.fillText(MOB_LABEL[e.k], p.x, p.y - 6);
+      ctx.fillStyle = '#ffd0d8'; ctx.fillText(def.name.toUpperCase(), p.x, p.y - 6);
     }
   }
   ctx.textAlign = 'left';
@@ -138,7 +137,7 @@ export function drawEventTint(now) {
 
 // labels on the Crypt's closed doors and shops within a few steps
 export function drawShopLabels() {
-  if (!S.survival || S.level !== 'crypt' || !S.me) return;
+  if (!S.survival || !isSurvivalLevel(S.level) || !S.me) return;
   const L = cryptLayout(S.MAP), me = S.me;
   ctx.textAlign = 'center';
   const label = (x, y, z, text, cost) => {

@@ -1,13 +1,13 @@
 // Lobby profile panel: your name and stats, sign in / create account / sign out, leaderboard.
 // The server does the checking; see the hello/register/login/logout handlers in server/hub.js.
 import { send } from './net.js';
-import { token, setToken, clearToken, savedName, saveName, savedSkin, setEntered, savedTitle, savedEffect, saveLook } from './profile.js';
+import { token, setToken, clearToken, savedName, saveName, savedSkin, setEntered, savedTitle, savedEffect, saveLook, savedHat, saveHat, savedCamo, savedPet, savePet } from './profile.js';
 import { homeProfile, homeAuth, homeOpen, showHome } from './home.js';
 import { canFriend } from './friends.js';
-import { levelInfo, levelFor, skinsUnlockedBetween, unlocksAt, TITLES, KILL_EFFECTS } from '/shared/progression.js';
+import { levelInfo, levelFor, skinsUnlockedBetween, unlocksAt, TITLES, KILL_EFFECTS, HATS, FAMILIARS } from '/shared/progression.js';
 import { MODE_NAMES } from '/shared/config.js';
-import { LEVEL_NAMES } from '/shared/levels.js';
-import { S } from './state.js';
+import { LEVEL_NAMES, MAP_UNLOCKS } from '/shared/levels.js';
+import { S, myLevel } from './state.js';
 import { updateLoadout } from './room.js';
 import { banner, toast, showXpGain } from './ui.js';
 import { PLAYER_SKIN_NAMES } from './render/sprites.js';
@@ -17,7 +17,7 @@ let me = {}; // latest profile message, merged (stat-only updates arrive after e
 let board = []; // latest leaderboard rows
 
 // sent on connect and whenever you change your name; the server replies with a profile message
-export function sendHello() { send({ type: 'hello', token: token(), name: savedName(), skin: savedSkin(), title: savedTitle(), effect: savedEffect() }); }
+export function sendHello() { send({ type: 'hello', token: token(), name: savedName(), skin: savedSkin(), title: savedTitle(), effect: savedEffect(), hat: savedHat(), camo: savedCamo(), pet: savedPet() }); }
 
 export function initAccount() {
   const nameInput = $('nameInput'), form = $('authForm');
@@ -87,7 +87,7 @@ function showXp() {
   const was = levelInfo(before).level;
   if (xpSeen && level > was) {
     const skins = skinsUnlockedBetween(was, level).map(s => PLAYER_SKIN_NAMES[s] || s);
-    for (let l = was + 1; l <= level; l++) skins.push(...unlocksAt(l));
+    for (let l = was + 1; l <= level; l++) skins.push(...unlocksAt(l), ...Object.keys(MAP_UNLOCKS).filter(k => MAP_UNLOCKS[k] === l).map(k => LEVEL_NAMES[k] + ' realm'));
     const text = 'LEVEL ' + level + (skins.length ? ' — ' + skins.join(', ') + ' unlocked' : '');
     if (S.started) banner(text, true); else toast(text);
   }
@@ -101,10 +101,22 @@ let xpSeen = false;
 // title and kill effect: picked on the Customize card (room.js); a saved one you no longer
 // qualify for (another device, an older save) falls back to the first
 function showLook() {
-  const level = levelFor(S.xp);
+  const level = myLevel();
   const t = TITLES[savedTitle()]?.level <= level ? savedTitle() : 'apprentice';
   const e = KILL_EFFECTS[savedEffect()]?.level <= level ? savedEffect() : 'blood';
   if (t !== savedTitle() || e !== savedEffect()) saveLook(t, e);
+  if (S.feats && !hatUnlocked(savedHat())) saveHat('none');
+  if (S.feats && !petUnlocked(savedPet())) savePet('none');
+}
+// familiars: the same
+export function petUnlocked(id) {
+  const f = FAMILIARS[id];
+  return !!f && (S.admin || (f.feat ? !!S.feats?.find(x => x.id === f.feat)?.done : f.level <= myLevel()));
+}
+// hats: by level, or by a feat you've finished (S.feats, from the server's meta)
+export function hatUnlocked(id) {
+  const h = HATS[id];
+  return !!h && (S.admin || (h.feat ? !!S.feats?.find(f => f.id === h.feat)?.done : h.level <= myLevel()));
 }
 
 // daily / weekly challenges, match history and records (the server's 'meta' message)
@@ -114,7 +126,7 @@ export function showMeta(m) {
     const li = document.createElement('li');
     li.classList.toggle('done', c.done);
     const text = document.createElement('span'); text.className = 'chalText'; text.textContent = c.text;
-    const xp = document.createElement('b'); xp.textContent = c.done ? '✓' : '+' + c.xp;
+    const xp = document.createElement('b'); xp.textContent = c.done ? '✓' : c.reward ? '🎁 ' + c.reward : '+' + c.xp;
     const bar = document.createElement('span'); bar.className = 'chalBar';
     const fill = document.createElement('i'); fill.style.width = Math.round(100 * c.n / c.goal) + '%';
     const count = document.createElement('small'); count.textContent = c.n + ' / ' + c.goal;
@@ -148,11 +160,17 @@ export function showMeta(m) {
     li.children[2].textContent = ago(h.t);
     return li;
   }) : [Object.assign(document.createElement('li'), { className: 'empty', textContent: 'No matches yet — go play one!' })]));
+  S.feats = m.feats || [];
+  S.weaponKills = m.weapons || {}; // camos
+  $('featList').replaceChildren(...S.feats.map(f => row({ ...f, xp: '' })));
+  showLook();
+  updateLoadout();
   S.tutorialDone = !!m.tutorial;
 }
 
 export function showProfile(msg) {
   me = Object.assign(me, msg);
+  if ('admin' in msg && S.admin !== !!msg.admin) { S.admin = !!msg.admin; updateLoadout(); }
   if ('xp' in msg) showXp();
   if (me.username) saveName(me.name); // signed in: the account's name wins over what this browser had
   homeProfile(me);

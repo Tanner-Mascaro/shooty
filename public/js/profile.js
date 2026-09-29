@@ -28,6 +28,15 @@ export const savedSkin = () => {
 export const savedTitle = () => get('shooty.title') || 'apprentice';
 export const savedEffect = () => get('shooty.effect') || 'blood';
 export const saveLook = (title, effect) => { set('shooty.title', title); set('shooty.effect', effect); };
+// your hat (witches only; the server checks you've unlocked it)
+export const savedHat = () => get('shooty.hat') || 'none';
+export const saveHat = hat => set('shooty.hat', hat);
+// your camo choice (shared/progression.js CAMO_CHOICES): 'best' shows each gun's best
+export const savedCamo = () => get('shooty.camo') || 'best';
+export const saveCamo = camo => set('shooty.camo', camo);
+// your familiar (shared/progression.js FAMILIARS)
+export const savedPet = () => get('shooty.pet') || 'none';
+export const savePet = pet => set('shooty.pet', pet);
 export const saveSkin = skin => set('shooty.skin', PLAYER_SKINS.includes(skin) ? skin : 'witch');
 
 // set once you sign in or continue as a guest; the sign-in screen is skipped from then on

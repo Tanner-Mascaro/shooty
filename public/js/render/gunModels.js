@@ -292,9 +292,22 @@ export const VARIANT_SCALE = { derringer: 0.6, flintlock: 1.3, dmr: 1.12, dragon
 // gunmetal, black, walnut and steel, the same on every map. The gun's own color is only a hint on
 // its accents, except for the magic ones, which glow
 const MAGIC = new Set(['wand', 'beam', 'staff']);
-export function gunPalette(held, pulse = 1) {
+// camos (shared/progression.js CAMOS) repaint the body: dark, mid and light metal, the wood, and
+// for the glowing ones the accents too (`glow`), pulsing with the gun
+export const CAMO_PAL = {
+  bronze: { d: [92, 58, 32], m: [148, 96, 52], l: [204, 150, 92], w: [120, 76, 40] },
+  silver: { d: [112, 116, 124], m: [170, 175, 184], l: [226, 230, 236], w: [140, 142, 148] },
+  gold: { d: [146, 104, 26], m: [210, 162, 50], l: [255, 222, 112], w: [176, 128, 36] },
+  hex: { d: [46, 20, 70], m: [92, 46, 136], l: [168, 108, 228], w: [70, 34, 100], glow: [210, 130, 255] },
+  ghost: { d: [16, 46, 60], m: [36, 106, 128], l: [116, 226, 250], w: [26, 76, 92], glow: [120, 255, 236] },
+  obsidian: { d: [14, 12, 18], m: [30, 26, 36], l: [72, 62, 92], w: [22, 18, 26], glow: [255, 96, 40] },
+};
+export function gunPalette(held, pulse = 1, camo = null) {
   const accent = GUN_COLOR[held] || [200, 200, 210], magic = MAGIC.has(held);
   const mix = (a, b, k) => a.map((v, i) => v * (1 - k) + b[i] * k);
-  return { d: [36, 38, 43], m: [62, 66, 73], l: [122, 128, 138], b: [17, 18, 21], w: [110, 68, 40], s: [178, 184, 194],
+  const pal = { d: [36, 38, 43], m: [62, 66, 73], l: [122, 128, 138], b: [17, 18, 21], w: [110, 68, 40], s: [178, 184, 194],
     g: magic ? accent.map(c => c * pulse) : mix([96, 100, 108], accent, 0.35), x: [110, 200, 255] };
+  const c = CAMO_PAL[camo];
+  if (c) { Object.assign(pal, { d: c.d, m: c.m, l: c.l, w: c.w }); if (c.glow) pal.g = c.glow.map(v => Math.min(255, v * pulse)); }
+  return pal;
 }

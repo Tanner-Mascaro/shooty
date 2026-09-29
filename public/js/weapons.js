@@ -2,7 +2,7 @@
 // requests and plays the local feedback (sound, recoil, screen punch) immediately. Rounds are
 // counted here the same way the server counts them, so the ammo readout never waits on the network.
 import { WEAPONS, GUN_SLOTS, USE_RANGE, HACK_FIRE, magSize, reloadTime, SURVIVAL, gunLook } from '/shared/config.js';
-import { cryptLayout } from '/shared/crypt.js';
+import { cryptLayout, isSurvivalLevel } from '/shared/crypt.js';
 import { S, owned, spare, gunSlots } from './state.js';
 import { send } from './net.js';
 import { play } from './audio.js';
@@ -108,7 +108,7 @@ export function findUseTarget() {
   });
   for (const b of S.boxes) consider(b, { box: b.id, items: b.items });
   // the Crypt: doors, guns on the walls, elixirs and the mystery cauldron, all for gold
-  if (S.room?.mode === 'survival' && S.level === 'crypt') {
+  if (S.room?.mode === 'survival' && isSurvivalLevel(S.level)) {
     const L = cryptLayout(S.MAP);
     for (const d of L.doors) {
       if (S.openDoors.has(d.id)) continue;

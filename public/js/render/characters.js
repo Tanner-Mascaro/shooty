@@ -772,10 +772,10 @@ const ART = {
     '.oCAAAAAAA',
     'oCCAAAAAAA',
     'oCAAAAAAAA',
-    'oCAppppAAA',
-    'oCApppppAA',
-    'oCAAppppAA',
-    'oCAAAppAAA',
+    'oCAAAAAAAA',
+    'oCAAAAAAAA',
+    'oCAAAAAAAA',
+    'oCAAAAAAAA',
     'oCCoCAAAAA',
     'oCAoCAAAAA',
     'oooCAAAAAA',
@@ -819,8 +819,7 @@ const ART = {
     '..oCAo.oCA',
     '...oo...oo',
     '..........',
-  ], colors: { A: [172, 226, 240], B: [98, 162, 192], C: [224, 250, 255], e: [25, 40, 60],
-    p: [220, 170, 200], o: [40, 70, 100] } },
+  ], colors: { A: [172, 226, 240], B: [98, 162, 192], C: [224, 250, 255], e: [25, 40, 60], o: [40, 70, 100] } },
 
   goose: { glint: [4, 11], rows: [
     '....................',
@@ -1526,4 +1525,343 @@ const ART = {
     d: [170, 80, 90], e: EYE, w: [245, 245, 240], m: MOUTH, b: [198, 140, 100], k: [148, 95, 70], o: [28, 14, 10] } },
 };
 
+// --- the Drowned Fleet's monsters (shared/config.js MOBS: sailor ... kraken); not player skins ---
+const onFloor = rows => [...Array(H - rows.length).fill('..........'), ...rows]; // stand shorter art on the ground line
+const SAILOR = [
+  '..........',
+  '..........',
+  '......oooo',
+  '.....orrrr',
+  '....orrrrr',
+  '....ohsuss',
+  '....ohsess',
+  '....ohssss',
+  '....ohsmwm',
+  '.....ottss',
+  '......ostt',
+  '..ooooAAAA',
+  '.oAAoCAAAA',
+  '.oBBoCBBBB',
+  '.oAAoCAAAA',
+  '.oBBoCBBBB',
+  '.oAAoCAAAA',
+  '.ossoCBBBB',
+  '..gg.oAAAA',
+  '..g..okkkk',
+  '.....oPPPP',
+  ...LEGS,
+];
+Object.assign(ART, {
+  // Drowned Sailor: striped shirt, red bandana, kelp in the hair and dripping off the hands
+  sailor: { glint: [8, 7], emit: 'e', rows: SAILOR, colors: { A: [214, 212, 196], B: [40, 58, 104], C: [236, 234, 222],
+    r: [150, 32, 32], h: [40, 92, 50], s: [118, 168, 138], t: [80, 122, 100], u: [150, 200, 170], e: [200, 255, 220],
+    m: [30, 40, 35], w: [210, 206, 170], g: [60, 130, 70], k: [60, 40, 25], P: [50, 60, 80], K: [60, 84, 74], o: [14, 24, 24] } },
+  // Barnacled Deckhand: a sailor who's been down there longer, crusted grey and weed-wrapped
+  deckhand: { glint: [8, 7], emit: 'e', rows: SAILOR.map((r, y) => y >= 11 && y <= 17 && y % 2 ? r.replace(/B(?=B)/, 'x') : r),
+    colors: { A: [124, 138, 128], B: [78, 92, 86], C: [160, 172, 160], x: [196, 190, 170],
+    r: [58, 96, 70], h: [30, 70, 44], s: [110, 140, 128], t: [74, 100, 90], u: [140, 170, 156], e: [255, 200, 90],
+    m: [24, 30, 28], w: [190, 186, 160], g: [58, 110, 64], k: [50, 44, 36], P: [58, 66, 70], K: [90, 96, 90], o: [14, 20, 20] } },
+  // Giant Crab: claws up, eyes on stalks, a wide shell on scuttling legs
+  crab: { glint: [12, 7], rows: onFloor([
+    '.oo.......',
+    'oCAoo.....',
+    'oCAAAo....',
+    '.oCAAo....',
+    '..oAo..e..',
+    '..oAo..o..',
+    '...oAooAoo',
+    '....oCAAAA',
+    '...oCAAAAA',
+    '..oCAAAAAA',
+    '..oCAAAAAA',
+    '..oBBBBBBB',
+    '...ooooooo',
+    '...A.A.A..',
+    '..A.A.A...',
+    '.A.A.A....',
+  ]), colors: { A: [214, 74, 42], B: [140, 40, 26], C: [244, 126, 74], e: [20, 16, 16], o: [44, 14, 10] } },
+  // Pufferfish: blown up round and spiky, and about to pop
+  puffer: { glint: [17, 6], float: true, rows: onFloor([
+    '.......o..',
+    '....o.oyoo',
+    '...oyoyyyy',
+    '.o.oyyyyyy',
+    '.oyyyyyyyy',
+    '..oyywkyyy',
+    'ooyyywkyyy',
+    '..oyyyyyyy',
+    '.oyywwwwww',
+    '.oyywwwwwm',
+    '.oyywwwwww',
+    '..oywwwwww',
+    '.o.oywwwww',
+    '...ooywwww',
+    '....o.oooo',
+    '.......o..',
+    '..........',
+  ]), colors: { y: [224, 192, 72], w: [246, 236, 204], k: [20, 20, 20], m: [130, 40, 40], o: [70, 46, 20] } },
+  // Siren: pale and weed-haired, a fish's tail where her legs should be; sings hexes at you
+  siren: { glint: [4, 7], emit: 'e', float: true, rows: [
+    '..........',
+    '......hhhh',
+    '.....hhhhh',
+    '....hhssss',
+    '....hhsess',
+    '....hhssss',
+    '....hhsssm',
+    '...hhhosss',
+    '...hh..oss',
+    '..hhoossss',
+    '..hosAAsss',
+    '..hossssss',
+    '...ossssss',
+    '....oCCAAA',
+    '....oCAAAA',
+    '....oCAAAA',
+    '.....oCAAA',
+    '.....oCAAA',
+    '......oCAA',
+    '......oCAA',
+    '.......oCA',
+    '.......oCA',
+    '.....oCCAo',
+    '....oCAAo.',
+    '...oCAo...',
+    '...oo.....',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+  ], colors: { A: [60, 170, 160], B: [30, 110, 110], C: [120, 222, 200], h: [40, 112, 92], s: [172, 212, 216],
+    e: [255, 255, 255], m: [60, 30, 50], o: [14, 40, 44] } },
+  // Ghost Captain: tricorn, white beard, a red coat with gold buttons, glowing eyes
+  captain: { glint: [6, 7], emit: 'e', rows: [
+    '..........',
+    '..oooooooo',
+    '.oqqqqqqqq',
+    '..oqqqqqqy',
+    '...oqqqqqq',
+    '....osssss',
+    '....osesss',
+    '....osssss',
+    '....obbbbb',
+    '....obbbbm',
+    '.....obbbb',
+    '..ooooAAAA',
+    '.oAAoCAAyA',
+    '.oAAoCAAAA',
+    '.oAAoCAAyA',
+    '.oAAoCAAAA',
+    '.oAAoCAAyA',
+    '.ossoCAAAA',
+    '..oo.okkky',
+    '....oCAAAA',
+    '....oCAAAA',
+    ...LEGS,
+  ], back: null, colors: { A: [140, 30, 40], B: [80, 16, 26], C: [190, 62, 62], q: [26, 20, 26], y: [232, 190, 70], s: [170, 222, 210],
+    e: [120, 255, 200], b: [206, 214, 206], m: [30, 30, 30], k: [40, 26, 16], P: [40, 40, 52], K: [30, 20, 16], o: [10, 10, 14] } },
+  // The Kraken: a great purple dome with a beak and two yellow eyes, on a nest of tentacles
+  kraken: { glint: [8, 4], emit: 'e', float: true, rows: [
+    '..........',
+    '..........',
+    '.....ooooo',
+    '...ooCAAAA',
+    '..oCAAAAAA',
+    '.oCAAAAAAA',
+    '.oCAAAAAAA',
+    'oCAAAAAAAA',
+    'oCAAeeAAAA',
+    'oCAAekAAAA',
+    'oCAAAAAAAA',
+    'oCAAAAAAAA',
+    '.oCAAAAAAA',
+    '.oCAAAAmmm',
+    '..oCAAAAAA',
+    '..oAAoAAoA',
+    '.oAAooAAoA',
+    '.oAo.oAo.o',
+    'oAo..oAo..',
+    'oAo.oAo...',
+    '.oAooAo...',
+    '..oAoAo.o.',
+    '...oAo.oAo',
+    '..oAo..oAo',
+    '.oAo...oAo',
+    '.oo....oo.',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+  ], back: null, colors: { A: [124, 62, 146], B: [72, 30, 92], C: [174, 104, 194], e: [255, 222, 80], k: [20, 0, 0], m: [40, 10, 22], o: [20, 6, 26] } },
+});
+// --- skins that unlock past level 20 (shared/progression.js SKIN_UNLOCKS) ---
+const PIRATE_HAT = ['..........', '..........', '..........', '.....ooooo', '...ooqqqqq', '..oqqqqqqy', '.oqqqqqqqq', '..ooqqqqqq', '....oooooo'];
+const CORAL_CROWN = ['..........', '..........', '..........', '..........', '....c..c..', '....cc.cc.', '.....ccccc', '....oyyyyy', '...ooooooo'];
+const WITCH_BODY = ART.witch.rows.slice(9, 21), WITCH_BACK = ART.witch.back.slice(9, 21);
+Object.assign(ART, {
+  // Pirate Witch: a black tricorn with a bone badge, a red coat and a gold sash
+  pirateWitch: { glint: [10, 7], rows: [...PIRATE_HAT, ...WITCH_BODY, ...SWAMP_SKIRT], back: [...PIRATE_HAT.map(r => r.replace('y', 'q')), ...WITCH_BACK, ...SWAMP_SKIRT],
+    colors: { A: [150, 30, 36], B: [90, 16, 22], C: [200, 62, 56], p: [232, 182, 62], y: [236, 222, 192], q: [28, 22, 28], h: [30, 24, 28],
+      ...SKIN, t: [214, 162, 122], n: [196, 146, 108], e: [30, 20, 20], m: MOUTH, k: [30, 20, 14], o: [12, 8, 10] } },
+  // Sea Witch: a coral crown, seafoam hair, glowing eyes and a kelp-green gown with pearls
+  seaWitch: { glint: [10, 7], emit: 'e', rows: [...CORAL_CROWN, ...WITCH_BODY, ...SWAMP_SKIRT], back: [...CORAL_CROWN, ...WITCH_BACK, ...SWAMP_SKIRT],
+    colors: { A: [30, 120, 120], B: [14, 70, 76], C: [72, 180, 170], p: [240, 236, 226], h: [64, 172, 150], s: [170, 210, 222], t: [130, 170, 184],
+      n: [142, 182, 194], e: [140, 255, 230], m: [40, 60, 70], c: [240, 112, 112], y: [255, 212, 92], k: [20, 50, 52], o: [8, 24, 28] } },
+  // Bone Deckhand: a grinning skeleton in ragged sailor's trousers
+  skeleton: { glint: [7, 7], rows: [
+    '..........', '..........', '......oooo', '.....obbbb', '....obbbbb', '....obbbbb', '....obkkbb', '....obkkbb', '....obbbbk',
+    '.....obbbb', '.....obkbk', '.......obb', '...oobbbbb', '..ob.obbbb', '..ob.okkkb', '..ob.obbbb', '..ob.okkkb', '..ob.obbbb',
+    '..bb..okkb', '......obbb', '.....obbbb', ...LEGS,
+  ], colors: { b: [230, 225, 205], k: [40, 35, 40], P: [40, 50, 80], K: [60, 40, 30], o: [20, 18, 22] } },
+  // Scarecrow: a straw hat, a stitched burlap face, a plaid shirt with straw poking out
+  scarecrow: { glint: [7, 6], rows: [
+    '..........', '......oooo', '.....ohhhh', '.....ohhhh', '..oooohhhh', '.ohhhhhhhh', '..ooosssss', '....osksss', '....osssss',
+    '....osssss', '....osmsmm', '.....ossss', '..yyooAAAA', '.oAAoCAABA', '.oBBoCBBBB', '.oAAoCAABA', '.oAAoCAABA', '.oBBoCBBBB',
+    '.yyyoCAABA', '..y..okkkk', '.....oPPPP', ...LEGS,
+  ], colors: { A: [170, 40, 40], B: [90, 20, 20], C: [210, 80, 70], h: [220, 190, 90], y: [232, 202, 102], s: [182, 150, 100],
+    k: [40, 30, 20], m: [60, 40, 26], P: [60, 80, 120], K: [70, 50, 30], o: [30, 20, 10] } },
+  // Grim Reaper: a black hood with a skull in the dark of it, bony hands, a tattered robe
+  reaper: { glint: [6, 7], emit: 'e', float: true, rows: [
+    '..........', '......oooo', '.....oAAAA', '....oAAAAA', '...oAAAkkk', '...oAAkkkk', '...oAAkkek', '...oAAkkkk', '...oAAkwwk',
+    '...oAAAkkk', '..oAAAAAAA', '.oAAAAAAAA', '.oAAoCAAAA', 'oAAAoCAAAA', 'oAAoCAAAAA', 'owwoCAAAAA', '.oo.oCAAAA', '....oCAAAA',
+    '....oCAAAA', '...oCAAAAA', '...oCAAAAA', '..oCAAAAAA', '..oCAAAAAA', '.oCAAAAAAA', '.oCAAAAAAA', '.oBAABAABA', '..o.Bo.oBo',
+    '..........', '..........', '..........',
+  ], colors: { A: [30, 28, 36], B: [16, 14, 20], C: [62, 58, 72], k: [5, 5, 8], e: [255, 60, 60], w: [220, 215, 200], o: [4, 4, 6] } },
+  // Stitched Brute: a flat-topped, green, bolted-together monster in a black jacket
+  stitched: { glint: [7, 7], rows: [
+    '..........', '..........', '....oooooo', '....ohhhhh', '....ohhhhh', '....osssss', '....osmmms', '....osesss', '....osssss',
+    '....ossmmm', '.....otsss', '...yyotsss', '..ooooAAAA', '.oAAoCAAAA', '.oAAoCAAtt', '.oAAoCAAAA', '.oAAoCAAAA', '.ossoCAAAA',
+    '.oo..oAAAA', '.....okkkk', '.....oPPPP', ...LEGS,
+  ], colors: { A: [50, 50, 60], B: [30, 30, 36], C: [82, 82, 94], h: [20, 20, 24], k: [36, 30, 26], s: [120, 170, 100], t: [80, 120, 70], m: [40, 30, 30],
+    e: [240, 240, 200], y: [160, 160, 172], P: [40, 40, 50], K: [30, 25, 20], o: [8, 8, 10] } },
+  // Pumpkin King: a crowned, grinning, glowing jack-o'-lantern head on a black suit
+  pumpkinKing: { glint: [6, 6], emit: 'f', rows: [
+    '......y..y', '......yyyy', '.....oyyyy', '...oonnnnn', '..onnnnnnn', '.onnnnffnn', '.onnnnfnnn', '.onnnnnnnf', '.onnnfnfnf',
+    '.onnnnffff', '..onnnnnnn', '...ooNNNNN', '..ooooAAAy', '.oAAoCAAAy', '.oAAoCAAAy', '.oAAoCAAAA', '.oAAoCAAAA', '.oggoCAAAA',
+    '..oo.oAAAA', '.....oAAAA', '.....oPPPP', ...LEGS,
+  ], back: [
+    '......y..y', '......yyyy', '.....oyyyy', '...oonnnnn', '..onnnnnnn', '.onnnnnnnn', '.onnnnNnnn', '.onnnnnnnN', '.onnnnnnnn',
+    '.onnnnNnnn', '..onnnnnnn', '...ooNNNNN', '..ooooAAAA', '.oAAoCAAAA', '.oAAoCAAAA', '.oAAoCAAAA', '.oAAoCAAAA', '.oggoCAAAA',
+    '..oo.oAAAA', '.....oAAAA', '.....oPPPP', ...LEGS,
+  ], colors: { A: [26, 22, 30], B: [12, 10, 16], C: [60, 50, 70], y: [240, 200, 60], n: [235, 125, 30], N: [180, 80, 20],
+    f: [255, 230, 90], g: [230, 230, 220], P: [20, 18, 24], K: [10, 8, 12], o: [20, 10, 5] } },
+  // Frost Snowman: three snowballs, a top hat, coal eyes, a carrot nose and a red scarf
+  snowman: { glint: [7, 7], float: true, rows: onFloor([
+    '......oooo', '......oqqq', '......oqqq', '......orrr', '....oooqqq', '.....oWWWW', '....oWkWWW', '....oWWWWn', '....oWkWkW',
+    '.....oWWWW', '...orrrrrr', '..oWWWWWWW', '.oWWWWWWWk', 'oWWWWWWWWW', 'oWWWWWWWWk', 'oWWWWWWWWW', '.oWWWWWWWW', '..oWWWWWWW',
+    '.oWWWWWWWW', 'oWWWWWWWWW', 'oWWWWWWWWW', 'oWWWWWWWWW', 'oWWWWWWWWW', 'oWWWWWWWWW', '.oWWWWWWWW', '..oWWWWWWW', '...ooooooo',
+  ]), colors: { q: [25, 22, 28], r: [200, 40, 40], W: [240, 245, 250], k: [20, 20, 24], n: [255, 140, 30], o: [120, 140, 170] } },
+});
+
+// from behind: no face on the snowman or the skull
+ART.skeleton.back = ART.skeleton.rows.map((r, y) => y >= 6 && y <= 10 ? r.replace(/k/g, 'b') : r);
+ART.snowman.back = ART.snowman.rows.map((r, y) => y >= 8 && y <= 15 ? r.replace(/[kn]/g, 'W') : r);
+// from behind: the captain's dark hair and hat, the kraken's plain dome
+ART.captain.back = ART.captain.rows.map((r, y) => y >= 5 && y <= 10 ? r.replace(/[sebm]/g, 'q') : y === 3 ? r.replace(/y/g, 'q')
+  : y === 18 ? r.replace(/y/g, 'k') : r.replace(/y/g, 'A')); // no buttons or badge on the back
+ART.kraken.back = ART.kraken.rows.map(r => r.replace(/[ekm]/g, 'A'));
+
 export const PLAYER_SPRITES = Object.fromEntries(Object.entries(ART).map(([k, a]) => [k, build(a)]));
+
+// --- hats (shared/progression.js HATS) ---
+// A hat replaces the rows above a witch's face: HAT_AT is her first face row. Hat art sits on it,
+// bottom row first; a taller hat loses its tip on a witch with less room (the Ice Witch).
+// 10-wide rows mirror plainly; `o` is the witch's own outline, A / B / C her outfit (team-tinted),
+// H her hair. Other letters are the hat's own colors, renamed so they can't clash with hers.
+const HAT_AT = { witch: 9, robotWitch: 9, gothicWitch: 9, infernalWitch: 8, iceWitch: 6, ghostWitch: 8, plagueWitch: 8, pirateWitch: 9, seaWitch: 9 };
+const BARE = ['.....ooooo', '...ooHHHHH']; // the top of her head, for hats that don't cover it
+const HAT_ART = {
+  classic: { rows: ['.........o', '........oq', '........oq', '.......oqq', '.......oqQ', '......oqqQ', '.....opppp', '..ooooqqqq', '.oqqqqqqqQ'],
+    colors: { q: [34, 28, 44], Q: [64, 54, 82], p: [150, 60, 200] } },
+  crooked: { rows: [
+    '...............oo...',
+    '.............ooAo...',
+    '...........ooAAo....',
+    '..........oCAAo.....',
+    '.........oCAAAo.....',
+    '........oCAAAAAo....',
+    '.......oCppppppo....',
+    '...ooooCAAAAAAAAoo..',
+    '..ooCCAAAAAAAAAABBo.',
+  ], colors: { p: [230, 190, 60] } },
+  pumpkin: { emit: 'f', rows: ['.........g', '......ooog', '....onnnnn', '...onfnnnn', '...onffnnn', '...onnnnnf', '..onNnnnff', '..oooooooo'],
+    back: ['.........g', '......ooog', '....onnnnn', '...onnnnnn', '...onNnnnN', '...onnnnnn', '..onNnnNnn', '..oooooooo'],
+    colors: { g: [70, 120, 40], n: [235, 125, 30], N: [190, 85, 20], f: [255, 230, 90] } },
+  mushroom: { rows: ['......oooo', '....oorrrr', '...orrwwrr', '..orwwrrrw', '.orrrrrwwr', '.oRRRRRRRR', '..ooooowww', '...ooHHHHH'],
+    colors: { r: [210, 40, 40], R: [150, 25, 30], w: [245, 240, 230] } },
+  tophat: { rows: ['....oooooo', '....oqqqqq', '....oqqqqQ', '....oqqqqQ', '....orrrrr', '....oqqqqq', '.oqqqqqqqQ', '..oooooooo'],
+    colors: { q: [30, 28, 34], Q: [70, 66, 80], r: [170, 30, 50] } },
+  candle: { emit: 'Ff', rows: ['.........F', '........fF', '.........k', '.......oww', '.......owW', '......owWw', '.....owwww', '...oyyyyyy', '..oooooooo'],
+    colors: { F: [255, 240, 150], f: [255, 150, 40], k: [30, 20, 20], w: [240, 232, 210], W: [210, 200, 175], y: [200, 160, 60] } },
+  frog: { rows: ['....oo....', '...owwo...', '...owko...', '...oggoooo', '..oggggggg', '..ogGggggg', '.ogggggggg', '.oggggggmm', '.ooooooooo'],
+    colors: { w: [245, 245, 235], k: [20, 20, 20], g: [80, 170, 60], G: [140, 210, 90], m: [40, 80, 30] } },
+  crown: { emit: 'rb', rows: ['....y....y', '....yy..yy', '....yyyyyy', '....yryyby', '....oyyyyy', '....oooooo', '...ooHHHHH'],
+    colors: { y: [240, 200, 60], r: [230, 40, 60], b: [60, 140, 255] } },
+  bat: { emit: 'r', rows: ['...k.....k', '..kkk...kk', '.kkkkk.kkr', '.k.k.kkkkk', '......kkkk', '.....ooooo', '...ooHHHHH'],
+    colors: { k: [40, 30, 50], r: [255, 60, 60] } },
+  skull: { rows: ['......oooo', '....oowwww', '...owwwwww', '...owkkwww', '...owkkwww', '...owwwwwk', '..owwwwwww', '..owtwtwtw', '..oooooooo'],
+    back: ['......oooo', '....oowwww', '...owwwwww', '...owwwwww', '...owwwWww', '...owwwWww', '..owwwwwww', '..owwwwwww', '..oooooooo'],
+    colors: { w: [235, 228, 205], W: [190, 180, 160], k: [30, 20, 25], t: [150, 140, 120] } },
+  horns: { rows: ['..r.......', '..rr......', '...rr.....', '...Rrr....', '....Rrr...', '....oRoooo', '...ooHHHHH'],
+    colors: { r: [200, 30, 30], R: [130, 15, 20] } },
+  antlers: { rows: ['.t..t.....', '.t.t......', '..tt..t...', '...t.t....', '...tt.....', '....t.....', '.....ooooo', '...ooHHHHH'],
+    colors: { t: [150, 110, 70] } },
+  beret: { rows: [
+    '..........oo........',
+    '......ooooqqoooo....',
+    '....ooqqqqqqqqqqoo..',
+    '...oqqqqqqqqqqqqqqo.',
+    '...oQQQQQQQQQQQQQo..',
+    '...ooooooooooooooo..',
+  ], colors: { q: [60, 80, 50], Q: [40, 55, 35] } },
+  arrow: { rows: [
+    '....................',
+    '.v.....ooooo........',
+    'vv...ooHHHHHoo...x..',
+    '.kkkkkkkkkkkkkkkkkxx',
+    'vv.ooHHHHHHHHHHoo.x.',
+  ], colors: { v: [220, 60, 60], k: [120, 85, 50], x: [170, 175, 185] } },
+  cauldron: { emit: 'g', rows: ['......g..g', '........g.', '....oooooo', '...okkkkkk', '...okKkggg', '...okkkkkk', '....okkkkk', '...ooooooo'],
+    colors: { g: [120, 255, 90], k: [40, 40, 48], K: [90, 90, 105] } },
+  halo: { emit: 'y', rows: ['.....yyyyy', '....y.....', '.....yyyyy', '..........', '.....ooooo', '...ooHHHHH'],
+    colors: { y: [255, 230, 120] } },
+  cone: { rows: ['.........o', '........on', '........ow', '.......onn', '.......oww', '......onnn', '.....onnnn', '..oNNNNNNN', '..oooooooo'],
+    colors: { n: [255, 120, 20], N: [200, 80, 15], w: [245, 245, 245] } },
+  wizard: { emit: 'S', rows: ['.........o', '........ob', '........oS', '.......obb', '......obbb', '......obSb', '.....obbbb', '..oooobbbb', '.obbbbbbbb'],
+    colors: { b: [40, 60, 160], S: [255, 230, 90] } },
+};
+const HAT_FREE = [...'0123456789!#$%&*+=?@^~<>'];
+const full = r => r.length === W ? r : r + [...r].reverse().join('');
+
+// a witch's art with a hat on (null if she isn't a witch or there's no such hat)
+function withHat(skin, hat) {
+  const art = ART[skin], at = HAT_AT[skin], h = HAT_ART[hat];
+  if (!art || at === undefined || !h) return null;
+  const letters = Object.keys(h.colors), rename = Object.fromEntries(letters.map((k, i) => [k, HAT_FREE[i]]));
+  const hair = art.colors.h ? 'h' : 'A';
+  const paint = r => [...full(r)].map(c => c === 'H' ? hair : rename[c] || c).join('');
+  const put = (rows, hatRows) => {
+    const out = rows.slice();
+    for (let y = 0; y < at; y++) out[y] = '.'.repeat(W);
+    hatRows.forEach((r, i) => { const y = at - hatRows.length + i; if (y >= 0) out[y] = paint(r); });
+    return out;
+  };
+  const colors = { ...art.colors, ...Object.fromEntries(letters.map(k => [rename[k], h.colors[k]])) };
+  return {
+    ...art, colors,
+    emit: (art.emit || '') + [...(h.emit || '')].map(k => rename[k]).join(''),
+    rows: put(art.rows, h.rows),
+    back: art.back && put(art.back, h.back || h.rows.map(r => [...full(r)].reverse().join(''))),
+  };
+}
+
+// the sprite for a look: a skin, or "skin@hat"
+const hatSprites = {};
+export function spriteFor(look) {
+  if (PLAYER_SPRITES[look]) return PLAYER_SPRITES[look];
+  const [skin, hat] = String(look || '').split('@');
+  if (!hat) return PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
+  if (!(look in hatSprites)) { const art = withHat(skin, hat); hatSprites[look] = art ? build(art) : null; }
+  return hatSprites[look] || PLAYER_SPRITES[skin] || PLAYER_SPRITES.witch;
+}
+export const wearsHats = skin => skin in HAT_AT;

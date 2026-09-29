@@ -99,6 +99,7 @@ export function buildWorld(scene, T, theme, palette) {
     return false;
   };
   const floorZ = (i, j) => {
+    if (theme.sea && mAt(i, j) === MAT.PIT) return -0.6; // under the water: the decks stand clear of it
     if (kAt(i, j) === 1) return 0;
     if (underHutCell(i, j)) return 0;
     if (underTowerTread(i, j)) return 0;
@@ -239,7 +240,7 @@ export function buildWorld(scene, T, theme, palette) {
     pgeo.setIndex(pitIdx);
     root.add(new THREE.Mesh(pgeo, new THREE.MeshBasicMaterial({
       map: tex.pit,
-      color: band,
+      color: theme.sea ? 0xffffff : band,
       side: THREE.DoubleSide,
     })));
   }
@@ -258,10 +259,47 @@ export function buildWorld(scene, T, theme, palette) {
   addProps(root, T, theme);
   addTrees(root, (T.props || []).filter(p => p.type === 'tree'), tex, theme);
   addHouses(root, T, tex);
-  if (theme.id === 'castle' || theme.id === 'crypt') addCastleTorches(root, T, theme);
+  if (['castle', 'crypt', 'ship', 'yard'].includes(theme.id)) addCastleTorches(root, T, theme); // on the fleet: lanterns on masts and deckhouses
+  addMasts(root, (T.props || []).filter(p => p.type === 'mast'));
   scene.add(root);
   worldRoot = root;
   return root;
+}
+
+// masts: a yard across the top with a tattered sail hanging from it, and a lower yard
+function addMasts(root, masts) {
+  if (!masts.length) return;
+  const sailTex = (() => {
+    const c = document.createElement('canvas'), n = 64;
+    c.width = c.height = n;
+    const g = c.getContext('2d');
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const torn = y > n * 0.7 && Math.sin(x * 0.7) * 6 + Math.sin(x * 0.23) * 5 > n - y - 2; // ragged hem
+      const hole = Math.hypot(x - 18, y - 30) < 5 || Math.hypot(x - 44, y - 16) < 3.5;
+      if (torn || hole) continue;
+      const v = 0.75 + 0.15 * Math.sin(x * 0.4) + 0.1 * Math.random();
+      g.fillStyle = `rgb(${190 * v | 0},${184 * v | 0},${168 * v | 0})`;
+      g.fillRect(x, y, 1, 1);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter;
+    return t;
+  })();
+  const wood = new THREE.MeshLambertMaterial({ color: 0x4a3222 });
+  const sail = new THREE.MeshLambertMaterial({ map: sailTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
+  for (const m of masts) {
+    for (const [y, w] of [[m.h - 0.3, 3.4], [m.h * 0.55, 2.6]]) {
+      const yard = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, 0.1), wood);
+      yard.position.set(m.x, y, m.y);
+      root.add(yard);
+    }
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(3.1, m.h * 0.45 - 0.35, 6, 4), sail);
+    const pos = s.geometry.attributes.position; // billow it forward a little
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, -0.25 * Math.cos(pos.getX(i) / 1.55 * Math.PI / 2) * Math.cos(pos.getY(i) / 1.2));
+    s.geometry.computeVertexNormals();
+    s.position.set(m.x, (m.h - 0.3 + m.h * 0.55) / 2, m.y - 0.12);
+    root.add(s);
+  }
 }
 
 function addCastleTorches(root, T, theme) {

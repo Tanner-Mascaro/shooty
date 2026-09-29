@@ -1,4 +1,4 @@
-// The Crypt's furniture for Wave Survival, read off its map (shared/levels.js): doors,
+// A survival map's furniture (the Crypt, the Drowned Fleet), read off its map (shared/levels.js): doors,
 // sections, monster spawners, guns on the walls, elixirs and the mystery cauldron. Used by
 // the server and the browser, so both put the doors in the same place.
 //
@@ -7,12 +7,15 @@
 // skips: render/gl/doors.js draws them so they can vanish.
 import { MAT, CEILING_H } from './terrain.js';
 import { DOORS, WALL_BUYS, ELIXIRS } from './config.js';
+import { LEVELS } from './levels.js';
+export { isSurvivalLevel } from './levels.js';
 
 const layouts = new Map();
 const isDoor = c => c >= '1' && c <= '9';
 
 export function cryptLayout(MAP) {
   if (layouts.has(MAP)) return layouts.get(MAP);
+  const names = DOORS[Object.keys(LEVELS).find(k => LEVELS[k] === MAP)] || {};
   const H = MAP.length, W = MAP[0].length, at = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? '#' : MAP[y][x];
   const doors = [], starts = [], spawners = [], buys = [], elixirs = [], boxes = [];
   // doors: each touching group of the same digit
@@ -33,21 +36,21 @@ export function cryptLayout(MAP) {
     const xs = cells.map(c => c[0]), ys = cells.map(c => c[1]);
     const box = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs) + 1, y1: Math.max(...ys) + 1 };
     doors.push({ id, group: +c, cells, ...box, x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2,
-      cost: DOORS[c]?.cost ?? 1000, name: DOORS[c]?.name || 'Door', sides: [] });
+      cost: names[c]?.cost ?? 1000, name: names[c]?.name || 'Door', sides: [] });
   }
-  // sections: open ground split by walls and doors
+  // sections: open ground split by walls, doors and open water
   const region = new Int16Array(W * H).fill(-1);
   let regions = 0;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const c = at(x, y);
-    if (c === '#' || isDoor(c) || region[y * W + x] >= 0) continue;
+    if (c === '#' || c === 'L' || isDoor(c) || region[y * W + x] >= 0) continue;
     const id = regions++, stack = [[x, y]];
     region[y * W + x] = id;
     while (stack.length) {
       const [a, b] = stack.pop();
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = a + dx, ny = b + dy, n = at(nx, ny);
-        if (n === '#' || isDoor(n) || region[ny * W + nx] >= 0) continue;
+        if (n === '#' || n === 'L' || isDoor(n) || region[ny * W + nx] >= 0) continue;
         region[ny * W + nx] = id; stack.push([nx, ny]);
       }
     }
@@ -61,9 +64,9 @@ export function cryptLayout(MAP) {
     }
     d.sides = [...sides];
   }
-  // a wall-mounted thing faces out of the wall it's on
+  // a wall-mounted thing faces out of the wall (or ship's rail) it's on
   const facing = (x, y) => {
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) if (at(x + dx, y + dy) === '#') return { wx: dx, wy: dy };
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) if (at(x + dx, y + dy) === '#' || at(x + dx, y + dy) === 'R') return { wx: dx, wy: dy };
     return { wx: 0, wy: 0 };
   };
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
